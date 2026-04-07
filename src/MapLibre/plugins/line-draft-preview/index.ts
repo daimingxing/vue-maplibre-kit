@@ -8,6 +8,10 @@ import {
   LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
 } from './useLineDraftPreviewPlugin';
+import type {
+  LineDraftPreviewPluginApi,
+  LineDraftPreviewStateChangePayload,
+} from './useLineDraftPreviewController';
 
 /** 线草稿预览插件描述对象。 */
 export interface LineDraftPreviewPluginDescriptor
@@ -39,10 +43,7 @@ export {
   LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
 };
-export type {
-  LineDraftPreviewPluginApi,
-  LineDraftPreviewStateChangePayload,
-} from './useLineDraftPreviewPlugin';
+export type { LineDraftPreviewPluginApi, LineDraftPreviewStateChangePayload };
 export type {
   LineDraftPreviewFillStyleOverrides,
   LineDraftPreviewLineStyleOverrides,

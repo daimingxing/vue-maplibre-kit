@@ -2,7 +2,6 @@ import { computed, watch, type ComputedRef } from 'vue';
 import { cloneDeep } from 'lodash-es';
 import { createFillLayerStyle, createLineLayerStyle } from '../../shared/map-layer-style-config';
 import type {
-  ManagedTunnelPreviewOptions,
   MapLayerInteractiveContext,
   MapLayerInteractiveOptions,
 } from '../../shared/mapLibre-contols-types';
@@ -13,10 +12,6 @@ import type {
   SaveFeaturePropertiesResult,
 } from '../../composables/useMapDataUpdate';
 import {
-  MANAGED_TUNNEL_PREVIEW_LINE_LAYER_ID,
-  useManagedTunnelPreview,
-} from './useManagedTunnelPreview';
-import {
   createMapSourceFeatureRef,
   extractManagedPreviewOriginFromProperties,
   type MapCommonFeature,
@@ -26,48 +21,52 @@ import {
 } from '../../shared/map-common-tools';
 import type { MapLayerStyle } from '../../shared/map-layer-style-config';
 import type { FillLayerSpecification, LineLayerSpecification } from 'maplibre-gl';
+import type { LineDraftPreviewOptions } from './types';
+import { LINE_DRAFT_PREVIEW_LINE_LAYER_ID, useLineDraftPreviewStore } from './useLineDraftPreviewStore';
 
-export interface ManagedTunnelPreviewStateChangePayload {
-  /** 当前托管预览中是否至少存在一个要素 */
+/** 线草稿预览状态变化载荷。 */
+export interface LineDraftPreviewStateChangePayload {
+  /** 当前线草稿中是否至少存在一个要素。 */
   hasFeatures: boolean;
-  /** 当前托管预览要素总数 */
+  /** 当前线草稿要素总数。 */
   featureCount: number;
 }
 
-export interface ManagedTunnelPreviewExtensionApi {
-  /** 获取托管预览要素数据源 */
+/** 线草稿预览插件 API。 */
+export interface LineDraftPreviewPluginApi {
+  /** 获取线草稿要素数据源。 */
   data: ComputedRef<MapCommonFeatureCollection>;
-  /** 获取托管预览线图层样式 */
+  /** 获取线草稿线图层样式。 */
   lineStyle: ComputedRef<
     MapLayerStyle<LineLayerSpecification['layout'], LineLayerSpecification['paint']>
   >;
-  /** 获取托管预览区域图层样式 */
+  /** 获取线草稿线廊图层样式。 */
   fillStyle: ComputedRef<
     MapLayerStyle<FillLayerSpecification['layout'], FillLayerSpecification['paint']>
   >;
-  /** 按业务 ID 获取托管预览要素 */
+  /** 按业务 ID 获取线草稿要素。 */
   getFeatureById: (featureId: MapFeatureId | null) => MapCommonFeature | null;
-  /** 判断指定业务 ID 是否属于托管预览要素 */
+  /** 判断指定业务 ID 是否属于线草稿要素。 */
   isFeatureById: (featureId: MapFeatureId | null) => boolean;
-  /** 判断当前选中的要素是否属于托管预览 */
+  /** 判断当前选中的要素是否属于线草稿。 */
   isSelectedFeature: () => boolean;
-  /** 获取当前选中要素的标准化快照 */
+  /** 获取当前选中要素的标准化快照。 */
   getSelectedFeatureSnapshot: () => MapCommonFeature | null;
-  /** 生成或替换托管临时延长线 */
+  /** 生成或替换线延长草稿。 */
   previewLine: (previewOptions: {
     lineFeature: MapCommonLineFeature;
     segmentIndex: number;
     extendLengthMeters: number;
     origin?: MapSourceFeatureRef | null;
   }) => MapCommonLineFeature | null;
-  /** 生成或替换托管临时预览区域 */
+  /** 生成或替换线廊草稿。 */
   replacePreviewRegion: (previewOptions: {
     lineFeature: MapCommonLineFeature;
     widthMeters: number;
   }) => boolean;
-  /** 清空全部托管临时预览 */
+  /** 清空全部线草稿。 */
   clear: () => void;
-  /** 保存托管临时预览要素属性 */
+  /** 保存线草稿要素属性。 */
   saveProperties: (saveOptions: {
     featureId: MapFeatureId;
     newProperties: FeatureProperties;
@@ -75,30 +74,30 @@ export interface ManagedTunnelPreviewExtensionApi {
   }) => SaveFeaturePropertiesResult;
 }
 
-interface UseManagedTunnelPreviewExtensionOptions {
-  /** 读取业务层传入的托管临时预览配置 */
-  getOptions: () => ManagedTunnelPreviewOptions | null | undefined;
-  /** 读取业务层传入的普通图层交互配置 */
+interface UseLineDraftPreviewControllerOptions {
+  /** 读取业务层传入的线草稿预览配置。 */
+  getOptions: () => LineDraftPreviewOptions | null | undefined;
+  /** 读取业务层传入的普通图层交互配置。 */
   getMapInteractive: () => MapLayerInteractiveOptions | null | undefined;
-  /** 普通图层交互层提供的选中上下文读取能力 */
+  /** 普通图层交互层提供的选中上下文读取能力。 */
   getSelectedFeatureContext: () => MapLayerInteractiveContext | null;
-  /** 普通图层交互层提供的 hover 状态清理能力 */
+  /** 普通图层交互层提供的 hover 状态清理能力。 */
   clearHoverState: () => void;
-  /** 普通图层交互层提供的选中状态清理能力 */
+  /** 普通图层交互层提供的选中状态清理能力。 */
   clearSelectedFeature: () => void;
-  /** 将渲染态要素转换为标准 GeoJSON 快照 */
+  /** 将渲染态要素转换为标准 GeoJSON 快照。 */
   toFeatureSnapshot: (feature: any) => MapCommonFeature | null;
-  /** 托管预览状态变化回调 */
-  onStateChange?: (payload: ManagedTunnelPreviewStateChangePayload) => void;
+  /** 线草稿状态变化回调。 */
+  onStateChange?: (payload: LineDraftPreviewStateChangePayload) => void;
 }
 
 /**
- * 托管临时巷道预览扩展控制器。
- * 负责将“临时预览数据管理、样式覆写、交互继承、对外 API”打包成一个可复用扩展。
- * @param options 扩展初始化选项
- * @returns 托管临时预览扩展能力集合
+ * 线草稿预览插件控制器。
+ * 负责将“临时草稿数据管理、样式覆写、交互继承、对外 API”打包成一个可复用插件。
+ * @param options 插件初始化选项
+ * @returns 线草稿插件能力集合
  */
-export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPreviewExtensionOptions) {
+export function useLineDraftPreviewController(options: UseLineDraftPreviewControllerOptions) {
   const {
     getOptions,
     getMapInteractive,
@@ -110,7 +109,7 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
   } = options;
 
   /**
-   * 当前托管临时预览是否启用。
+   * 当前线草稿预览是否启用。
    * 仅当业务层显式传入配置，且 enabled !== false 时才会生效。
    */
   const enabled = computed(() => {
@@ -119,7 +118,7 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
   });
 
   /**
-   * 托管临时延长线图层样式。
+   * 线延长草稿图层样式。
    * 默认保持橙色虚线风格，业务层若传入 line 样式覆写，则只覆盖对应字段。
    */
   const lineStyle = computed(() =>
@@ -142,7 +141,7 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
   );
 
   /**
-   * 托管临时预览区域图层样式。
+   * 线廊草稿图层样式。
    * 默认保持基础面图层表现，业务层若传入 fill 样式覆写，则只覆盖对应字段。
    */
   const fillStyle = computed(() =>
@@ -156,25 +155,19 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
     })
   );
 
-  const binding = useManagedTunnelPreview({
+  const binding = useLineDraftPreviewStore({
     isEnabled: () => enabled.value,
   });
 
   /**
-   * 暴露给渲染层的托管预览数据源。
+   * 暴露给渲染层的线草稿数据源。
    * 使用 computed 包一层，便于调用方统一按响应式对象消费。
    */
   const data = computed(() => binding.featureCollection.value);
 
   /**
-   * 配置临时图层（延长线）的鼠标点击和悬浮行为。
-   *
-   * 作用：让临时延长线表现得像真正的业务线一样。
-   * 做法：你指定一个正式线图层的ID (inheritInteractiveFromLayerId)，
-   *       插件就会把那个图层的【鼠标变小手】、【点击事件】、【Hover效果】
-   *       原封不动地复制到临时延长线上。
-   *
-   * 这样你就不用为临时延长线单独写一套点击逻辑了。
+   * 配置临时图层（线延长草稿）的鼠标点击和悬浮行为。
+   * 插件会从正式线图层继承交互配置，减少业务层重复声明。
    */
   const mergedMapInteractive = computed<MapLayerInteractiveOptions | null>(() => {
     const baseInteractive = getMapInteractive();
@@ -196,7 +189,7 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
       ...baseInteractive,
       layers: {
         ...(baseInteractive.layers || {}),
-        [MANAGED_TUNNEL_PREVIEW_LINE_LAYER_ID]: cloneDeep(inheritedLayerConfig),
+        [LINE_DRAFT_PREVIEW_LINE_LAYER_ID]: cloneDeep(inheritedLayerConfig),
       },
     };
   });
@@ -214,7 +207,7 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
 
   /**
    * 获取当前选中要素的标准化快照。
-   * 如果当前选中的是托管预览要素，则优先返回内部数据源中的最新快照。
+   * 如果当前选中的是线草稿要素，则优先返回内部数据源中的最新快照。
    */
   const getSelectedFeatureSnapshot = (): MapCommonFeature | null => {
     const selectedFeatureContext = getSelectedFeatureContext();
@@ -222,7 +215,7 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
       return null;
     }
 
-    if (binding.isManagedFeatureSource(selectedFeatureContext.sourceId)) {
+    if (binding.isLineDraftFeatureSource(selectedFeatureContext.sourceId)) {
       return binding.getFeatureById(selectedFeatureContext.featureId);
     }
 
@@ -230,18 +223,18 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
   };
 
   /**
-   * 判断当前选中的要素是否属于托管临时预览。
+   * 判断当前选中的要素是否属于线草稿。
    */
   const isSelectedFeature = (): boolean => {
     const selectedFeatureContext = getSelectedFeatureContext();
-    return binding.isManagedFeatureSource(selectedFeatureContext?.sourceId);
+    return binding.isLineDraftFeatureSource(selectedFeatureContext?.sourceId);
   };
 
   /**
-   * 清空全部托管临时预览要素，并同步清理普通图层交互状态。
+   * 清空全部线草稿要素，并同步清理普通图层交互状态。
    */
   const clear = (): void => {
-    binding.clearTunnelPreviewFeatures();
+    binding.clearLineDraftFeatures();
     clearHoverState();
     if (isSelectedFeature()) {
       clearSelectedFeature();
@@ -249,18 +242,14 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
   };
 
   /**
-   * 生成或替换托管临时延长线预览。
-   * @param previewOptions 临时延长线生成配置
-   * @returns 最新生成的临时延长线；生成失败时返回 null
+   * 生成或替换线延长草稿。
+   * @param previewOptions 线延长草稿生成配置
+   * @returns 最新生成的线延长草稿；生成失败时返回 null
    */
   const previewLine = (previewOptions: {
-    /** 当前参与延长的线要素 */
     lineFeature: MapCommonLineFeature;
-    /** 当前命中的线段索引 */
     segmentIndex: number;
-    /** 本次延长长度（米） */
     extendLengthMeters: number;
-    /** 当前预览线对应的正式来源引用 */
     origin?: MapSourceFeatureRef | null;
   }): MapCommonLineFeature | null => {
     const previewOrigin = resolvePreviewOrigin(previewOptions.lineFeature, previewOptions.origin);
@@ -268,7 +257,7 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
       return null;
     }
 
-    return binding.previewTunnelLineExtension({
+    return binding.previewLineExtension({
       lineFeature: previewOptions.lineFeature,
       segmentIndex: previewOptions.segmentIndex,
       extendLengthMeters: previewOptions.extendLengthMeters,
@@ -277,14 +266,10 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
   };
 
   /**
-   * 弄清楚这条"临时虚线"到底是从哪条"正式实线"延伸出来的。
-   *
-   * 因为在多数据源场景下，图层A和图层B可能都有叫 "line_1" 的线。
-   * 为了防止把图层A的线画到图层B去，我们需要记住它的"祖宗"是谁（即 sourceId + featureId）。
-   *
-   * @param lineFeature 当前正在操作的线（可能是正式线，也可能是已经生成的虚线）
-   * @param explicitOrigin 如果你明确知道它的来源，可以直接传进来
-   * @returns 包含 sourceId 和 featureId 的"祖宗"信息；找不到返回 null
+   * 解析当前线草稿对应的正式来源引用。
+   * @param lineFeature 当前正在操作的线要素
+   * @param explicitOrigin 显式传入的正式来源引用
+   * @returns 标准化后的正式来源引用；找不到时返回 null
    */
   const resolvePreviewOrigin = (
     lineFeature: MapCommonLineFeature,
@@ -311,33 +296,28 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
   };
 
   /**
-   * 生成或替换托管临时预览区域。
-   * @param previewOptions 临时预览区域生成配置
+   * 生成或替换线廊草稿。
+   * @param previewOptions 线廊草稿生成配置
    * @returns 是否生成成功
    */
   const replacePreviewRegion = (previewOptions: {
-    /** 当前参与生成区域的线要素 */
     lineFeature: MapCommonLineFeature;
-    /** 当前区域宽度（米） */
     widthMeters: number;
   }): boolean => {
-    return binding.replaceTunnelPreviewRegion(previewOptions);
+    return binding.replaceLineCorridorPreview(previewOptions);
   };
 
   /**
-   * 保存托管临时预览要素属性。
+   * 保存线草稿要素属性。
    * @param saveOptions 属性写回配置
    * @returns 结构化写回结果
    */
   const saveProperties = (saveOptions: {
-    /** 目标要素业务 ID */
     featureId: MapFeatureId;
-    /** 需要写回的最新属性对象 */
     newProperties: FeatureProperties;
-    /** 写回模式 */
     mode?: FeaturePropertySaveMode;
   }): SaveFeaturePropertiesResult => {
-    return binding.saveManagedFeatureProperties(saveOptions);
+    return binding.saveLineDraftFeatureProperties(saveOptions);
   };
 
   return {
@@ -347,8 +327,8 @@ export function useManagedTunnelPreviewExtension(options: UseManagedTunnelPrevie
     fillStyle,
     mergedMapInteractive,
     getFeatureById: binding.getFeatureById,
-    isFeatureById: binding.isManagedFeatureById,
-    isFeatureSource: binding.isManagedFeatureSource,
+    isFeatureById: binding.isLineDraftFeatureById,
+    isFeatureSource: binding.isLineDraftFeatureSource,
     getSelectedFeatureSnapshot,
     isSelectedFeature,
     previewLine,

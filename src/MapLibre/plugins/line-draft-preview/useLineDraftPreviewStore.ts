@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue';
 import {
-  MapTunnelLineExtensionTool,
-  MapTunnelRegionTool,
+  MapLineCorridorTool,
+  MapLineExtensionTool,
   buildMapSourceFeatureRefKey,
   extractManagedPreviewOriginFromProperties,
   MANAGED_PREVIEW_ORIGIN_KEY_PROPERTY,
@@ -17,52 +17,52 @@ import type {
   SaveFeaturePropertiesResult,
 } from '../../composables/useMapDataUpdate';
 
-/** 托管临时巷道预览数据源 ID */
-export const MANAGED_TUNNEL_PREVIEW_SOURCE_ID = 'managed_tunnel_preview_source';
+/** 线草稿预览数据源 ID。 */
+export const LINE_DRAFT_PREVIEW_SOURCE_ID = 'lineDraftSource';
 
-/** 托管临时巷道预览线图层 ID */
-export const MANAGED_TUNNEL_PREVIEW_LINE_LAYER_ID = 'managedTunnelPreviewLineLayer';
+/** 线草稿预览线图层 ID。 */
+export const LINE_DRAFT_PREVIEW_LINE_LAYER_ID = 'lineDraftLineLayer';
 
-/** 托管临时巷道预览区域图层 ID */
-export const MANAGED_TUNNEL_PREVIEW_FILL_LAYER_ID = 'managedTunnelPreviewFillLayer';
+/** 线草稿预览面图层 ID。 */
+export const LINE_DRAFT_PREVIEW_FILL_LAYER_ID = 'lineDraftFillLayer';
 
-/** 托管临时巷道预览区域 generatedKind 固定值 */
-export const MANAGED_TUNNEL_PREVIEW_REGION_KIND = 'tunnel-region-preview';
+/** 线草稿预览线廊草稿 generatedKind 固定值。 */
+export const LINE_DRAFT_PREVIEW_CORRIDOR_KIND = 'line-corridor-draft';
 
-interface UseManagedTunnelPreviewOptions {
-  /** 读取当前托管预览是否启用 */
+interface UseLineDraftPreviewStoreOptions {
+  /** 读取当前线草稿预览是否启用。 */
   isEnabled: () => boolean;
 }
 
-interface PreviewTunnelLineExtensionOptions {
-  /** 当前需要参与延长的线要素 */
+interface PreviewLineDraftOptions {
+  /** 当前需要参与延长的线要素。 */
   lineFeature: MapCommonLineFeature;
-  /** 当前命中的线段索引 */
+  /** 当前命中的线段索引。 */
   segmentIndex: number;
-  /** 本次延长长度（米） */
+  /** 本次延长长度（米）。 */
   extendLengthMeters: number;
-  /** 当前预览线对应的正式来源引用 */
+  /** 当前草稿线对应的正式来源引用。 */
   origin: MapSourceFeatureRef;
 }
 
-interface ReplaceTunnelPreviewRegionOptions {
-  /** 当前需要生成预览区域的线要素 */
+interface ReplaceLineCorridorPreviewOptions {
+  /** 当前需要生成线廊草稿的线要素。 */
   lineFeature: MapCommonLineFeature;
-  /** 区域半宽（米） */
+  /** 线廊半宽（米）。 */
   widthMeters: number;
 }
 
-interface SaveManagedFeaturePropertiesOptions {
-  /** 目标要素业务 ID */
+interface SaveLineDraftFeaturePropertiesOptions {
+  /** 目标要素业务 ID。 */
   featureId: MapFeatureId;
-  /** 需要写回的属性对象 */
+  /** 需要写回的属性对象。 */
   newProperties: FeatureProperties;
-  /** 属性写回模式 */
+  /** 属性写回模式。 */
   mode?: FeaturePropertySaveMode;
 }
 
 /**
- * 创建空的托管预览要素集合。
+ * 创建空的线草稿要素集合。
  * @returns 空的 FeatureCollection
  */
 function createEmptyFeatureCollection(): MapCommonFeatureCollection {
@@ -104,7 +104,7 @@ function getFeatureBusinessId(feature: MapCommonFeature | null | undefined): Map
 }
 
 /**
- * 在托管预览集合中按业务 ID 查找要素索引。
+ * 在线草稿集合中按业务 ID 查找要素索引。
  * @param features 当前要素列表
  * @param featureId 目标业务 ID
  * @returns 命中的要素索引；未命中时返回 -1
@@ -114,7 +114,7 @@ function findFeatureIndexById(features: MapCommonFeature[], featureId: MapFeatur
 }
 
 /**
- * 过滤掉指定临时线及其派生预览要素。
+ * 过滤掉指定临时线草稿及其派生预览要素。
  * @param features 当前要素列表
  * @param lineIds 需要剔除的临时线业务 ID 集合
  * @returns 过滤后的要素列表
@@ -143,12 +143,12 @@ function filterOutDerivedFeaturesByLineIds(
 }
 
 /**
- * 收集本次需要被替换掉的旧临时线业务 ID。
- * @param features 当前托管预览要素列表
+ * 收集本次需要被替换掉的旧临时线草稿业务 ID。
+ * @param features 当前线草稿要素列表
  * @param nextLineFeature 最新生成的临时延长线
  * @returns 需要清理的旧临时线业务 ID 集合
  */
-function collectReplacedTemporaryTunnelLineIds(
+function collectReplacedLineDraftIds(
   features: MapCommonFeature[],
   nextLineFeature: MapCommonLineFeature
 ): Set<string> {
@@ -161,7 +161,7 @@ function collectReplacedTemporaryTunnelLineIds(
   }
 
   features.forEach((feature) => {
-    if (!MapTunnelLineExtensionTool.isTemporaryExtensionFeature(feature)) {
+    if (!MapLineExtensionTool.isTemporaryExtensionFeature(feature)) {
       return;
     }
 
@@ -200,7 +200,7 @@ function getManagedPreviewOriginKey(feature: MapCommonFeature | null | undefined
 }
 
 /**
- * 计算普通地图要素属性写回后的新属性集合。
+ * 计算地图要素属性写回后的新属性集合。
  * @param currentProperties 当前属性对象
  * @param newProperties 最新写回属性对象
  * @param mode 写回模式
@@ -261,25 +261,25 @@ function createSuccessResult(
 }
 
 /**
- * 托管临时巷道预览管理器。
- * 负责在组件内部维护临时延长线与其派生预览区域，避免业务页直接操作临时图层数据。
- * @param options 管理器初始化选项
- * @returns 托管预览的数据与操作方法
+ * 线草稿预览存储器。
+ * 负责在插件内部维护临时延长线与其派生线廊草稿，避免业务页直接操作临时图层数据。
+ * @param options 存储器初始化选项
+ * @returns 线草稿数据与操作方法
  */
-export function useManagedTunnelPreview(options: UseManagedTunnelPreviewOptions) {
+export function useLineDraftPreviewStore(options: UseLineDraftPreviewStoreOptions) {
   const { isEnabled } = options;
   const featureCollection = ref<MapCommonFeatureCollection>(createEmptyFeatureCollection());
 
   /**
-   * 读取当前托管预览中的全部要素列表。
-   * @returns 当前托管预览要素数组
+   * 读取当前线草稿中的全部要素列表。
+   * @returns 当前线草稿要素数组
    */
   const getCurrentFeatures = (): MapCommonFeature[] => {
     return (featureCollection.value.features || []) as MapCommonFeature[];
   };
 
   /**
-   * 将新的要素数组整体写回托管预览数据源。
+   * 将新的要素数组整体写回线草稿数据源。
    * @param nextFeatures 最新要素数组
    */
   const commitFeatures = (nextFeatures: MapCommonFeature[]): void => {
@@ -290,7 +290,7 @@ export function useManagedTunnelPreview(options: UseManagedTunnelPreviewOptions)
   };
 
   /**
-   * 按业务 ID 获取托管预览要素快照。
+   * 按业务 ID 获取线草稿要素快照。
    * @param featureId 目标业务 ID
    * @returns 命中的要素快照；未命中时返回 null
    */
@@ -306,40 +306,40 @@ export function useManagedTunnelPreview(options: UseManagedTunnelPreviewOptions)
   };
 
   /**
-   * 判断指定业务 ID 是否属于托管预览要素。
+   * 判断指定业务 ID 是否属于线草稿要素。
    * @param featureId 目标业务 ID
-   * @returns 是否存在对应的托管预览要素
+   * @returns 是否存在对应的线草稿要素
    */
-  const isManagedFeatureById = (featureId: MapFeatureId | null): boolean => {
+  const isLineDraftFeatureById = (featureId: MapFeatureId | null): boolean => {
     return getFeatureById(featureId) !== null;
   };
 
   /**
-   * 判断指定 sourceId 是否为托管预览数据源。
+   * 判断指定 sourceId 是否为线草稿数据源。
    * @param sourceId 待判断的数据源 ID
-   * @returns 是否命中托管预览数据源
+   * @returns 是否命中线草稿数据源
    */
-  const isManagedFeatureSource = (sourceId: string | null | undefined): boolean => {
-    return sourceId === MANAGED_TUNNEL_PREVIEW_SOURCE_ID;
+  const isLineDraftFeatureSource = (sourceId: string | null | undefined): boolean => {
+    return sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID;
   };
 
   /**
-   * 在托管预览中生成或替换临时延长线。
-   * @param extensionOptions 延长配置
+   * 在线草稿中生成或替换临时延长线。
+   * @param previewOptions 延长配置
    * @returns 最新生成的临时延长线；生成失败时返回 null
    */
-  const previewTunnelLineExtension = (
-    extensionOptions: PreviewTunnelLineExtensionOptions
+  const previewLineExtension = (
+    previewOptions: PreviewLineDraftOptions
   ): MapCommonLineFeature | null => {
     if (!isEnabled()) {
       return null;
     }
 
-    const nextLineFeature = MapTunnelLineExtensionTool.extendSelectedLineSegment(
-      extensionOptions.lineFeature,
-      extensionOptions.segmentIndex,
-      extensionOptions.extendLengthMeters,
-      extensionOptions.origin
+    const nextLineFeature = MapLineExtensionTool.extendSelectedLineSegment(
+      previewOptions.lineFeature,
+      previewOptions.segmentIndex,
+      previewOptions.extendLengthMeters,
+      previewOptions.origin
     );
 
     if (!nextLineFeature) {
@@ -347,9 +347,7 @@ export function useManagedTunnelPreview(options: UseManagedTunnelPreviewOptions)
     }
 
     const currentFeatures = getCurrentFeatures();
-    // 同一条来源线的同一段只保留一份预览结果，
-    // 这样业务层重复点击“延长”时，看到的始终是最新预览，而不是不断叠加旧草稿。
-    const replacedLineIds = collectReplacedTemporaryTunnelLineIds(currentFeatures, nextLineFeature);
+    const replacedLineIds = collectReplacedLineDraftIds(currentFeatures, nextLineFeature);
     const nextFeatures = filterOutDerivedFeaturesByLineIds(currentFeatures, replacedLineIds).concat(
       clonePlainData(nextLineFeature)
     );
@@ -359,25 +357,23 @@ export function useManagedTunnelPreview(options: UseManagedTunnelPreviewOptions)
   };
 
   /**
-   * 在托管预览中生成或替换指定线要素对应的预览区域。
-   * @param regionOptions 区域生成配置
+   * 在线草稿中生成或替换指定线要素对应的线廊草稿。
+   * @param previewOptions 线廊生成配置
    * @returns 是否生成成功
    */
-  const replaceTunnelPreviewRegion = (
-    regionOptions: ReplaceTunnelPreviewRegionOptions
+  const replaceLineCorridorPreview = (
+    previewOptions: ReplaceLineCorridorPreviewOptions
   ): boolean => {
     if (!isEnabled()) {
       return false;
     }
 
-    // 这里复用正式区域生成工具，但写入到托管预览源中。
-    // 这样几何算法仍然只有一份实现，临时态和正式态的视觉结果也保持一致。
-    const nextFeatures = MapTunnelRegionTool.replaceRegionFeatures(
+    const nextFeatures = MapLineCorridorTool.replaceRegionFeatures(
       getCurrentFeatures(),
-      regionOptions.lineFeature,
-      regionOptions.widthMeters,
+      previewOptions.lineFeature,
+      previewOptions.widthMeters,
       {
-        generatedKind: MANAGED_TUNNEL_PREVIEW_REGION_KIND,
+        generatedKind: LINE_DRAFT_PREVIEW_CORRIDOR_KIND,
       }
     );
 
@@ -390,41 +386,39 @@ export function useManagedTunnelPreview(options: UseManagedTunnelPreviewOptions)
   };
 
   /**
-   * 清空全部托管预览要素。
+   * 清空全部线草稿要素。
    */
-  const clearTunnelPreviewFeatures = (): void => {
+  const clearLineDraftFeatures = (): void => {
     commitFeatures([]);
   };
 
   /**
-   * 保存托管预览要素属性。
+   * 保存线草稿要素属性。
    * @param saveOptions 属性写回配置
    * @returns 结构化写回结果
    */
-  const saveManagedFeatureProperties = (
-    saveOptions: SaveManagedFeaturePropertiesOptions
+  const saveLineDraftFeatureProperties = (
+    saveOptions: SaveLineDraftFeaturePropertiesOptions
   ): SaveFeaturePropertiesResult => {
     const { featureId, newProperties, mode = 'replace' } = saveOptions;
 
     if (!isEnabled()) {
-      return createFailureResult(featureId, '托管临时巷道预览未启用');
+      return createFailureResult(featureId, '线草稿预览未启用');
     }
 
     const currentFeatures = clonePlainData(getCurrentFeatures());
     const featureIndex = findFeatureIndexById(currentFeatures, featureId);
 
     if (featureIndex === -1) {
-      return createFailureResult(featureId, `未找到 ID 为 '${featureId}' 的托管预览要素`);
+      return createFailureResult(featureId, `未找到 ID 为 '${featureId}' 的线草稿要素`);
     }
 
     const currentProperties = clonePlainData(currentFeatures[featureIndex].properties || {});
     const nextProperties = resolveNextMapProperties(currentProperties, newProperties, mode);
     currentFeatures[featureIndex].properties = nextProperties;
 
-    // 托管预览同样采用“更新内存态 + 回写完整集合”的方式，
-    // 这样与普通 GeoJSON 源的属性写回语义保持一致，页面层无需关心底层差异。
     commitFeatures(currentFeatures);
-    return createSuccessResult(featureId, nextProperties, '托管预览要素属性写回成功');
+    return createSuccessResult(featureId, nextProperties, '线草稿要素属性写回成功');
   };
 
   const hasFeatures = computed(() => getCurrentFeatures().length > 0);
@@ -434,7 +428,7 @@ export function useManagedTunnelPreview(options: UseManagedTunnelPreviewOptions)
     () => isEnabled(),
     (enabled) => {
       if (!enabled && getCurrentFeatures().length) {
-        clearTunnelPreviewFeatures();
+        clearLineDraftFeatures();
       }
     },
     { immediate: true }
@@ -444,12 +438,12 @@ export function useManagedTunnelPreview(options: UseManagedTunnelPreviewOptions)
     featureCollection,
     hasFeatures,
     featureCount,
-    previewTunnelLineExtension,
-    replaceTunnelPreviewRegion,
-    clearTunnelPreviewFeatures,
-    saveManagedFeatureProperties,
+    previewLineExtension,
+    replaceLineCorridorPreview,
+    clearLineDraftFeatures,
+    saveLineDraftFeatureProperties,
     getFeatureById,
-    isManagedFeatureById,
-    isManagedFeatureSource,
+    isLineDraftFeatureById,
+    isLineDraftFeatureSource,
   };
 }

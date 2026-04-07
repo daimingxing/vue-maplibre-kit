@@ -90,8 +90,8 @@ export interface MapLinePartialMeasureResult {
   lengthMeters: number;
 }
 
-/** 生成区域的附加配置 */
-export interface MapTunnelRegionOptions {
+/** 线廊生成的附加配置 */
+export interface MapLineCorridorOptions {
   /** 生成区域的类型标识 */
   generatedKind?: string;
   /** 生成区域的业务类型名称 */
@@ -137,7 +137,7 @@ export class MapLineMeasureTool {
       return null;
     }
 
-    return MapTunnelLineExtensionTool.getLineLengthInMeters(feature.geometry.coordinates);
+    return MapLineExtensionTool.getLineLengthInMeters(feature.geometry.coordinates);
   }
 
   /**
@@ -146,7 +146,7 @@ export class MapLineMeasureTool {
    * @returns 折线总长度
    */
   static getCoordinatesLengthInMeters(coordinates: Position[]): number {
-    return MapTunnelLineExtensionTool.getLineLengthInMeters(coordinates);
+    return MapLineExtensionTool.getLineLengthInMeters(coordinates);
   }
 
   /**
@@ -182,7 +182,7 @@ export class MapLineMeasureTool {
     start: Position,
     end: Position
   ): MapLinePartialMeasureResult | null {
-    const normalizedCoordinates = MapTunnelLineExtensionTool.normalizeLineCoordinates(coordinates);
+    const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(coordinates);
     if (normalizedCoordinates.length < 2) {
       return null;
     }
@@ -239,11 +239,11 @@ export class MapLineMeasureTool {
         segmentEndMercator
       );
       const snappedCoordinate = MapLineMeasureTool.mercatorPointToLngLat(projectedPoint.point);
-      const distanceToLineMeters = MapTunnelLineExtensionTool.getDistanceInMeters(
+      const distanceToLineMeters = MapLineExtensionTool.getDistanceInMeters(
         target,
         snappedCoordinate
       );
-      const segmentLengthMeters = MapTunnelLineExtensionTool.getDistanceInMeters(
+      const segmentLengthMeters = MapLineExtensionTool.getDistanceInMeters(
         segmentStart,
         segmentEnd
       );
@@ -278,7 +278,7 @@ export class MapLineMeasureTool {
     for (let index = 1; index < coordinates.length; index += 1) {
       cumulativeDistances[index] =
         cumulativeDistances[index - 1] +
-        MapTunnelLineExtensionTool.getDistanceInMeters(coordinates[index - 1], coordinates[index]);
+        MapLineExtensionTool.getDistanceInMeters(coordinates[index - 1], coordinates[index]);
     }
 
     return cumulativeDistances;
@@ -462,12 +462,12 @@ export function buildManagedPreviewOriginProperties(
 }
 
 /**
- * 巷道区域生成工具类。
+ * 线廊生成工具类。
  * 负责从中心线生成区域面，以及在要素集合中替换旧区域。
  */
-export class MapTunnelRegionTool {
+export class MapLineCorridorTool {
   /** 默认的生成区域标识 */
-  static readonly DEFAULT_GENERATED_KIND = 'tunnel-region';
+  static readonly DEFAULT_GENERATED_KIND = 'line-corridor';
 
   /**
    * 判断指定要素是否为某条线生成出来的区域面。
@@ -479,7 +479,7 @@ export class MapTunnelRegionTool {
   static isGeneratedRegionFeature(
     feature: MapCommonFeature,
     lineId: string | number,
-    generatedKind = MapTunnelRegionTool.DEFAULT_GENERATED_KIND
+    generatedKind = MapLineCorridorTool.DEFAULT_GENERATED_KIND
   ): feature is MapCommonPolygonFeature {
     return (
       feature.geometry?.type === 'Polygon' &&
@@ -498,21 +498,21 @@ export class MapTunnelRegionTool {
   static createRegionFeature(
     lineFeature: MapCommonLineFeature,
     widthMeters: number,
-    options: MapTunnelRegionOptions = {}
+    options: MapLineCorridorOptions = {}
   ): MapCommonPolygonFeature | null {
-    const polygonRing = MapTunnelRegionTool.buildTunnelRegionPolygonRing(
+    const polygonRing = MapLineCorridorTool.buildLineCorridorPolygonRing(
       lineFeature.geometry.coordinates,
       widthMeters
     );
-    const lineId = MapTunnelRegionTool.getFeatureBusinessId(lineFeature);
+    const lineId = MapLineCorridorTool.getFeatureBusinessId(lineFeature);
 
     if (!polygonRing || lineId === null) {
       return null;
     }
 
-    const generatedKind = options.generatedKind ?? MapTunnelRegionTool.DEFAULT_GENERATED_KIND;
+    const generatedKind = options.generatedKind ?? MapLineCorridorTool.DEFAULT_GENERATED_KIND;
     const regionId = options.regionId ?? `generated_region_${String(lineId)}`;
-    const regionType = options.regionType ?? '巷道区域';
+    const regionType = options.regionType ?? '线廊区域';
 
     return {
       type: 'Feature',
@@ -546,11 +546,11 @@ export class MapTunnelRegionTool {
     features: MapCommonFeature[],
     lineFeature: MapCommonLineFeature,
     widthMeters: number,
-    options: MapTunnelRegionOptions = {}
+    options: MapLineCorridorOptions = {}
   ): MapCommonFeature[] | null {
-    const lineId = MapTunnelRegionTool.getFeatureBusinessId(lineFeature);
-    const generatedKind = options.generatedKind ?? MapTunnelRegionTool.DEFAULT_GENERATED_KIND;
-    const nextRegionFeature = MapTunnelRegionTool.createRegionFeature(
+    const lineId = MapLineCorridorTool.getFeatureBusinessId(lineFeature);
+    const generatedKind = options.generatedKind ?? MapLineCorridorTool.DEFAULT_GENERATED_KIND;
+    const nextRegionFeature = MapLineCorridorTool.createRegionFeature(
       lineFeature,
       widthMeters,
       options
@@ -562,7 +562,7 @@ export class MapTunnelRegionTool {
 
     return features
       .filter(
-        (feature) => !MapTunnelRegionTool.isGeneratedRegionFeature(feature, lineId, generatedKind)
+        (feature) => !MapLineCorridorTool.isGeneratedRegionFeature(feature, lineId, generatedKind)
       )
       .concat(nextRegionFeature);
   }
@@ -573,24 +573,24 @@ export class MapTunnelRegionTool {
    * @param widthMeters 中心线到边界的距离（米）
    * @returns 闭合的面坐标环；无法生成时返回 null
    */
-  private static buildTunnelRegionPolygonRing(
+  private static buildLineCorridorPolygonRing(
     coordinates: Position[],
     widthMeters: number
   ): Position[] | null {
-    const normalizedCoordinates = MapTunnelLineExtensionTool.normalizeLineCoordinates(coordinates);
+    const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(coordinates);
     if (normalizedCoordinates.length < 2) return null;
 
     const mercatorCoordinates = normalizedCoordinates.map((coordinate) =>
-      MapTunnelRegionTool.lngLatToMercatorPoint(coordinate)
+      MapLineCorridorTool.lngLatToMercatorPoint(coordinate)
     );
-    const leftPath = MapTunnelRegionTool.buildOffsetPath(mercatorCoordinates, widthMeters, 1);
-    const rightPath = MapTunnelRegionTool.buildOffsetPath(mercatorCoordinates, widthMeters, -1);
+    const leftPath = MapLineCorridorTool.buildOffsetPath(mercatorCoordinates, widthMeters, 1);
+    const rightPath = MapLineCorridorTool.buildOffsetPath(mercatorCoordinates, widthMeters, -1);
 
     const ring = [
-      ...leftPath.map((coordinate) => MapTunnelRegionTool.mercatorPointToLngLat(coordinate)),
+      ...leftPath.map((coordinate) => MapLineCorridorTool.mercatorPointToLngLat(coordinate)),
       ...rightPath
         .reverse()
-        .map((coordinate) => MapTunnelRegionTool.mercatorPointToLngLat(coordinate)),
+        .map((coordinate) => MapLineCorridorTool.mercatorPointToLngLat(coordinate)),
     ];
 
     if (ring.length < 4) return null;
@@ -613,57 +613,57 @@ export class MapTunnelRegionTool {
   ): MercatorPoint[] {
     return coordinates.map((currentCoordinate, index) => {
       if (index === 0) {
-        const firstNormal = MapTunnelRegionTool.getLeftNormalVector(
+        const firstNormal = MapLineCorridorTool.getLeftNormalVector(
           currentCoordinate,
           coordinates[index + 1]
         );
-        return MapTunnelRegionTool.addMercatorPoint(
+        return MapLineCorridorTool.addMercatorPoint(
           currentCoordinate,
-          MapTunnelRegionTool.scaleMercatorPoint(firstNormal || { x: 0, y: 0 }, offsetMeters * side)
+          MapLineCorridorTool.scaleMercatorPoint(firstNormal || { x: 0, y: 0 }, offsetMeters * side)
         );
       }
 
       if (index === coordinates.length - 1) {
-        const lastNormal = MapTunnelRegionTool.getLeftNormalVector(
+        const lastNormal = MapLineCorridorTool.getLeftNormalVector(
           coordinates[index - 1],
           currentCoordinate
         );
-        return MapTunnelRegionTool.addMercatorPoint(
+        return MapLineCorridorTool.addMercatorPoint(
           currentCoordinate,
-          MapTunnelRegionTool.scaleMercatorPoint(lastNormal || { x: 0, y: 0 }, offsetMeters * side)
+          MapLineCorridorTool.scaleMercatorPoint(lastNormal || { x: 0, y: 0 }, offsetMeters * side)
         );
       }
 
       const previousCoordinate = coordinates[index - 1];
       const nextCoordinate = coordinates[index + 1];
-      const previousNormal = MapTunnelRegionTool.getLeftNormalVector(
+      const previousNormal = MapLineCorridorTool.getLeftNormalVector(
         previousCoordinate,
         currentCoordinate
       );
-      const nextNormal = MapTunnelRegionTool.getLeftNormalVector(currentCoordinate, nextCoordinate);
+      const nextNormal = MapLineCorridorTool.getLeftNormalVector(currentCoordinate, nextCoordinate);
 
       if (!previousNormal || !nextNormal) {
         return currentCoordinate;
       }
 
-      const previousOffsetStart = MapTunnelRegionTool.addMercatorPoint(
+      const previousOffsetStart = MapLineCorridorTool.addMercatorPoint(
         previousCoordinate,
-        MapTunnelRegionTool.scaleMercatorPoint(previousNormal, offsetMeters * side)
+        MapLineCorridorTool.scaleMercatorPoint(previousNormal, offsetMeters * side)
       );
-      const previousOffsetEnd = MapTunnelRegionTool.addMercatorPoint(
+      const previousOffsetEnd = MapLineCorridorTool.addMercatorPoint(
         currentCoordinate,
-        MapTunnelRegionTool.scaleMercatorPoint(previousNormal, offsetMeters * side)
+        MapLineCorridorTool.scaleMercatorPoint(previousNormal, offsetMeters * side)
       );
-      const nextOffsetStart = MapTunnelRegionTool.addMercatorPoint(
+      const nextOffsetStart = MapLineCorridorTool.addMercatorPoint(
         currentCoordinate,
-        MapTunnelRegionTool.scaleMercatorPoint(nextNormal, offsetMeters * side)
+        MapLineCorridorTool.scaleMercatorPoint(nextNormal, offsetMeters * side)
       );
-      const nextOffsetEnd = MapTunnelRegionTool.addMercatorPoint(
+      const nextOffsetEnd = MapLineCorridorTool.addMercatorPoint(
         nextCoordinate,
-        MapTunnelRegionTool.scaleMercatorPoint(nextNormal, offsetMeters * side)
+        MapLineCorridorTool.scaleMercatorPoint(nextNormal, offsetMeters * side)
       );
 
-      const intersection = MapTunnelRegionTool.getInfiniteLineIntersection(
+      const intersection = MapLineCorridorTool.getInfiniteLineIntersection(
         previousOffsetStart,
         previousOffsetEnd,
         nextOffsetStart,
@@ -677,8 +677,8 @@ export class MapTunnelRegionTool {
         };
       }
 
-      const miterLength = MapTunnelRegionTool.getMercatorVectorLength(
-        MapTunnelRegionTool.subtractMercatorPoint(intersection, previousOffsetEnd)
+      const miterLength = MapLineCorridorTool.getMercatorVectorLength(
+        MapLineCorridorTool.subtractMercatorPoint(intersection, previousOffsetEnd)
       );
       if (miterLength > offsetMeters * 6) {
         return {
@@ -701,8 +701,8 @@ export class MapTunnelRegionTool {
     start: MercatorPoint,
     end: MercatorPoint
   ): MercatorPoint | null {
-    const direction = MapTunnelRegionTool.normalizeMercatorVector(
-      MapTunnelRegionTool.subtractMercatorPoint(end, start)
+    const direction = MapLineCorridorTool.normalizeMercatorVector(
+      MapLineCorridorTool.subtractMercatorPoint(end, start)
     );
     if (!direction) return null;
 
@@ -726,15 +726,15 @@ export class MapTunnelRegionTool {
     secondStart: MercatorPoint,
     secondEnd: MercatorPoint
   ): MercatorPoint | null {
-    const firstVector = MapTunnelRegionTool.subtractMercatorPoint(firstEnd, firstStart);
-    const secondVector = MapTunnelRegionTool.subtractMercatorPoint(secondEnd, secondStart);
+    const firstVector = MapLineCorridorTool.subtractMercatorPoint(firstEnd, firstStart);
+    const secondVector = MapLineCorridorTool.subtractMercatorPoint(secondEnd, secondStart);
     const determinant = firstVector.x * secondVector.y - firstVector.y * secondVector.x;
 
     if (Math.abs(determinant) < 1e-9) {
       return null;
     }
 
-    const delta = MapTunnelRegionTool.subtractMercatorPoint(secondStart, firstStart);
+    const delta = MapLineCorridorTool.subtractMercatorPoint(secondStart, firstStart);
     const ratio = (delta.x * secondVector.y - delta.y * secondVector.x) / determinant;
 
     return {
@@ -753,10 +753,10 @@ export class MapTunnelRegionTool {
     const clampedLatitude = Math.max(Math.min(lat, 85.0511287798), -85.0511287798);
 
     return {
-      x: MERCATOR_RADIUS_METERS * MapTunnelRegionTool.toRadians(lng),
+      x: MERCATOR_RADIUS_METERS * MapLineCorridorTool.toRadians(lng),
       y:
         MERCATOR_RADIUS_METERS *
-        Math.log(Math.tan(Math.PI / 4 + MapTunnelRegionTool.toRadians(clampedLatitude) / 2)),
+        Math.log(Math.tan(Math.PI / 4 + MapLineCorridorTool.toRadians(clampedLatitude) / 2)),
     };
   }
 
@@ -767,8 +767,8 @@ export class MapTunnelRegionTool {
    */
   private static mercatorPointToLngLat(point: MercatorPoint): Position {
     return [
-      MapTunnelRegionTool.toDegrees(point.x / MERCATOR_RADIUS_METERS),
-      MapTunnelRegionTool.toDegrees(
+      MapLineCorridorTool.toDegrees(point.x / MERCATOR_RADIUS_METERS),
+      MapLineCorridorTool.toDegrees(
         2 * Math.atan(Math.exp(point.y / MERCATOR_RADIUS_METERS)) - Math.PI / 2
       ),
     ];
@@ -831,7 +831,7 @@ export class MapTunnelRegionTool {
    * @returns 单位向量；零向量时返回 null
    */
   private static normalizeMercatorVector(vector: MercatorPoint): MercatorPoint | null {
-    const vectorLength = MapTunnelRegionTool.getMercatorVectorLength(vector);
+    const vectorLength = MapLineCorridorTool.getMercatorVectorLength(vector);
     if (vectorLength === 0) return null;
 
     return {
@@ -874,15 +874,15 @@ export class MapTunnelRegionTool {
 }
 
 /**
- * 巷道延长工具类。
- * 负责识别命中的线段、计算线长，以及沿指定线段方向延长巷道。
+ * 线延长草稿工具类。
+ * 负责识别命中的线段、计算线长，以及沿指定线段方向生成线延长草稿。
  */
-export class MapTunnelLineExtensionTool {
+export class MapLineExtensionTool {
   /** 临时延长线要素的 generatedKind 标识 */
-  static readonly TEMPORARY_EXTENSION_KIND = 'tunnel-line-extension-temp';
+  static readonly TEMPORARY_EXTENSION_KIND = 'line-extension-draft';
 
   /** 临时延长线要素 ID 前缀 */
-  static readonly TEMPORARY_EXTENSION_ID_PREFIX = 'temp_tunnel_line_extension_';
+  static readonly TEMPORARY_EXTENSION_ID_PREFIX = 'lineDraftFeature_';
 
   /**
    * 计算两点之间的球面距离（米）。
@@ -900,11 +900,11 @@ export class MapTunnelLineExtensionTool {
    * @returns 折线总长度（米）
    */
   static getLineLengthInMeters(coordinates: Position[]): number {
-    const normalizedCoordinates = MapTunnelLineExtensionTool.normalizeLineCoordinates(coordinates);
+    const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(coordinates);
     let totalLength = 0;
 
     for (let index = 0; index < normalizedCoordinates.length - 1; index += 1) {
-      totalLength += MapTunnelLineExtensionTool.getDistanceInMeters(
+      totalLength += MapLineExtensionTool.getDistanceInMeters(
         normalizedCoordinates[index],
         normalizedCoordinates[index + 1]
       );
@@ -925,8 +925,8 @@ export class MapTunnelLineExtensionTool {
     const { feature, featureRef = null, lngLat, resolveLatestFeature } = options;
     const latestFeature = resolveLatestFeature?.(featureRef);
     const lineFeature =
-      MapTunnelLineExtensionTool.toLineFeatureSnapshot(latestFeature) ??
-      MapTunnelLineExtensionTool.toLineFeatureSnapshot(feature);
+      MapLineExtensionTool.toLineFeatureSnapshot(latestFeature) ??
+      MapLineExtensionTool.toLineFeatureSnapshot(feature);
 
     if (!lineFeature) {
       return null;
@@ -934,7 +934,7 @@ export class MapTunnelLineExtensionTool {
 
     return {
       lineFeature,
-      segmentSelection: MapTunnelLineExtensionTool.resolveNearestSegmentSelection(
+      segmentSelection: MapLineExtensionTool.resolveNearestSegmentSelection(
         lineFeature.geometry.coordinates,
         lngLat
       ),
@@ -951,27 +951,27 @@ export class MapTunnelLineExtensionTool {
     coordinates: Position[],
     lngLat: { lng: number; lat: number }
   ): MapLineSegmentSelection | null {
-    const normalizedCoordinates = MapTunnelLineExtensionTool.normalizeLineCoordinates(coordinates);
+    const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(coordinates);
     if (normalizedCoordinates.length < 2) return null;
 
-    const clickedPoint = MapTunnelLineExtensionTool.lngLatToMercatorPoint([lngLat.lng, lngLat.lat]);
+    const clickedPoint = MapLineExtensionTool.lngLatToMercatorPoint([lngLat.lng, lngLat.lat]);
     let bestSegmentIndex = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
 
     for (let index = 0; index < normalizedCoordinates.length - 1; index += 1) {
-      const segmentStart = MapTunnelLineExtensionTool.lngLatToMercatorPoint(
+      const segmentStart = MapLineExtensionTool.lngLatToMercatorPoint(
         normalizedCoordinates[index]
       );
-      const segmentEnd = MapTunnelLineExtensionTool.lngLatToMercatorPoint(
+      const segmentEnd = MapLineExtensionTool.lngLatToMercatorPoint(
         normalizedCoordinates[index + 1]
       );
-      const projectedPoint = MapTunnelLineExtensionTool.projectPointToSegment(
+      const projectedPoint = MapLineExtensionTool.projectPointToSegment(
         clickedPoint,
         segmentStart,
         segmentEnd
       ).point;
-      const projectedDistance = MapTunnelLineExtensionTool.getMercatorVectorLength(
-        MapTunnelLineExtensionTool.subtractMercatorPoint(projectedPoint, clickedPoint)
+      const projectedDistance = MapLineExtensionTool.getMercatorVectorLength(
+        MapLineExtensionTool.subtractMercatorPoint(projectedPoint, clickedPoint)
       );
 
       if (projectedDistance < bestDistance) {
@@ -984,7 +984,7 @@ export class MapTunnelLineExtensionTool {
 
     return {
       index: bestSegmentIndex,
-      lengthMeters: MapTunnelLineExtensionTool.getDistanceInMeters(
+      lengthMeters: MapLineExtensionTool.getDistanceInMeters(
         normalizedCoordinates[bestSegmentIndex],
         normalizedCoordinates[bestSegmentIndex + 1]
       ),
@@ -999,7 +999,7 @@ export class MapTunnelLineExtensionTool {
    */
   static isTemporaryExtensionFeature(
     feature: MapCommonFeature,
-    generatedKind = MapTunnelLineExtensionTool.TEMPORARY_EXTENSION_KIND
+    generatedKind = MapLineExtensionTool.TEMPORARY_EXTENSION_KIND
   ): feature is MapCommonLineFeature {
     return (
       feature.geometry?.type === 'LineString' && feature.properties?.generatedKind === generatedKind
@@ -1020,7 +1020,7 @@ export class MapTunnelLineExtensionTool {
     extendLengthMeters: number,
     origin: MapSourceFeatureRef | null = null
   ): MapCommonLineFeature | null {
-    const normalizedCoordinates = MapTunnelLineExtensionTool.normalizeLineCoordinates(
+    const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(
       lineFeature.geometry.coordinates
     );
 
@@ -1030,7 +1030,7 @@ export class MapTunnelLineExtensionTool {
 
     const segmentStart = normalizedCoordinates[segmentIndex];
     const segmentEnd = normalizedCoordinates[segmentIndex + 1];
-    const currentSegmentLength = MapTunnelLineExtensionTool.getDistanceInMeters(
+    const currentSegmentLength = MapLineExtensionTool.getDistanceInMeters(
       segmentStart,
       segmentEnd
     );
@@ -1039,15 +1039,15 @@ export class MapTunnelLineExtensionTool {
       return null;
     }
 
-    const segmentBearing = MapTunnelLineExtensionTool.getSegmentBearing(segmentStart, segmentEnd);
+    const segmentBearing = MapLineExtensionTool.getSegmentBearing(segmentStart, segmentEnd);
     const extendedEndCoordinate = turfDestination(
       turfPoint(segmentEnd),
       extendLengthMeters,
       segmentBearing,
       { units: 'meters' }
     ).geometry.coordinates as Position;
-    const sourceLineId = MapTunnelLineExtensionTool.getFeatureBusinessId(lineFeature);
-    const generatedSegmentIndex = MapTunnelLineExtensionTool.resolveGeneratedSegmentIndex(
+    const sourceLineId = MapLineExtensionTool.getFeatureBusinessId(lineFeature);
+    const generatedSegmentIndex = MapLineExtensionTool.resolveGeneratedSegmentIndex(
       lineFeature,
       segmentIndex
     );
@@ -1056,7 +1056,7 @@ export class MapTunnelLineExtensionTool {
       return null;
     }
 
-    const temporaryLineId = MapTunnelLineExtensionTool.buildTemporaryExtensionId(
+    const temporaryLineId = MapLineExtensionTool.buildTemporaryExtensionId(
       origin,
       generatedSegmentIndex
     );
@@ -1071,7 +1071,7 @@ export class MapTunnelLineExtensionTool {
       properties: {
         ...(lineFeature.properties || {}),
         id: temporaryLineId,
-        generatedKind: MapTunnelLineExtensionTool.TEMPORARY_EXTENSION_KIND,
+        generatedKind: MapLineExtensionTool.TEMPORARY_EXTENSION_KIND,
         generatedFromLineId: sourceLineId,
         generatedFromSegmentIndex: generatedSegmentIndex,
         extendLengthMeters,
@@ -1133,15 +1133,15 @@ export class MapTunnelLineExtensionTool {
   private static getSegmentBearing(start: Position, end: Position): number {
     const [startLng, startLat] = start;
     const [endLng, endLat] = end;
-    const longitudeDelta = MapTunnelLineExtensionTool.toRadians(endLng - startLng);
-    const startLatitude = MapTunnelLineExtensionTool.toRadians(startLat);
-    const endLatitude = MapTunnelLineExtensionTool.toRadians(endLat);
+    const longitudeDelta = MapLineExtensionTool.toRadians(endLng - startLng);
+    const startLatitude = MapLineExtensionTool.toRadians(startLat);
+    const endLatitude = MapLineExtensionTool.toRadians(endLat);
     const y = Math.sin(longitudeDelta) * Math.cos(endLatitude);
     const x =
       Math.cos(startLatitude) * Math.sin(endLatitude) -
       Math.sin(startLatitude) * Math.cos(endLatitude) * Math.cos(longitudeDelta);
 
-    return ((MapTunnelLineExtensionTool.toDegrees(Math.atan2(y, x)) + 540) % 360) - 180;
+    return ((MapLineExtensionTool.toDegrees(Math.atan2(y, x)) + 540) % 360) - 180;
   }
 
   /**
@@ -1156,7 +1156,7 @@ export class MapTunnelLineExtensionTool {
     start: MercatorPoint,
     end: MercatorPoint
   ): { point: MercatorPoint; ratio: number } {
-    const segmentVector = MapTunnelLineExtensionTool.subtractMercatorPoint(end, start);
+    const segmentVector = MapLineExtensionTool.subtractMercatorPoint(end, start);
     const segmentLengthSquared =
       segmentVector.x * segmentVector.x + segmentVector.y * segmentVector.y;
 
@@ -1167,7 +1167,7 @@ export class MapTunnelLineExtensionTool {
       };
     }
 
-    const pointVector = MapTunnelLineExtensionTool.subtractMercatorPoint(point, start);
+    const pointVector = MapLineExtensionTool.subtractMercatorPoint(point, start);
     const rawRatio =
       (pointVector.x * segmentVector.x + pointVector.y * segmentVector.y) / segmentLengthSquared;
     const ratio = Math.max(0, Math.min(1, rawRatio));
@@ -1199,7 +1199,7 @@ export class MapTunnelLineExtensionTool {
     const sourceIdToken = encodeURIComponent(origin.sourceId || 'unknown_source');
     const featureIdToken = encodeURIComponent(String(origin.featureId ?? 'unknown_feature'));
     const randomSuffix = Math.random().toString(36).slice(2, 8);
-    return `${MapTunnelLineExtensionTool.TEMPORARY_EXTENSION_ID_PREFIX}${sourceIdToken}_${featureIdToken}_${segmentIndex}_${Date.now()}_${randomSuffix}`;
+    return `${MapLineExtensionTool.TEMPORARY_EXTENSION_ID_PREFIX}${sourceIdToken}_${featureIdToken}_${segmentIndex}_${Date.now()}_${randomSuffix}`;
   }
 
   /**
@@ -1245,10 +1245,10 @@ export class MapTunnelLineExtensionTool {
     const clampedLatitude = Math.max(Math.min(lat, 85.0511287798), -85.0511287798);
 
     return {
-      x: MERCATOR_RADIUS_METERS * MapTunnelLineExtensionTool.toRadians(lng),
+      x: MERCATOR_RADIUS_METERS * MapLineExtensionTool.toRadians(lng),
       y:
         MERCATOR_RADIUS_METERS *
-        Math.log(Math.tan(Math.PI / 4 + MapTunnelLineExtensionTool.toRadians(clampedLatitude) / 2)),
+        Math.log(Math.tan(Math.PI / 4 + MapLineExtensionTool.toRadians(clampedLatitude) / 2)),
     };
   }
 

@@ -1,7 +1,5 @@
 import type {
   ControlPosition,
-  FillLayerSpecification,
-  LineLayerSpecification,
   Map as MaplibreMap,
   MapGeoJSONFeature,
 } from 'maplibre-gl';
@@ -218,12 +216,6 @@ export interface TerradrawLineDecorationOptions {
 /** 地图吸附类型 */
 export type MapFeatureSnapKind = 'vertex' | 'segment';
 
-/** 单条吸附规则可命中的几何类型 */
-export type MapFeatureSnapGeometryType = 'Point' | 'LineString' | 'Polygon';
-
-/** 单条吸附规则支持的吸附方式 */
-export type MapFeatureSnapMode = 'vertex' | 'segment';
-
 /** 吸附命中的线段信息 */
 export interface MapFeatureSnapSegmentInfo {
   /** 当前命中的坐标路径索引（多几何场景下用于区分第几段路径） */
@@ -238,68 +230,6 @@ export interface MapFeatureSnapSegmentInfo {
   endCoordinate: [number, number];
 }
 
-/** 单条吸附规则高级过滤上下文 */
-export interface MapFeatureSnapRuleFilterContext {
-  /** 当前匹配中的规则配置 */
-  rule: MapFeatureSnapRule;
-  /** 当前候选渲染要素 */
-  feature: MapGeoJSONFeature;
-  /** 当前候选图层 ID */
-  layerId: string;
-  /** 当前候选 source ID */
-  sourceId: string | null;
-  /** 当前候选 source-layer */
-  sourceLayer: string | null;
-  /** 当前候选属性对象 */
-  properties: Record<string, any> | null;
-  /** 当前地图实例 */
-  map: MaplibreMap;
-}
-
-/** 单条普通图层吸附规则 */
-export interface MapFeatureSnapRule {
-  /** 规则唯一标识 */
-  id: string;
-  /** 是否启用当前规则；默认 true */
-  enabled?: boolean;
-  /** 参与当前规则候选查询的图层 ID 集合 */
-  layerIds: string[];
-  /** 当前规则命中优先级；数值越大优先级越高 */
-  priority?: number;
-  /** 当前规则局部吸附范围（像素） */
-  tolerancePx?: number;
-  /** 当前规则允许命中的几何类型 */
-  geometryTypes?: MapFeatureSnapGeometryType[];
-  /** 当前规则允许采用的吸附方式 */
-  snapTo?: MapFeatureSnapMode[];
-  /** 对候选属性对象做浅层严格匹配的条件集合 */
-  where?: Record<string, unknown>;
-  /** 业务层高级过滤函数；返回 false 时表示当前候选要素跳过吸附 */
-  filter?: (context: MapFeatureSnapRuleFilterContext) => boolean;
-}
-
-/** 吸附预览图层配置 */
-export interface MapFeatureSnapPreviewOptions {
-  /** 是否启用吸附预览；默认 true */
-  enabled?: boolean;
-  /** 吸附点颜色 */
-  pointColor?: string;
-  /** 吸附点半径（像素） */
-  pointRadius?: number;
-  /** 命中线段高亮颜色 */
-  lineColor?: string;
-  /** 命中线段高亮宽度（像素） */
-  lineWidth?: number;
-}
-
-/** 普通图层吸附配置 */
-export interface MapFeatureSnapOrdinaryLayerOptions {
-  /** 是否启用普通图层吸附；存在规则时默认 true */
-  enabled?: boolean;
-  /** 普通图层吸附规则集合 */
-  rules: MapFeatureSnapRule[];
-}
-
 /** TerraDraw / Measure 共享吸附配置 */
 export interface TerradrawSnapSharedOptions {
   /** 是否启用吸附；默认 true */
@@ -310,27 +240,6 @@ export interface TerradrawSnapSharedOptions {
   useNative?: boolean;
   /** 是否启用普通图层候选吸附；默认 true */
   useMapTargets?: boolean;
-}
-
-/** 地图吸附扩展配置 */
-export interface MapFeatureSnapOptions {
-  /** 是否启用整个吸附扩展；默认 true */
-  enabled?: boolean;
-  /** 全局默认吸附范围（像素）；默认 16 */
-  defaultTolerancePx?: number;
-  /** 吸附预览配置 */
-  preview?: MapFeatureSnapPreviewOptions;
-  /** 普通图层吸附配置 */
-  ordinaryLayers?: MapFeatureSnapOrdinaryLayerOptions;
-  /** TerraDraw / Measure 吸附公共默认配置 */
-  terradraw?: {
-    /** TerraDraw / Measure 共用默认值 */
-    defaults?: TerradrawSnapSharedOptions;
-    /** 绘图控件默认值；传 false 表示默认关闭 */
-    draw?: TerradrawSnapSharedOptions | boolean;
-    /** 测量控件默认值；传 false 表示默认关闭 */
-    measure?: TerradrawSnapSharedOptions | boolean;
-  };
 }
 
 /** 统一吸附结果 */
@@ -423,43 +332,6 @@ export interface MapLayerInteractiveLayerOptions {
   onDoubleClick?: (context: MapLayerInteractiveContext) => void;
   /** 右键图层要素回调 */
   onContextMenu?: (context: MapLayerInteractiveContext) => void;
-}
-
-/** 托管临时预览线图层样式覆写配置 */
-export interface ManagedTunnelPreviewLineStyleOverrides {
-  /** 线图层 layout 部分覆写；只传需要修改的字段，未传字段继续使用容器层默认值 */
-  layout?: Partial<NonNullable<LineLayerSpecification['layout']>>;
-  /** 线图层 paint 部分覆写；只传需要修改的字段，未传字段继续使用容器层默认值 */
-  paint?: Partial<NonNullable<LineLayerSpecification['paint']>>;
-}
-
-/** 托管临时预览面图层样式覆写配置 */
-export interface ManagedTunnelPreviewFillStyleOverrides {
-  /** 面图层 layout 部分覆写；只传需要修改的字段，未传字段继续使用容器层默认值 */
-  layout?: Partial<NonNullable<FillLayerSpecification['layout']>>;
-  /** 面图层 paint 部分覆写；只传需要修改的字段，未传字段继续使用容器层默认值 */
-  paint?: Partial<NonNullable<FillLayerSpecification['paint']>>;
-}
-
-/** 托管临时巷道预览样式覆写配置 */
-export interface ManagedTunnelPreviewStyleOverrides {
-  /** 临时延长线图层样式覆写 */
-  line?: ManagedTunnelPreviewLineStyleOverrides;
-  /** 临时预览区域图层样式覆写 */
-  fill?: ManagedTunnelPreviewFillStyleOverrides;
-}
-
-/** MapLibre 托管临时巷道预览配置 */
-export interface ManagedTunnelPreviewOptions {
-  /** 是否启用托管临时巷道预览；默认 true */
-  enabled?: boolean;
-  /** 需要继承交互配置的正式线图层 ID */
-  inheritInteractiveFromLayerId: string;
-  /**
-   * 业务层可选传入的局部样式覆写。
-   * 仅支持覆写 layout / paint，不开放 sourceId / layerId / filter / generatedKind 等图层结构配置。
-   */
-  styleOverrides?: ManagedTunnelPreviewStyleOverrides;
 }
 
 /** 普通 MapLibre 图层业务交互配置 */

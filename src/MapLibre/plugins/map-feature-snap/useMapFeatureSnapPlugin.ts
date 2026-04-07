@@ -1,11 +1,9 @@
 import { computed } from 'vue';
-import {
-  MapFeatureSnapPreviewLayers,
-  createEmptyMapFeatureSnapResult,
-  useMapFeatureSnapExtension,
-} from '../../extensions/mapFeatureSnap';
 import { defineMapPlugin, type MapPluginDescriptor } from '../types';
 import type { MapFeatureSnapOptions, MapFeatureSnapPluginApi } from './types';
+import MapFeatureSnapPreviewLayers from './MapFeatureSnapPreviewLayers.vue';
+import { useMapFeatureSnapController } from './useMapFeatureSnapController';
+import { createEmptyMapFeatureSnapResult } from './useMapFeatureSnapBinding';
 
 /** 统一地图吸附插件类型标识。 */
 export const MAP_FEATURE_SNAP_PLUGIN_TYPE = 'mapFeatureSnap';
@@ -21,7 +19,7 @@ export interface MapFeatureSnapPluginDescriptor
 export const mapFeatureSnapPlugin = defineMapPlugin({
   type: MAP_FEATURE_SNAP_PLUGIN_TYPE,
   createInstance(context) {
-    const pluginController = useMapFeatureSnapExtension({
+    const pluginController = useMapFeatureSnapController({
       getOptions: () => context.getOptions() as MapFeatureSnapOptions,
       getMap: context.getMap,
     });

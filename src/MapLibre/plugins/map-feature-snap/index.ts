@@ -1,14 +1,16 @@
 import {
   createEmptyMapFeatureSnapResult,
   createMapFeatureSnapBinding,
+  type MapFeatureSnapBinding,
   MAP_FEATURE_SNAP_PREVIEW_LINE_LAYER_ID,
   MAP_FEATURE_SNAP_PREVIEW_POINT_LAYER_ID,
   MAP_FEATURE_SNAP_PREVIEW_SOURCE_ID,
-  MapFeatureSnapPreviewLayers,
-} from '../../extensions/mapFeatureSnap';
+} from './useMapFeatureSnapBinding';
+import MapFeatureSnapPreviewLayers from './MapFeatureSnapPreviewLayers.vue';
 import type { MapPluginDescriptor } from '../types';
 import type { MapFeatureSnapOptions } from './types';
 import { mapFeatureSnapPlugin, MAP_FEATURE_SNAP_PLUGIN_TYPE } from './useMapFeatureSnapPlugin';
+import type { ResolvedTerradrawSnapOptions } from '../types';
 
 /** 地图吸附插件工厂函数返回值。 */
 export interface MapFeatureSnapPluginDescriptor
@@ -42,6 +44,7 @@ export {
   MAP_FEATURE_SNAP_PREVIEW_POINT_LAYER_ID,
   MAP_FEATURE_SNAP_PREVIEW_SOURCE_ID,
 };
+export type { MapFeatureSnapBinding, ResolvedTerradrawSnapOptions };
 export type {
   MapFeatureSnapGeometryType,
   MapFeatureSnapKind,

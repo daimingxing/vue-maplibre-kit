@@ -1,16 +1,18 @@
 import { computed, ref } from 'vue';
-import {
-  MANAGED_TUNNEL_PREVIEW_FILL_LAYER_ID,
-  MANAGED_TUNNEL_PREVIEW_LINE_LAYER_ID,
-  MANAGED_TUNNEL_PREVIEW_REGION_KIND,
-  MANAGED_TUNNEL_PREVIEW_SOURCE_ID,
-  ManagedTunnelPreviewLayers,
-  useManagedTunnelPreviewExtension,
-  type ManagedTunnelPreviewExtensionApi,
-  type ManagedTunnelPreviewStateChangePayload,
-} from '../../extensions/managedTunnelPreview';
 import { defineMapPlugin, type MapPluginDescriptor } from '../types';
 import type { LineDraftPreviewOptions } from './types';
+import LineDraftPreviewLayers from './LineDraftPreviewLayers.vue';
+import {
+  LINE_DRAFT_PREVIEW_CORRIDOR_KIND,
+  LINE_DRAFT_PREVIEW_FILL_LAYER_ID,
+  LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
+  LINE_DRAFT_PREVIEW_SOURCE_ID,
+} from './useLineDraftPreviewStore';
+import {
+  useLineDraftPreviewController,
+  type LineDraftPreviewPluginApi,
+  type LineDraftPreviewStateChangePayload,
+} from './useLineDraftPreviewController';
 
 /** 线草稿预览插件类型标识。 */
 export const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
@@ -18,12 +20,6 @@ export const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
 /** 线草稿预览插件描述对象。 */
 export interface LineDraftPreviewPluginDescriptor
   extends MapPluginDescriptor<typeof LINE_DRAFT_PREVIEW_PLUGIN_TYPE, LineDraftPreviewOptions> {}
-
-/** 线草稿预览插件 API。 */
-export type LineDraftPreviewPluginApi = ManagedTunnelPreviewExtensionApi;
-
-/** 线草稿预览插件状态载荷。 */
-export type LineDraftPreviewStateChangePayload = ManagedTunnelPreviewStateChangePayload;
 
 /**
  * 线草稿预览插件定义。
@@ -36,8 +32,8 @@ export const lineDraftPreviewPlugin = defineMapPlugin({
       hasFeatures: false,
       featureCount: 0,
     });
-    const pluginController = useManagedTunnelPreviewExtension({
-      getOptions: () => context.getOptions() as any,
+    const pluginController = useLineDraftPreviewController({
+      getOptions: () => context.getOptions() as LineDraftPreviewOptions,
       getMapInteractive: context.getBaseMapInteractive,
       getSelectedFeatureContext: context.getSelectedFeatureContext,
       clearHoverState: context.clearHoverState,
@@ -65,7 +61,7 @@ export const lineDraftPreviewPlugin = defineMapPlugin({
       getRenderItems: () => [
         {
           id: context.descriptor.id,
-          component: ManagedTunnelPreviewLayers,
+          component: LineDraftPreviewLayers,
           props: {
             enabled: pluginController.enabled.value,
             data: pluginController.data.value,
@@ -89,13 +85,13 @@ export const lineDraftPreviewPlugin = defineMapPlugin({
 });
 
 /** 线草稿预览 source ID。 */
-export const LINE_DRAFT_PREVIEW_SOURCE_ID = MANAGED_TUNNEL_PREVIEW_SOURCE_ID;
+export { LINE_DRAFT_PREVIEW_SOURCE_ID };
 
 /** 线草稿预览线图层 ID。 */
-export const LINE_DRAFT_PREVIEW_LINE_LAYER_ID = MANAGED_TUNNEL_PREVIEW_LINE_LAYER_ID;
+export { LINE_DRAFT_PREVIEW_LINE_LAYER_ID };
 
 /** 线草稿预览面图层 ID。 */
-export const LINE_DRAFT_PREVIEW_FILL_LAYER_ID = MANAGED_TUNNEL_PREVIEW_FILL_LAYER_ID;
+export { LINE_DRAFT_PREVIEW_FILL_LAYER_ID };
 
 /** 线草稿预览线廊 generatedKind 固定值。 */
-export const LINE_DRAFT_PREVIEW_CORRIDOR_KIND = MANAGED_TUNNEL_PREVIEW_REGION_KIND;
+export { LINE_DRAFT_PREVIEW_CORRIDOR_KIND };

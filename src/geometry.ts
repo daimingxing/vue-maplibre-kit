@@ -3,8 +3,8 @@
  * 这里统一对外暴露中立命名，避免业务侧再直接感知历史业务语义命名。
  */
 export {
-  MapTunnelLineExtensionTool as MapLineExtensionTool,
-  MapTunnelRegionTool as MapLineCorridorTool,
+  MapLineExtensionTool,
+  MapLineCorridorTool,
   MapLineMeasureTool,
   buildMapSourceFeatureRefKey,
   buildManagedPreviewOriginProperties,

@@ -1,7 +1,8 @@
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
-import { ref, type Ref } from 'vue';
+import { ref } from 'vue';
 import type { TerraDrawMouseEvent } from 'terra-draw';
+import type { MapSnapBinding } from '../types';
 import type {
   MapFeatureSnapGeometryType,
   MapFeatureSnapKind,
@@ -10,7 +11,7 @@ import type {
   MapFeatureSnapResult,
   MapFeatureSnapRule,
   MapFeatureSnapSegmentInfo,
-} from '../../shared/mapLibre-contols-types';
+} from './types';
 
 type PreviewFeatureCollection = FeatureCollection;
 
@@ -35,34 +36,20 @@ interface ResolvePointerOptions {
   lngLat: { lng: number; lat: number };
 }
 
-/** 吸附预览数据源 ID */
+/** 吸附预览数据源 ID。 */
 export const MAP_FEATURE_SNAP_PREVIEW_SOURCE_ID = '__mapFeatureSnapPreviewSource';
-/** 吸附预览点图层 ID */
+
+/** 吸附预览点图层 ID。 */
 export const MAP_FEATURE_SNAP_PREVIEW_POINT_LAYER_ID = '__mapFeatureSnapPreviewPointLayer';
-/** 吸附预览线图层 ID */
+
+/** 吸附预览线图层 ID。 */
 export const MAP_FEATURE_SNAP_PREVIEW_LINE_LAYER_ID = '__mapFeatureSnapPreviewLineLayer';
 
 const DEFAULT_TOLERANCE_PX = 16;
 const DEFAULT_SNAP_MODES: MapFeatureSnapMode[] = ['vertex', 'segment'];
 
-/**
- * 统一地图吸附绑定句柄。
- * 容器层通过它读取当前预览数据、解析普通层吸附结果，并为 TerraDraw 提供普通层吸附解析入口。
- */
-export interface MapFeatureSnapBinding {
-  /** 当前吸附预览图层数据源 */
-  previewData: Ref<PreviewFeatureCollection>;
-  /** 根据 MapLibre 鼠标事件解析吸附结果 */
-  resolveMapEvent: (event: MapMouseEvent) => MapFeatureSnapResult;
-  /** 根据通用屏幕点和经纬度解析吸附结果 */
-  resolvePointer: (options: ResolvePointerOptions) => MapFeatureSnapResult;
-  /** 根据 TerraDraw 鼠标事件解析吸附结果 */
-  resolveTerradrawEvent: (event: TerraDrawMouseEvent) => MapFeatureSnapResult;
-  /** 主动清空吸附预览 */
-  clearPreview: () => void;
-  /** 销毁当前吸附绑定 */
-  destroy: () => void;
-}
+/** 地图吸附插件内部绑定句柄。 */
+export type MapFeatureSnapBinding = MapSnapBinding;
 
 /**
  * 创建一个“未命中吸附”的空结果。
@@ -122,6 +109,7 @@ function getResolvedSnapModes(
   if (geometryType === 'Point') {
     return snapModes.includes('vertex') ? ['vertex'] : [];
   }
+
   return snapModes;
 }
 
@@ -340,7 +328,7 @@ function resolveFeatureGeometryType(feature: MapGeoJSONFeature): MapFeatureSnapG
  * @param feature 当前候选要素
  * @param rule 当前规则
  * @param layerId 当前候选图层 ID
- * @returns 当前候选要素的最佳点吸附结果；未命中返回 null
+ * @returns 当前候选要素的最佳点吸附结果；未命中返回空数组
  */
 function buildPointCandidates(
   map: MaplibreMap,
@@ -521,7 +509,7 @@ function shouldReplaceCandidate(current: SnapCandidate | null, next: SnapCandida
  * @param map 当前地图实例
  * @param rules 当前启用的规则集合
  * @param pointer 当前鼠标指针上下文
- * @returns 最终命中的吸附结果
+ * @returns 最终命中的吸附候选
  */
 function resolveSnapCandidate(
   map: MaplibreMap,
@@ -627,23 +615,23 @@ function toSnapResult(candidate: SnapCandidate | null): MapFeatureSnapResult {
 }
 
 /**
- * 判断当前吸附扩展是否启用。
- * @param options 地图吸附扩展配置
+ * 判断当前吸附插件是否启用。
+ * @param options 地图吸附插件配置
  * @returns 是否启用
  */
-function isSnapExtensionEnabled(options: MapFeatureSnapOptions | null | undefined): boolean {
+function isSnapPluginEnabled(options: MapFeatureSnapOptions | null | undefined): boolean {
   return Boolean(options) && options?.enabled !== false;
 }
 
 /**
  * 读取当前启用的普通图层吸附规则集合。
- * @param options 地图吸附扩展配置
+ * @param options 地图吸附插件配置
  * @returns 当前启用的规则集合
  */
 function getEnabledSnapRules(
   options: MapFeatureSnapOptions | null | undefined
 ): MapFeatureSnapRule[] {
-  if (!isSnapExtensionEnabled(options)) {
+  if (!isSnapPluginEnabled(options)) {
     return [];
   }
 
@@ -705,8 +693,7 @@ function buildPreviewData(result: MapFeatureSnapResult): PreviewFeatureCollectio
 
 /**
  * 创建统一地图吸附绑定。
- * @param map 当前地图实例
- * @param getOptions 读取最新扩展配置的方法
+ * @param options 绑定初始化参数
  * @returns 吸附绑定句柄
  */
 export function createMapFeatureSnapBinding(options: {
@@ -818,7 +805,7 @@ export function createMapFeatureSnapBinding(options: {
     }
 
     const snapOptions = getOptions();
-    if (!isSnapExtensionEnabled(snapOptions) || snapOptions?.preview?.enabled === false) {
+    if (!isSnapPluginEnabled(snapOptions) || snapOptions?.preview?.enabled === false) {
       previewData.value = createEmptyPreviewFeatureCollection();
       return;
     }

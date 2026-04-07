@@ -1,35 +1,17 @@
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import type { Map as MaplibreMap } from 'maplibre-gl';
 import { createCircleLayerStyle, createLineLayerStyle } from '../../shared/map-layer-style-config';
-import type {
-  MapFeatureSnapOptions,
-  TerradrawControlType,
-  TerradrawSnapSharedOptions,
-} from '../../shared/mapLibre-contols-types';
-import {
-  createEmptyMapFeatureSnapResult,
-  createMapFeatureSnapBinding,
-  type MapFeatureSnapBinding,
-} from './useMapFeatureSnap';
+import type { TerradrawControlType, TerradrawSnapSharedOptions } from '../../shared/mapLibre-contols-types';
+import type { ResolvedTerradrawSnapOptions } from '../types';
+import { createEmptyMapFeatureSnapResult, createMapFeatureSnapBinding, type MapFeatureSnapBinding } from './useMapFeatureSnapBinding';
+import type { MapFeatureSnapOptions } from './types';
 
 const DEFAULT_TOLERANCE_PX = 16;
 
-/** TerraDraw / Measure 最终生效的吸附配置 */
-export interface ResolvedTerradrawSnapOptions {
-  /** 当前控件是否启用吸附 */
-  enabled: boolean;
-  /** 当前控件最终吸附范围 */
-  tolerancePx: number;
-  /** 是否启用 TerraDraw 原生吸附 */
-  useNative: boolean;
-  /** 是否启用普通图层候选吸附 */
-  useMapTargets: boolean;
-}
-
-interface UseMapFeatureSnapExtensionOptions {
-  /** 读取业务层注册的统一吸附扩展配置 */
+interface UseMapFeatureSnapControllerOptions {
+  /** 读取业务层注册的吸附插件配置。 */
   getOptions: () => MapFeatureSnapOptions | null | undefined;
-  /** 读取当前地图实例 */
+  /** 读取当前地图实例。 */
   getMap: () => MaplibreMap | null | undefined;
 }
 
@@ -59,17 +41,17 @@ function normalizeSnapConfig(
 }
 
 /**
- * 统一地图吸附扩展控制器。
- * 容器层通过它拿到普通图层吸附绑定、预览样式以及 TerraDraw / Measure 的最终吸附配置。
- * @param options 扩展初始化选项
- * @returns 吸附扩展能力集合
+ * 地图吸附插件控制器。
+ * 负责管理吸附绑定、预览样式以及 TerraDraw / Measure 的最终吸附配置。
+ * @param options 插件初始化选项
+ * @returns 吸附插件能力集合
  */
-export function useMapFeatureSnapExtension(options: UseMapFeatureSnapExtensionOptions) {
+export function useMapFeatureSnapController(options: UseMapFeatureSnapControllerOptions) {
   const { getOptions, getMap } = options;
   const bindingRef = shallowRef<MapFeatureSnapBinding | null>(null);
 
   /**
-   * 当前统一吸附扩展是否启用。
+   * 当前吸附插件是否启用。
    */
   const enabled = computed(() => {
     const snapOptions = getOptions();
@@ -135,7 +117,7 @@ export function useMapFeatureSnapExtension(options: UseMapFeatureSnapExtensionOp
   }
 
   /**
-   * 根据当前地图实例和扩展配置重新同步吸附绑定。
+   * 根据当前地图实例和插件配置重新同步吸附绑定。
    */
   function syncBinding(): void {
     destroyBinding();
@@ -169,7 +151,7 @@ export function useMapFeatureSnapExtension(options: UseMapFeatureSnapExtensionOp
 
   /**
    * 读取当前控件最终生效的 TerraDraw / Measure 吸附配置。
-   * 合并顺序为：扩展默认值 -> 控件类别默认值 -> 业务层局部覆写。
+   * 合并顺序为：插件默认值 -> 控件类别默认值 -> 业务层局部覆写。
    * @param controlType 当前控件类型
    * @param localConfig 业务层局部传入的吸附配置
    * @returns 最终生效的吸附配置
@@ -179,14 +161,14 @@ export function useMapFeatureSnapExtension(options: UseMapFeatureSnapExtensionOp
     localConfig: TerradrawSnapSharedOptions | boolean | null | undefined
   ): ResolvedTerradrawSnapOptions {
     const snapOptions = getOptions();
-    const extensionDefaults = normalizeSnapConfig(snapOptions?.terradraw?.defaults);
+    const pluginDefaults = normalizeSnapConfig(snapOptions?.terradraw?.defaults);
     const controlDefaults = normalizeSnapConfig(
       controlType === 'draw' ? snapOptions?.terradraw?.draw : snapOptions?.terradraw?.measure
     );
     const localOverrides = normalizeSnapConfig(localConfig);
 
     const mergedConfig = {
-      ...extensionDefaults,
+      ...pluginDefaults,
       ...controlDefaults,
       ...localOverrides,
     };
