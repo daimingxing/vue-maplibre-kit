@@ -34,7 +34,7 @@
  * 托管临时巷道预览图层组件。
  * 负责渲染内部预览数据源与临时线/临时区域图层，让 mapLibre-init 不再直接持有具体业务模板。
  */
-import { PropType } from 'vue';
+import { type PropType } from 'vue';
 import { MglGeoJsonSource, MglFillLayer, MglLineLayer } from 'vue-maplibre-gl';
 import {
   MapTunnelLineExtensionTool,
