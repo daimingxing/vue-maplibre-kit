@@ -65,7 +65,7 @@
  *
  * 业务层不会直接使用这个组件；它只会被 map-libre-init 在内部挂载。
  */
-import { PropType } from 'vue';
+import { type PropType } from 'vue';
 import { MglGeoJsonSource, MglLineLayer, MglSymbolLayer } from 'vue-maplibre-gl';
 import type { LineLayerSpecification } from 'maplibre-gl';
 import type { MapCommonFeatureCollection } from '../shared/map-common-tools';

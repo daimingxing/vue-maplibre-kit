@@ -23,7 +23,7 @@
  * 负责渲染统一吸附模块维护的“吸附点 + 命中线段”预览，不向业务层暴露内部 source/layer 结构。
  */
 import { MglCircleLayer, MglGeoJsonSource, MglLineLayer } from 'vue-maplibre-gl';
-import { PropType } from 'vue';
+import { type PropType } from 'vue';
 import type { FeatureCollection } from 'geojson';
 import type { CircleLayerSpecification, LineLayerSpecification } from 'maplibre-gl';
 import type { MapLayerStyle } from '../../shared/map-layer-style-config';
