@@ -1,0 +1,32 @@
+{
+  "name": "vue-maplibre-kit",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@watergis/maplibre-gl-terradraw": "^1.13.0",
+    "maplibre-gl": "^5.22.0",
+    "mitt": "^3.0.1",
+    "vue": "^3.5.32",
+    "geojson": "^0.5.0",
+    "vue-maplibre-gl": "^5.6.1",
+    "element-plus": "^2.2.5",
+    "@element-plus/icons-vue": "^2.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "@vue/tsconfig": "^0.9.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.4",
+    "vue-tsc": "^3.2.6",
+    "@types/geojson": "^7946.0.16",
+    "sass": "^1.26.5",
+    "sass-loader": "^8.0.2"
+  }
+}
