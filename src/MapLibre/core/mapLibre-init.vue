@@ -129,7 +129,7 @@ import { useMapInteractive } from '../composables/useMapInteractive';
 import { useMapPluginHost } from './useMapPluginHost';
 import { type MapCommonFeature } from '../shared/map-common-tools';
 import type {
-  MapPluginDescriptor,
+  AnyMapPluginDescriptor,
   ResolvedTerradrawSnapOptions,
   MapPluginStateChangePayload,
 } from '../plugins/types';
@@ -158,7 +158,7 @@ const props = defineProps({
   },
   // 挂载的插件列表，外部通过显式注册的方式启用地图能力。
   plugins: {
-    type: Array as PropType<MapPluginDescriptor[]>,
+    type: Array as PropType<AnyMapPluginDescriptor[]>,
     default: () => [],
   },
 });

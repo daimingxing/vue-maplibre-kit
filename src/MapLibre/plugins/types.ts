@@ -72,10 +72,21 @@ export interface MapPluginServices {
   mapSnap?: MapSnapService;
 }
 
-/** 地图插件描述对象。 */
-export interface MapPluginDescriptor<TType extends string = string, TOptions = unknown> {
+/** 宿主消费用的已擦除插件描述对象。 */
+export interface AnyMapPluginDescriptor {
   /** 插件唯一标识。 */
   id: string;
+  /** 插件类型标识。 */
+  type: string;
+  /** 插件配置项。 */
+  options: unknown;
+  /** 插件定义对象。 */
+  plugin: MapPluginDefinition<any, any, unknown, unknown>;
+}
+
+/** 地图插件描述对象。 */
+export interface MapPluginDescriptor<TType extends string = string, TOptions = unknown>
+  extends AnyMapPluginDescriptor {
   /** 插件类型标识。 */
   type: TType;
   /** 插件配置项。 */

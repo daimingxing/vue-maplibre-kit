@@ -2,8 +2,8 @@ import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import type { Map as MaplibreMap } from 'maplibre-gl';
 import { type MapInstance } from 'vue-maplibre-gl';
 import type {
+  AnyMapPluginDescriptor,
   MapPluginContext,
-  MapPluginDescriptor,
   MapPluginHostExpose,
   MapPluginInstance,
   MapPluginRenderItem,
@@ -15,7 +15,7 @@ import type { MapCommonFeature } from '../shared/map-common-tools';
 
 interface UseMapPluginHostOptions {
   /** 读取当前业务层注册的插件列表。 */
-  getDescriptors: () => MapPluginDescriptor[];
+  getDescriptors: () => AnyMapPluginDescriptor[];
   /** 读取当前地图实例。 */
   getMap: () => MaplibreMap | null | undefined;
   /** 读取当前地图实例包装对象。 */
@@ -36,7 +36,7 @@ interface UseMapPluginHostOptions {
 
 interface MapPluginRecord {
   /** 当前插件的最新描述对象引用。 */
-  descriptorRef: { value: MapPluginDescriptor };
+  descriptorRef: { value: AnyMapPluginDescriptor };
   /** 当前插件实例。 */
   instance: MapPluginInstance;
   /** 停止监听当前插件状态。 */
@@ -110,7 +110,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    * @returns 是否允许复用
    */
   function canReusePluginRecord(
-    currentDescriptor: MapPluginDescriptor,
+    currentDescriptor: AnyMapPluginDescriptor,
     pluginRecord: MapPluginRecord | undefined
   ): boolean {
     if (!pluginRecord) {
@@ -130,9 +130,9 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    * @returns 供插件使用的上下文
    */
   function createPluginContext(
-    descriptor: MapPluginDescriptor,
-    descriptorRef: { value: MapPluginDescriptor }
-  ): MapPluginContext {
+    descriptor: AnyMapPluginDescriptor,
+    descriptorRef: { value: AnyMapPluginDescriptor }
+  ): MapPluginContext<string, any> {
     return {
       descriptor,
       getOptions: () => descriptorRef.value.options,
@@ -151,8 +151,8 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    * @param descriptor 当前插件描述对象
    * @returns 新建的插件记录
    */
-  function createPluginRecord(descriptor: MapPluginDescriptor): MapPluginRecord {
-    const descriptorRef = shallowRef<MapPluginDescriptor>(descriptor);
+  function createPluginRecord(descriptor: AnyMapPluginDescriptor): MapPluginRecord {
+    const descriptorRef = shallowRef<AnyMapPluginDescriptor>(descriptor);
     const instance = descriptor.plugin.createInstance(createPluginContext(descriptor, descriptorRef));
     const pluginRecord: MapPluginRecord = {
       descriptorRef,

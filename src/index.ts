@@ -2,6 +2,7 @@ export { default as MapLibreInit } from './MapLibre/core/mapLibre-init.vue';
 export type { MapLibreInitExpose } from './MapLibre/core/mapLibre-init.types';
 export {
   defineMapPlugin,
+  type AnyMapPluginDescriptor,
   type MapPluginContext,
   type MapPluginDefinition,
   type MapPluginDescriptor,
