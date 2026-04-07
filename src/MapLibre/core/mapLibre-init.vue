@@ -42,12 +42,12 @@
     <!-- 数据源与图层插槽 -->
     <slot name="dataSource"></slot>
 
-    <!-- 动态地图扩展图层 -->
+    <!-- 动态地图插件渲染项 -->
     <component
-      :is="extensionRenderItem.component"
-      v-for="extensionRenderItem in extensionRenderItems"
-      :key="extensionRenderItem.id"
-      v-bind="extensionRenderItem.props"
+      :is="pluginRenderItem.component"
+      v-for="pluginRenderItem in pluginRenderItems"
+      :key="pluginRenderItem.id"
+      v-bind="pluginRenderItem.props"
     />
     <terradraw-line-decoration-layers
       v-if="drawLineDecorationLayerProps"
@@ -85,9 +85,7 @@ import {
   MglScaleControl,
   MglAttributionControl,
   MglFrameRateControl,
-  MglCustomControl,
   useMap,
-  MglMarker,
 } from 'vue-maplibre-gl';
 import { MaplibreTerradrawControl, MaplibreMeasureControl } from '@watergis/maplibre-gl-terradraw';
 import '@watergis/maplibre-gl-terradraw/dist/maplibre-gl-terradraw.css';
@@ -128,36 +126,13 @@ import {
   type TerradrawLineDecorationBinding,
 } from '../terradraw/useTerradrawLineDecoration';
 import { useMapInteractive } from '../composables/useMapInteractive';
-import {
-  type MapCommonFeature,
-  type MapCommonLineFeature,
-  type MapSourceFeatureRef,
-} from '../shared/map-common-tools';
-import {
-  ManagedTunnelPreviewLayers,
-  MANAGED_TUNNEL_PREVIEW_EXTENSION_TYPE,
-  type ManagedTunnelPreviewExtensionApi,
-  type ManagedTunnelPreviewExtensionDescriptor,
-  useManagedTunnelPreviewExtension,
-} from '../extensions/managedTunnelPreview';
-import {
-  MAP_FEATURE_SNAP_EXTENSION_TYPE,
-  MapFeatureSnapPreviewLayers,
-  type MapFeatureSnapExtensionDescriptor,
-  useMapFeatureSnapExtension,
-  type ResolvedTerradrawSnapOptions,
-} from '../extensions/mapFeatureSnap';
+import { useMapPluginHost } from './useMapPluginHost';
+import { type MapCommonFeature } from '../shared/map-common-tools';
 import type {
-  MapExtensionDescriptor,
-  MapExtensionRenderItem,
-  MapExtensionStateChangePayload,
-} from '../extensions/types';
-import type {
-  FeatureProperties,
-  FeaturePropertySaveMode,
-  MapFeatureId,
-  SaveFeaturePropertiesResult,
-} from '../composables/useMapDataUpdate';
+  MapPluginDescriptor,
+  ResolvedTerradrawSnapOptions,
+  MapPluginStateChangePayload,
+} from '../plugins/types';
 
 const props = defineProps({
   // 用于区分多个地图实例的唯一名字。如果你一个页面有两个地图，就靠它来区分。
@@ -181,15 +156,15 @@ const props = defineProps({
     type: Object as PropType<MapLayerInteractiveOptions | null>,
     default: null,
   },
-  // 挂载的插件列表（比如临时延长线插件），外部通过传入配置对象来激活插件功能
-  extensions: {
-    type: Array as PropType<MapExtensionDescriptor[]>,
+  // 挂载的插件列表，外部通过显式注册的方式启用地图能力。
+  plugins: {
+    type: Array as PropType<MapPluginDescriptor[]>,
     default: () => [],
   },
 });
 
 const emit = defineEmits<{
-  (event: 'extensionStateChange', payload: MapExtensionStateChangePayload<unknown>): void;
+  (event: 'pluginStateChange', payload: MapPluginStateChangePayload<unknown>): void;
 }>();
 
 /**
@@ -287,129 +262,34 @@ const mergedOptions = computed(() => {
 const map = useMap(props.mapKey as any);
 
 /**
- * 根据插件的名字（类型），从业务层传进来的 extensions 列表里，把那个插件的配置找出来。
- * @param extensionType 插件类型（比如 'managedTunnelPreview'）
- * @returns 找出来的插件配置对象；没找到返回 null
+ * 普通图层交互绑定实例。
+ * 宿主创建插件时会通过闭包访问这里的状态，因此需要先占位，后初始化。
  */
-const resolveExtensionDescriptorByType = (extensionType: string): MapExtensionDescriptor | null => {
-  return (
-    props.extensions.find((extensionDescriptor) => extensionDescriptor.type === extensionType) ||
-    null
-  );
-};
+let mapInteractiveBinding: ReturnType<typeof useMapInteractive> | null = null;
 
 /**
- * 找一找：业务层有没有启用【临时延长线/预览区域】插件？
- * 只有在外部传进来的 extensions 数组里包含了这个插件，这里才会有值。
+ * 创建地图插件宿主。
+ * mapLibreInit 自身不再直接识别任何具体插件，只消费宿主聚合后的渲染项、交互补丁与服务接口。
  */
-const managedTunnelPreviewDescriptor = computed<ManagedTunnelPreviewExtensionDescriptor | null>(
-  () => {
-    return (
-      (resolveExtensionDescriptorByType(
-        MANAGED_TUNNEL_PREVIEW_EXTENSION_TYPE
-      ) as ManagedTunnelPreviewExtensionDescriptor | null) || null
-    );
-  }
-);
-
-/**
- * 统一吸附扩展描述对象。
- * 业务层通过扩展工厂函数显式注册，容器层统一负责普通图层吸附预览与 TerraDraw / Measure 对接。
- */
-const mapFeatureSnapDescriptor = computed<MapFeatureSnapExtensionDescriptor | null>(() => {
-  return (
-    (resolveExtensionDescriptorByType(
-      MAP_FEATURE_SNAP_EXTENSION_TYPE
-    ) as MapFeatureSnapExtensionDescriptor | null) || null
-  );
-});
-
-/**
- * 统一吸附扩展控制器。
- * 容器层通过它拿到普通图层吸附绑定、预览图层样式以及 TerraDraw / Measure 的最终吸附配置。
- */
-const mapFeatureSnapExtension = useMapFeatureSnapExtension({
-  getOptions: () => mapFeatureSnapDescriptor.value?.options,
+const pluginHost = useMapPluginHost({
+  getDescriptors: () => props.plugins,
   getMap: () => map.map || null,
-});
-
-/**
- * 启动【临时延长线/预览区域】的逻辑核心。
- * 把底层的地图操作、图层状态、交互事件都喂给它，它就能自动管好那些临时的虚线和面。
- */
-const managedTunnelPreviewExtension = useManagedTunnelPreviewExtension({
-  /** 读取业务层注册的托管预览扩展配置 */
-  getOptions: () => managedTunnelPreviewDescriptor.value?.options,
-  /** 读取业务层传入的普通图层交互配置 */
-  getMapInteractive: () => props.mapInteractive,
-  /** 读取普通图层交互层当前选中的上下文 */
-  getSelectedFeatureContext: () => mapInteractiveBinding.getSelectedFeatureContext() || null,
-  /** 清理普通图层 hover 状态 */
-  clearHoverState: () => mapInteractiveBinding.clearHoverState(),
-  /** 清理普通图层选中状态 */
-  clearSelectedFeature: () => mapInteractiveBinding.clearSelectionState(),
-  /** 将渲染态要素转换为标准 GeoJSON 快照 */
+  getMapInstance: () => map,
+  getBaseMapInteractive: () => props.mapInteractive,
+  getSelectedFeatureContext: () => mapInteractiveBinding?.getSelectedFeatureContext() || null,
+  clearHoverState: () => mapInteractiveBinding?.clearHoverState(),
+  clearSelectedFeature: () => mapInteractiveBinding?.clearSelectionState(),
   toFeatureSnapshot: toMapFeatureSnapshot,
-  /** 将扩展内部状态变化以通用事件的形式回传给业务层 */
-  onStateChange: (payload) => {
-    if (!managedTunnelPreviewDescriptor.value) {
-      return;
-    }
-
-    emit('extensionStateChange', {
-      extensionId: managedTunnelPreviewDescriptor.value.id,
-      extensionType: managedTunnelPreviewDescriptor.value.type,
-      state: payload,
-    });
+  onPluginStateChange: (payload) => {
+    emit('pluginStateChange', payload);
   },
 });
 
-/** 托管临时预览是否启用 */
-const managedTunnelPreviewEnabled = managedTunnelPreviewExtension.enabled;
-/** 托管临时预览数据源 */
-const managedTunnelPreviewData = managedTunnelPreviewExtension.data;
-/** 托管临时延长线图层样式 */
-const managedTunnelPreviewLineStyle = managedTunnelPreviewExtension.lineStyle;
-/** 托管临时预览区域图层样式 */
-const managedTunnelPreviewFillStyle = managedTunnelPreviewExtension.fillStyle;
-/** 合并托管临时预览图层后的普通图层交互配置 */
-const mergedMapInteractive = managedTunnelPreviewExtension.mergedMapInteractive;
+/** 当前所有需要渲染到地图中的插件渲染项。 */
+const pluginRenderItems = pluginHost.renderItems;
 
-/**
- * 拼装所有要渲染在地图上的插件组件。
- * 这个机制让插件自己决定要渲染什么图层，mapLibre-init 只需要在上面的 template 里用 v-for 盲目渲染就行了。
- */
-const extensionRenderItems = computed<MapExtensionRenderItem[]>(() => {
-  const renderItems: MapExtensionRenderItem[] = [];
-
-  if (mapFeatureSnapDescriptor.value) {
-    renderItems.push({
-      id: mapFeatureSnapDescriptor.value.id,
-      component: MapFeatureSnapPreviewLayers,
-      props: {
-        enabled: mapFeatureSnapExtension.previewEnabled.value,
-        data: mapFeatureSnapExtension.previewData.value,
-        pointStyle: mapFeatureSnapExtension.previewPointStyle.value,
-        lineStyle: mapFeatureSnapExtension.previewLineStyle.value,
-      },
-    });
-  }
-
-  if (managedTunnelPreviewDescriptor.value) {
-    renderItems.push({
-      id: managedTunnelPreviewDescriptor.value.id,
-      component: ManagedTunnelPreviewLayers,
-      props: {
-        enabled: managedTunnelPreviewEnabled.value,
-        data: managedTunnelPreviewData.value,
-        lineStyle: managedTunnelPreviewLineStyle.value,
-        fillStyle: managedTunnelPreviewFillStyle.value,
-      },
-    });
-  }
-
-  return renderItems;
-});
+/** 业务层交互配置叠加插件补丁后的最终结果。 */
+const mergedMapInteractive = pluginHost.mergedMapInteractive;
 
 /**
  * 将内部线装饰管理器句柄转换为渲染组件所需的 props。
@@ -438,10 +318,10 @@ function createLineDecorationLayerProps(bindingRef: {
   });
 }
 
-const mapInteractiveBinding = useMapInteractive({
+mapInteractiveBinding = useMapInteractive({
   mapInstance: map,
   getInteractive: () => mergedMapInteractive.value,
-  getSnapBinding: () => mapFeatureSnapExtension.binding.value,
+  getSnapBinding: () => pluginHost.getMapSnapService()?.getBinding() || null,
 });
 
 /**
@@ -449,7 +329,7 @@ const mapInteractiveBinding = useMapInteractive({
  * @returns 当前选中的 MapLibre 要素；未选中时返回 null
  */
 function getSelectedMapFeature() {
-  return mapInteractiveBinding.getSelectedFeature();
+  return mapInteractiveBinding?.getSelectedFeature() || null;
 }
 
 /**
@@ -457,14 +337,14 @@ function getSelectedMapFeature() {
  * @returns 当前选中的普通图层交互上下文；未选中时返回 null
  */
 function getSelectedMapFeatureContext() {
-  return mapInteractiveBinding.getSelectedFeatureContext();
+  return mapInteractiveBinding?.getSelectedFeatureContext() || null;
 }
 
 /**
  * 清空当前普通图层交互封装记录的选中要素。
  */
 function clearSelectedMapFeature() {
-  mapInteractiveBinding.clearSelectionState();
+  mapInteractiveBinding?.clearSelectionState();
 }
 
 /**
@@ -473,35 +353,13 @@ function clearSelectedMapFeature() {
  * @returns 标准化后的 GeoJSON 要素快照；未选中时返回 null
  */
 function getSelectedMapFeatureSnapshot(): MapCommonFeature | null {
-  return managedTunnelPreviewExtension.getSelectedFeatureSnapshot();
+  const pluginSnapshot = pluginHost.resolveSelectedFeatureSnapshot();
+  if (pluginSnapshot) {
+    return pluginSnapshot;
+  }
+
+  return toMapFeatureSnapshot(mapInteractiveBinding?.getSelectedFeature() || null);
 }
-
-/**
- * 外部想拿到各种插件的方法，统一走这里。
- * 用法：mapInitRef.value.extensions.managedTunnelPreview.previewLine(...)
- * 这样设计是为了防止向外暴露的方法太多太乱。
- */
-const extensionApis = {
-  get managedTunnelPreview(): ManagedTunnelPreviewExtensionApi | null {
-    if (!managedTunnelPreviewDescriptor.value) {
-      return null;
-    }
-
-    return {
-      data: managedTunnelPreviewData,
-      lineStyle: managedTunnelPreviewLineStyle,
-      fillStyle: managedTunnelPreviewFillStyle,
-      getFeatureById: managedTunnelPreviewExtension.getFeatureById,
-      isFeatureById: managedTunnelPreviewExtension.isFeatureById,
-      isSelectedFeature: managedTunnelPreviewExtension.isSelectedFeature,
-      getSelectedFeatureSnapshot: managedTunnelPreviewExtension.getSelectedFeatureSnapshot,
-      previewLine: managedTunnelPreviewExtension.previewLine,
-      replacePreviewRegion: managedTunnelPreviewExtension.replacePreviewRegion,
-      clear: managedTunnelPreviewExtension.clear,
-      saveProperties: managedTunnelPreviewExtension.saveProperties,
-    };
-  },
-};
 
 /**
  * Select 模式下线要素与面要素的默认可编辑 flags。
@@ -533,6 +391,30 @@ const defaultSelectSnapFlags = {
     },
   },
 };
+
+/**
+ * 读取当前控件最终生效的吸附配置。
+ * 若当前未注册吸附服务插件，则返回一份“关闭普通层吸附”的兜底配置。
+ * @param controlType 当前控件类型
+ * @param localSnapConfig 业务层传入的局部吸附配置
+ * @returns 最终生效的吸附配置
+ */
+function resolveTerradrawSnapOptions(
+  controlType: 'draw' | 'measure',
+  localSnapConfig: TerradrawSnapSharedOptions | boolean | null | undefined
+): ResolvedTerradrawSnapOptions {
+  const mapSnapService = pluginHost.getMapSnapService();
+  if (!mapSnapService) {
+    return {
+      enabled: false,
+      tolerancePx: 16,
+      useNative: true,
+      useMapTargets: false,
+    };
+  }
+
+  return mapSnapService.resolveTerradrawSnapOptions(controlType, localSnapConfig);
+}
 
 /**
  * 安全地同步 TerraDraw 某个模式的最新配置。
@@ -574,8 +456,7 @@ function buildTerradrawModeSnappingPatch(
 
   if (resolvedSnapOptions.enabled && resolvedSnapOptions.useMapTargets) {
     snappingConfig.toCustom = (event: any) => {
-      const snapResult =
-        mapFeatureSnapExtension.binding.value?.resolveTerradrawEvent(event) || null;
+      const snapResult = pluginHost.getMapSnapService()?.getBinding()?.resolveTerradrawEvent(event);
       return snapResult?.matched ? snapResult.targetCoordinate || undefined : undefined;
     };
   }
@@ -648,10 +529,7 @@ function syncDrawSnapping(
     return;
   }
 
-  const resolvedSnapOptions = mapFeatureSnapExtension.resolveTerradrawSnapOptions(
-    'draw',
-    localSnapConfig
-  );
+  const resolvedSnapOptions = resolveTerradrawSnapOptions('draw', localSnapConfig);
   const lineAndPolygonPatch = buildTerradrawModeSnappingPatch(resolvedSnapOptions);
 
   safeUpdateTerradrawModeOptions(drawInstance, 'linestring', lineAndPolygonPatch);
@@ -675,10 +553,7 @@ function syncMeasureSnapping(
     return;
   }
 
-  const resolvedSnapOptions = mapFeatureSnapExtension.resolveTerradrawSnapOptions(
-    'measure',
-    localSnapConfig
-  );
+  const resolvedSnapOptions = resolveTerradrawSnapOptions('measure', localSnapConfig);
   const lineAndPolygonPatch = buildTerradrawModeSnappingPatch(resolvedSnapOptions);
 
   safeUpdateTerradrawModeOptions(drawInstance, 'linestring', lineAndPolygonPatch);
@@ -731,7 +606,7 @@ const syncDrawInteractive = (interactiveConfig: any) => {
     control: drawControlRef.value,
     controlType: 'draw',
     interactive: interactiveConfig,
-    getSnapBinding: () => mapFeatureSnapExtension.binding.value,
+    getSnapBinding: () => pluginHost.getMapSnapService()?.getBinding() || null,
   });
 };
 
@@ -764,7 +639,7 @@ watch(
     map.isLoaded,
     props.controls.MaplibreTerradrawControl?.isUse,
     props.controls.MaplibreTerradrawControl,
-    mapFeatureSnapDescriptor.value?.options,
+    props.plugins,
   ],
   ([isLoaded, isUse, config]) => {
     if (isLoaded && map.map) {
@@ -882,7 +757,7 @@ const syncMeasureInteractive = (interactiveConfig: any) => {
     control: measureControlRef.value,
     controlType: 'measure',
     interactive: interactiveConfig,
-    getSnapBinding: () => mapFeatureSnapExtension.binding.value,
+    getSnapBinding: () => pluginHost.getMapSnapService()?.getBinding() || null,
   });
 };
 
@@ -915,7 +790,7 @@ watch(
     map.isLoaded,
     props.controls.MaplibreMeasureControl?.isUse,
     props.controls.MaplibreMeasureControl,
-    mapFeatureSnapDescriptor.value?.options,
+    props.plugins,
   ],
   ([isLoaded, isUse, config]) => {
     if (isLoaded && map.map) {
@@ -992,8 +867,8 @@ defineExpose({
   getSelectedMapFeatureSnapshot,
   /** 清空当前普通图层的选中状态 */
   clearSelectedMapFeature,
-  /** 地图扩展 API 命名空间 */
-  extensions: extensionApis,
+  /** 地图插件宿主查询接口 */
+  plugins: pluginHost.hostExpose,
 });
 
 /**

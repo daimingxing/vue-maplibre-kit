@@ -1,7 +1,7 @@
 import type {
   TerradrawControlOptions,
   MeasureControlOptions,
-} from '@/components/MapLibre/shared/mapLibre-contols-types';
+} from '@/MapLibre/shared/mapLibre-contols-types';
 
 /**
  * 绘图控件基础样式配置对象 (非实例化，供合并使用)
@@ -140,7 +140,7 @@ export const terradrawStyleConfig: Pick<TerradrawControlOptions, 'modeOptions'> 
  * 2. mapLibre-init 内部会先 cloneDeep 当前公共配置，再与业务页面传入的配置 merge；
  * 3. 因此业务页面仍然可以局部覆写这里的任意默认项，例如只在某个页面切换成英制或修改单位符号。
  */
-export const measureStyleConfig: Pick<
+export const measureStyleConfig: Partial<Pick<
   MeasureControlOptions,
   | 'modeOptions'
   | 'lineLayerLabelSpec'
@@ -155,7 +155,7 @@ export const measureStyleConfig: Pick<
   | 'computeElevation'
   | 'terrainSource'
   | 'elevationCacheConfig'
-> = {
+>> = {
   // ==========================================
   // 0. 测量单位 / 精度 / 缓存公共默认配置
   // ==========================================

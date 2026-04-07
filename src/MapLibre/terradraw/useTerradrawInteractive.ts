@@ -10,7 +10,7 @@ import type {
   TerradrawInteractiveOptions,
   TerradrawManagedControl,
 } from '../shared/mapLibre-contols-types';
-import type { MapFeatureSnapBinding } from '../extensions/mapFeatureSnap';
+import type { MapSnapBinding } from '../plugins/types';
 
 interface CreateTerradrawInteractiveOptions {
   /** 当前地图实例 */
@@ -22,7 +22,7 @@ interface CreateTerradrawInteractiveOptions {
   /** 业务层传入的交互配置 */
   interactive: TerradrawInteractiveOptions;
   /** 读取当前普通图层吸附绑定 */
-  getSnapBinding?: () => MapFeatureSnapBinding | null | undefined;
+  getSnapBinding?: () => MapSnapBinding | null | undefined;
 }
 
 export interface TerradrawInteractiveBinding {

@@ -1253,20 +1253,6 @@ export class MapTunnelLineExtensionTool {
   }
 
   /**
-   * 将 Web Mercator 米制坐标还原为经纬度坐标。
-   * @param point 墨卡托平面坐标
-   * @returns 经纬度坐标
-   */
-  private static mercatorPointToLngLat(point: MercatorPoint): Position {
-    return [
-      MapTunnelLineExtensionTool.toDegrees(point.x / MERCATOR_RADIUS_METERS),
-      MapTunnelLineExtensionTool.toDegrees(
-        2 * Math.atan(Math.exp(point.y / MERCATOR_RADIUS_METERS)) - Math.PI / 2
-      ),
-    ];
-  }
-
-  /**
    * 计算两个平面点的向量差。
    * @param target 目标点
    * @param source 起始点

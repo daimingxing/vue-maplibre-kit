@@ -7,7 +7,7 @@ import type {
   MapLayerInteractiveLayerOptions,
   MapLayerInteractiveOptions,
 } from '../shared/mapLibre-contols-types';
-import type { MapFeatureSnapBinding } from '../extensions/mapFeatureSnap';
+import type { MapSnapBinding } from '../plugins/types';
 
 export interface UseMapInteractiveOptions {
   /** 地图实例引用，通常是通过 useMap() 获取的 */
@@ -15,7 +15,7 @@ export interface UseMapInteractiveOptions {
   /** 获取最新的业务交互配置 */
   getInteractive: () => MapLayerInteractiveOptions | null | undefined;
   /** 获取当前普通图层吸附绑定 */
-  getSnapBinding?: () => MapFeatureSnapBinding | null | undefined;
+  getSnapBinding?: () => MapSnapBinding | null | undefined;
 }
 
 interface HoveredLayerTarget {
@@ -151,7 +151,7 @@ export function useMapInteractive(options: UseMapInteractiveOptions) {
 function createMapInteractiveBinding(
   map: MaplibreMap,
   interactive: MapLayerInteractiveOptions,
-  getSnapBinding?: (() => MapFeatureSnapBinding | null | undefined) | undefined
+  getSnapBinding?: (() => MapSnapBinding | null | undefined) | undefined
 ): MapInteractiveBinding {
   const layerEntries = Object.entries(interactive.layers || {});
   const layerConfigMap = new Map<string, MapLayerInteractiveLayerOptions>(layerEntries);

@@ -1,8 +1,32 @@
 {
   "name": "vue-maplibre-kit",
-  "private": true,
+  "private": false,
   "version": "0.0.0",
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./geometry": {
+      "types": "./dist/geometry.d.ts",
+      "import": "./dist/geometry.js"
+    },
+    "./plugins/map-feature-snap": {
+      "types": "./dist/plugins/map-feature-snap.d.ts",
+      "import": "./dist/plugins/map-feature-snap.js"
+    },
+    "./plugins/line-draft-preview": {
+      "types": "./dist/plugins/line-draft-preview.d.ts",
+      "import": "./dist/plugins/line-draft-preview.js"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",

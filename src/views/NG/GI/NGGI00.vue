@@ -6,8 +6,8 @@
         :mapOptions="mapOptions"
         :controls="mapControls"
         :mapInteractive="mapInteractive"
-        :extensions="mapExtensions"
-        @extensionStateChange="handleExtensionStateChange"
+        :plugins="mapPlugins"
+        @pluginStateChange="handlePluginStateChange"
       >
         <!-- 自定义控件插槽 -->
         <template #MglCustomControl>
@@ -119,7 +119,7 @@
         style="min-width: 320px"
       >
         <h3 style="margin: 0 0 10px 0; color: #409eff">
-          <el-icon><InfoFilled /></el-icon> 巷道操作
+          <el-icon><InfoFilled /></el-icon> 线操作
         </h3>
         <el-descriptions :column="1" border size="small">
           <el-descriptions-item label="编号">
@@ -167,23 +167,23 @@
             type="primary"
             size="small"
             style="flex: 1"
-            @click="handleGenerateTunnelRegion"
+            @click="handleGenerateLineCorridor"
           >
-            生成区域
+            生成线廊
           </el-button>
-          <el-button type="success" size="small" style="flex: 1" @click="handleExtendTunnelLine">
-            延长巷道
+          <el-button type="success" size="small" style="flex: 1" @click="handleCreateLineDraft">
+            创建线草稿
           </el-button>
         </div>
         <el-button
-          v-if="hasTemporaryTunnelFeatures"
+          v-if="hasLineDraftFeatures"
           type="warning"
           plain
           size="small"
           style="width: 100%; margin-top: 8px"
-          @click="handleCancelTemporaryTunnelFeatures"
+          @click="handleClearLineDraftFeatures"
         >
-          取消临时延长
+          清空临时草稿
         </el-button>
       </div>
 
@@ -251,12 +251,10 @@
 
 <script setup lang="ts">
 /**
- * 引入地图初始化组件，作为地图页面的容器
+ * 引入地图初始化组件，作为地图页面的容器。
  */
-import MapLibreInit from '@/MapLibre/core/mapLibre-init.vue';
-import type { MapLibreInitExpose } from '@/MapLibre/core/mapLibre-init.types';
+import { MapLibreInit, type MapLibreInitExpose, type MapControlsConfig, type MapPluginStateChangePayload } from '@/index';
 import FeaturePropertyEditor from './components/FeaturePropertyEditor.vue';
-import type { MapControlsConfig } from '@/MapLibre/shared/mapLibre-contols-types';
 import type { MapOptions } from 'maplibre-gl';
 import {
   useMap,
@@ -267,7 +265,7 @@ import {
   MglSymbolLayer,
   MglCustomControl,
 } from 'vue-maplibre-gl';
-import { computed, ref, reactive, type Ref } from 'vue';
+import { ref, reactive, type Ref } from 'vue';
 import mapGeojson from '../../../../docs/map.geojson';
 import mapGeojson2 from '../../../../docs/map2.geojson';
 import { ElButton, ElInputNumber, ElMessage } from 'element-plus';
@@ -293,30 +291,29 @@ import {
 } from '@/MapLibre/shared/map-layer-style-config';
 import {
   MapLineMeasureTool,
-  MapTunnelRegionTool,
-  MapTunnelLineExtensionTool,
+  MapLineCorridorTool,
+  MapLineExtensionTool,
   createMapSourceFeatureRef,
   type MapCommonFeatureCollection,
   type MapCommonFeature,
   type MapCommonLineFeature,
   type MapSourceFeatureRef,
-} from '@/MapLibre/shared/map-common-tools';
+} from '@/geometry';
 import type {
   MapLayerInteractiveContext,
   MapLayerInteractiveOptions,
   TerradrawControlType,
   TerradrawInteractiveContext,
-  TerradrawLineDecorationMode,
   TerradrawLineDecorationStyle,
 } from '@/MapLibre/shared/mapLibre-contols-types';
 import {
-  createManagedTunnelPreviewExtension,
-  MANAGED_TUNNEL_PREVIEW_EXTENSION_TYPE,
-  type ManagedTunnelPreviewStateChangePayload,
-} from '@/MapLibre/extensions/managedTunnelPreview';
-import { createMapFeatureSnapExtension } from '@/MapLibre/extensions/mapFeatureSnap';
-import type { MapExtensionStateChangePayload } from '@/MapLibre/extensions/types';
-import { MANAGED_TUNNEL_PREVIEW_SOURCE_ID } from '@/MapLibre/extensions/managedTunnelPreview';
+  createLineDraftPreviewPlugin,
+  LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
+  LINE_DRAFT_PREVIEW_SOURCE_ID,
+  type LineDraftPreviewPluginApi,
+  type LineDraftPreviewStateChangePayload,
+} from '@/plugins/line-draft-preview';
+import { createMapFeatureSnapPlugin } from '@/plugins/map-feature-snap';
 
 /** 主业务 GeoJSON source ID */
 const PRIMARY_SOURCE_ID = 'test_geojson_source';
@@ -334,7 +331,6 @@ const SECONDARY_LINE_LAYER_ID = 'lineLayerSecondary';
 const SECONDARY_FILL_LAYER_ID = 'fillLayerSecondary';
 
 import sendIcon from '@/assets/image/send.svg';
-import segment_stretch_test from '@/assets/image/segment-stretch.svg';
 import texturelabsWater from '@/assets/image/Texturelabs_Water.jpg';
 
 /**
@@ -349,7 +345,7 @@ import texturelabsWater from '@/assets/image/Texturelabs_Water.jpg';
  *
  * 2. 临时预览数据 (Preview Data)
  *    就是 mapLibre-init 组件内部帮你代管的临时图形数据。
- *    比如你点击了"延长巷道"，地图上出现的那条虚线就是临时预览数据。
+ *    比如你点击了"创建线草稿"，地图上出现的那条虚线就是临时预览数据。
  *    你不需要在 template 里去写这些临时图层，插件会自动帮你渲染。
  *
  * 为什么要在代码里区分它们？
@@ -392,25 +388,23 @@ const getGeoJsonRefBySourceId = (
 };
 
 /**
- * 启用并配置"临时延长巷道"功能。
- * 这个配置告诉地图：
- * 1. 开启这个功能 (enabled: true)
- * 2. 那些临时画出来的延长线，在鼠标放上去、点击时的行为，要和 PRIMARY_LINE_LAYER_ID 这条正式线一模一样 (inheritInteractiveFromLayerId)
- * 3. 临时延长线要长什么样 (styleOverrides，比如改成红色虚线)
+ * ==========================
+ * 插件注册区
+ * ==========================
  */
-const managedTunnelPreviewExtension = createManagedTunnelPreviewExtension({
-  // 是否启用托管临时巷道预览。
-  // 设为 true 后，map-libre-init 会在内部挂载固定的临时预览 source / layer。
+const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
+  // 是否启用线草稿预览。
+  // 设为 true 后，地图容器会通过插件自动挂载内部草稿 source / layer。
   enabled: true,
 
-  // 托管预览线要“照着谁的交互行为来”。
-  // 当前配置表示：临时预览线和 PRIMARY_LINE_LAYER_ID 一样，都会按同一套 hover / click / 右键规则处理。
+  // 草稿线要“照着谁的交互行为来”。
+  // 当前配置表示：草稿线和 PRIMARY_LINE_LAYER_ID 一样，都会按同一套 hover / click / 右键规则处理。
   inheritInteractiveFromLayerId: PRIMARY_LINE_LAYER_ID,
 
   // 业务层可选的临时图层样式局部覆写示例。
   // 这里只覆写当前页面关心的几项，其余样式继续使用 map-libre-init 的默认定义。
   styleOverrides: {
-    // 临时延长线图层样式覆写。
+    // 线草稿图层样式覆写。
     line: {
       // 线图层 layout 局部覆写。
       // 当前示例未覆写 layout，因此保留容器层默认值。
@@ -420,7 +414,7 @@ const managedTunnelPreviewExtension = createManagedTunnelPreviewExtension({
 
       // 线图层 paint 局部覆写。
       paint: {
-        // 临时延长线颜色。
+        // 线草稿颜色。
         // hover 时显示为更醒目的红色，默认态显示为橙红色。
         'line-color': [
           'case',
@@ -429,17 +423,17 @@ const managedTunnelPreviewExtension = createManagedTunnelPreviewExtension({
           '#fa8c16',
         ],
 
-        // 临时延长线宽度。
+        // 线草稿宽度。
         // 这里略微调大，用于演示业务层如何只覆写单条样式。
         'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 6, 5],
 
-        // 临时延长线虚线样式。
-        // [实线段长度, 空白段长度]，用于强调“预览态”而非正式巷道线。
+        // 线草稿虚线样式。
+        // [实线段长度, 空白段长度]，用于强调“草稿态”而非正式业务线。
         'line-dasharray': [2, 1.2],
       },
     },
 
-    // 临时预览区域图层样式覆写。
+    // 线廊草稿图层样式覆写。
     fill: {
       // 面图层 layout 局部覆写。
       // 当前示例同样不改 layout，仅演示 paint 覆写。
@@ -449,14 +443,14 @@ const managedTunnelPreviewExtension = createManagedTunnelPreviewExtension({
 
       // 面图层 paint 局部覆写。
       paint: {
-        // 临时预览区域填充颜色。
+        // 线廊草稿填充颜色。
         'fill-color': '#fa8c16',
 
-        // 临时预览区域透明度。
+        // 线廊草稿透明度。
         // 透明度略低，避免遮挡底图与正式业务图层。
         'fill-opacity': 0.18,
 
-        // 临时预览区域轮廓颜色。
+        // 线廊草稿轮廓颜色。
         'fill-outline-color': '#ff7a00',
       },
     },
@@ -472,7 +466,7 @@ const managedTunnelPreviewExtension = createManagedTunnelPreviewExtension({
  *
  * 吸附算法、预览图层、TerraDraw / Measure 对接全部由容器层统一封装处理。
  */
-const mapFeatureSnapExtension = createMapFeatureSnapExtension({
+const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
   // 启用统一吸附扩展。
   enabled: true,
 
@@ -552,16 +546,28 @@ const mapFeatureSnapExtension = createMapFeatureSnapExtension({
 });
 
 /**
- * 当前页面注册到地图容器中的扩展集合。
- * 业务层通过显式 import + 注册扩展的方式启用能力，而不是继续给 map-libre-init 传专属 prop。
+ * 当前页面注册到地图容器中的插件集合。
+ * 业务层通过显式 import + 注册插件的方式启用能力，而不是继续给 map-libre-init 传专属 prop。
  */
-const mapExtensions = [mapFeatureSnapExtension, managedTunnelPreviewExtension];
+const mapPlugins = [mapFeatureSnapPlugin, lineDraftPreviewPlugin];
 
 /**
- * 当前页面是否存在托管临时预览要素。
- * 该状态只用于驱动“取消临时延长”按钮显隐，不再从业务主数据源反推。
+ * 当前页面是否存在线草稿要素。
+ * 该状态只用于驱动“清空临时草稿”按钮显隐，不再从业务主数据源反推。
  */
-const hasTemporaryTunnelFeatures = ref(false);
+const hasLineDraftFeatures = ref(false);
+
+/**
+ * 读取当前页面注册的线草稿插件 API。
+ * 这里统一通过插件宿主查询 API，而不是写死 `mapInitRef.value.plugins.lineDraftPreview` 一类字段，
+ * 这样页面只依赖“插件 ID + 插件公共契约”，不会与容器内部实现细节耦合。
+ * @returns 当前线草稿插件 API；插件未注册或地图未初始化时返回 null
+ */
+const getLineDraftPreviewApi = (): LineDraftPreviewPluginApi | null => {
+  return (
+    mapInitRef.value?.plugins?.getApi<LineDraftPreviewPluginApi>(lineDraftPreviewPlugin.id) || null
+  );
+};
 
 /**
  * 获取 GeoJSON 要素的业务 ID。
@@ -651,7 +657,7 @@ const findMapFeatureBySourceRef = (
  * 拿着上面的"地址标签"，去数据源里把最新的完整数据找出来。
  * 它会根据 sourceId 自动判断：
  * - 如果这是个"正式数据"，它就去我们登记的 mapSourceGeoJsonRefMap 里找。
- * - 如果这是个"临时预览数据"，它就去托管预览池里找。
+ * - 如果这是个"临时草稿数据"，它就去线草稿插件维护的内部池里找。
  * @param featureRef "地址标签"
  * @returns 最新的要素数据；找不到返回 null
  */
@@ -660,11 +666,8 @@ const getFeatureByRef = (featureRef: MapSourceFeatureRef | null): MapCommonFeatu
     return null;
   }
 
-  if (featureRef.sourceId === MANAGED_TUNNEL_PREVIEW_SOURCE_ID) {
-    return (
-      mapInitRef.value?.extensions?.managedTunnelPreview?.getFeatureById?.(featureRef.featureId) ||
-      null
-    );
+  if (featureRef.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID) {
+    return getLineDraftPreviewApi()?.getFeatureById?.(featureRef.featureId) || null;
   }
 
   return findMapFeatureBySourceRef(featureRef);
@@ -694,30 +697,30 @@ const getFeatureRef = (
 };
 
 /**
- * 统一处理地图扩展状态变更事件。
- * 当前页面只消费托管临时巷道预览扩展的状态，但事件机制已经支持多个扩展共存。
- * @param payload 地图扩展状态变更事件载荷
+ * 统一处理地图插件状态变更事件。
+ * 当前页面只消费线草稿插件的状态，但事件机制已经支持多个插件共存。
+ * @param payload 地图插件状态变更事件载荷
  */
-const handleExtensionStateChange = (payload: MapExtensionStateChangePayload): void => {
-  // 当前页面只关心托管临时巷道预览扩展，其余扩展状态变更直接忽略。
+const handlePluginStateChange = (payload: MapPluginStateChangePayload): void => {
+  // 当前页面只关心线草稿插件，其余插件状态变更直接忽略。
   if (
-    payload.extensionType !== MANAGED_TUNNEL_PREVIEW_EXTENSION_TYPE ||
-    payload.extensionId !== managedTunnelPreviewExtension.id
+    payload.pluginType !== LINE_DRAFT_PREVIEW_PLUGIN_TYPE ||
+    payload.pluginId !== lineDraftPreviewPlugin.id
   ) {
     return;
   }
 
-  const previewState = payload.state as ManagedTunnelPreviewStateChangePayload;
+  const previewState = payload.state as LineDraftPreviewStateChangePayload;
 
   // 同时参考 hasFeatures 与 featureCount，
   // 是为了让页面态与容器层返回的数据保持一致，避免只依赖单个字段造成误判。
-  hasTemporaryTunnelFeatures.value = previewState.hasFeatures && previewState.featureCount > 0;
+  hasLineDraftFeatures.value = previewState.hasFeatures && previewState.featureCount > 0;
   console.log('previewState', payload);
 };
 
 /**
- * 获取当前用户选中的那条线（准备进行延长或生成区域操作）。
- * 不管用户点的是"正式线"还是"临时延长线"，只要是一条线，都能拿到。
+ * 获取当前用户选中的那条线（准备进行草稿生成或线廊生成操作）。
+ * 不管用户点的是"正式线"还是"线草稿"，只要是一条线，都能拿到。
  * @returns 当前选中的线要素数据；如果没选中或者选中的不是线，返回 null
  */
 const getSelectedLine = (): MapCommonLineFeature | null => {
@@ -748,7 +751,7 @@ const getSelectedLine = (): MapCommonLineFeature | null => {
  * @param segmentIndex 当前选中的线段索引
  */
 const syncLinePopupMetrics = (lineFeature: MapCommonLineFeature, segmentIndex: number): void => {
-  const normalizedCoordinates = MapTunnelLineExtensionTool.normalizeLineCoordinates(
+  const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(
     lineFeature.geometry.coordinates
   );
   if (normalizedCoordinates.length < 2) {
@@ -1536,29 +1539,30 @@ const handlePopupAction = () => {
 };
 
 /**
- * 统一取消当前页面中的全部临时延长线及其派生要素。
+ * 统一清空当前页面中的全部线草稿及其派生要素。
  */
-const handleCancelTemporaryTunnelFeatures = (): void => {
-  if (!hasTemporaryTunnelFeatures.value) {
-    ElMessage.info('当前没有可取消的临时延长线');
+const handleClearLineDraftFeatures = (): void => {
+  if (!hasLineDraftFeatures.value) {
+    ElMessage.info('当前没有可清理的线草稿');
     return;
   }
 
-  mapInitRef.value?.extensions?.managedTunnelPreview?.clear?.();
+  getLineDraftPreviewApi()?.clear?.();
   closeBusinessPanels();
-  ElMessage.success('已取消全部临时延长线');
+  ElMessage.success('已清空全部线草稿');
 };
 
 /**
- * 点击【生成区域】按钮时的处理逻辑。
+ * 点击【生成线廊】按钮时的处理逻辑。
  * 核心逻辑：
  * 1. 拿到当前选中的线
- * 2. 如果选中的是"临时虚线"，生成的区域就放到"临时预览池"里（这样点取消时能一起清掉）
- * 3. 如果选中的是"正式线"，生成的区域就保存到"正式数据源"里（真切地修改了业务数据）
+ * 2. 如果选中的是"线草稿"，生成的结果就继续进入插件内部草稿池（这样清理时能一起清掉）
+ * 3. 如果选中的是"正式线"，生成的结果就保存到"正式数据源"里
  */
-const handleGenerateTunnelRegion = (): void => {
+const handleGenerateLineCorridor = (): void => {
   const selectedLineFeature = getSelectedLine();
   const selectedFeatureContext = mapInitRef.value?.getSelectedMapFeatureContext?.() || null;
+  const lineDraftPreviewApi = getLineDraftPreviewApi();
   if (!selectedLineFeature) {
     ElMessage.warning('当前未选中可操作的线要素');
     return;
@@ -1569,10 +1573,10 @@ const handleGenerateTunnelRegion = (): void => {
     return;
   }
 
-  if (mapInitRef.value?.extensions?.managedTunnelPreview?.isSelectedFeature?.()) {
-    // 当前选中的是托管预览线时，区域也应该进入托管预览源，
-    // 这样“取消临时延长”才能一次性清掉整套临时结果。
-    const success = mapInitRef.value?.extensions?.managedTunnelPreview?.replacePreviewRegion?.({
+  if (lineDraftPreviewApi?.isSelectedFeature?.()) {
+    // 当前选中的是线草稿时，线廊也应该进入插件内部草稿源，
+    // 这样“清空临时草稿”才能一次性清掉整套临时结果。
+    const success = lineDraftPreviewApi.replacePreviewRegion?.({
       lineFeature: selectedLineFeature,
       widthMeters: lineActionForm.widthMeters,
     });
@@ -1583,7 +1587,7 @@ const handleGenerateTunnelRegion = (): void => {
     }
 
     syncLinePopupMetrics(selectedLineFeature, popupState.selectedSegmentIndex);
-    ElMessage.success('已按当前宽度替换生成临时预览区域');
+    ElMessage.success('已按当前宽度替换线廊草稿');
     return;
   }
 
@@ -1592,7 +1596,7 @@ const handleGenerateTunnelRegion = (): void => {
     return;
   }
 
-  const nextFeatures = MapTunnelRegionTool.replaceRegionFeatures(
+  const nextFeatures = MapLineCorridorTool.replaceRegionFeatures(
     getCurrentMapFeatures(selectedFeatureContext.sourceId),
     selectedLineFeature,
     lineActionForm.widthMeters
@@ -1608,13 +1612,14 @@ const handleGenerateTunnelRegion = (): void => {
 };
 
 /**
- * 点击【延长巷道】按钮时的处理逻辑。
+ * 点击【创建线草稿】按钮时的处理逻辑。
  * 这个方法不会直接修改你的"正式数据"。
  * 它只是告诉插件："我要在这条线的这个位置，按这个方向延长这么多米"。
- * 然后插件会自动在地图上画出一条【临时延长线】（虚线）。
+ * 然后插件会自动在地图上画出一条【线草稿】（虚线）。
  */
-const handleExtendTunnelLine = (): void => {
+const handleCreateLineDraft = (): void => {
   const selectedLineFeature = getSelectedLine();
+  const lineDraftPreviewApi = getLineDraftPreviewApi();
   if (!selectedLineFeature) {
     ElMessage.warning('当前未选中可操作的线要素');
     return;
@@ -1625,9 +1630,9 @@ const handleExtendTunnelLine = (): void => {
     return;
   }
 
-  // 告诉插件：生成一条临时的预览延长线
-  // 旧的预览线怎么清理、多数据源怎么隔离，这些脏活累活插件内部会自己搞定。
-  const nextLineFeature = mapInitRef.value?.extensions?.managedTunnelPreview?.previewLine?.({
+  // 告诉插件：生成一条临时线草稿。
+  // 旧草稿怎么清理、多数据源怎么隔离，这些工作都由插件内部负责。
+  const nextLineFeature = lineDraftPreviewApi?.previewLine?.({
     lineFeature: selectedLineFeature,
     segmentIndex: popupState.selectedSegmentIndex,
     extendLengthMeters: lineActionForm.extendLengthMeters,
@@ -1639,14 +1644,14 @@ const handleExtendTunnelLine = (): void => {
   }
 
   syncLinePopupMetrics(nextLineFeature, 0);
-  ElMessage.success('已生成临时延长线，可继续编辑或取消');
+  ElMessage.success('已生成线草稿，可继续编辑或清理');
 };
 
 /**
  * 这个方法在点击普通要素时触发。
  * 它会在地图上弹出一个气泡框(Popup)，显示这条线的详情。
  * 并且，它会顺便计算出【你刚才点击的是这条线的第几段】，
- * 这个"第几段"的数据会被后面的【延长巷道】和【生成区域】直接使用。
+ * 这个"第几段"的数据会被后面的【创建线草稿】和【生成线廊】直接使用。
  * @param context 点击事件传过来的数据
  */
 const openMapFeaturePopup = (context: MapLayerInteractiveContext) => {
@@ -1663,8 +1668,8 @@ const openMapFeaturePopup = (context: MapLayerInteractiveContext) => {
     // 注意：
     // 这里优先使用 context.lngLat，而不是直接使用原始鼠标坐标。
     // 一旦当前点击命中了吸附结果，lngLat 已经是“吸附后的有效坐标”，
-    // 这样后续线段识别、弹窗摘要、延长巷道等业务计算就都会自动跟随吸附点工作。
-    const lineInteractionSnapshot = MapTunnelLineExtensionTool.resolveLineInteractionSnapshot({
+    // 这样后续线段识别、弹窗摘要、线草稿生成等业务计算就都会自动跟随吸附点工作。
+    const lineInteractionSnapshot = MapLineExtensionTool.resolveLineInteractionSnapshot({
       feature: context.feature as unknown as MapCommonFeature,
       featureRef: getFeatureRef(context),
       lngLat: context.lngLat,
@@ -1712,8 +1717,8 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
   contextMenuState.targetType = 'map';
   contextMenuState.sourceId = context.sourceId || '';
   contextMenuState.layerId = context.layerId || '';
-  contextMenuState.isManagedTunnelPreviewFeature =
-    mapInitRef.value?.extensions?.managedTunnelPreview?.isFeatureById?.(context.featureId) || false;
+  contextMenuState.isLineDraftFeature =
+    getLineDraftPreviewApi()?.isFeatureById?.(context.featureId) || false;
   contextMenuState.controlType = '';
   contextMenuState.visible = true;
 };
@@ -1895,7 +1900,7 @@ const contextMenuState = reactive({
   targetType: '' as 'map' | 'terradraw' | '',
   sourceId: '',
   layerId: '',
-  isManagedTunnelPreviewFeature: false,
+  isLineDraftFeature: false,
   controlType: '' as TerradrawControlType | '',
 });
 
@@ -1943,7 +1948,7 @@ const closeBusinessPanels = () => {
   contextMenuState.targetType = '';
   contextMenuState.sourceId = '';
   contextMenuState.layerId = '';
-  contextMenuState.isManagedTunnelPreviewFeature = false;
+  contextMenuState.isLineDraftFeature = false;
   contextMenuState.controlType = '';
 };
 
@@ -2006,7 +2011,7 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
   contextMenuState.targetType = 'terradraw';
   contextMenuState.sourceId = '';
   contextMenuState.layerId = '';
-  contextMenuState.isManagedTunnelPreviewFeature = false;
+  contextMenuState.isLineDraftFeature = false;
   contextMenuState.controlType = context.controlType;
   contextMenuState.visible = true;
 };
@@ -2035,22 +2040,22 @@ const handleSaveProperty = (updatedProperties: Record<string, any>) => {
   }
 
   if (contextMenuState.targetType === 'map') {
-    if (contextMenuState.isManagedTunnelPreviewFeature) {
+    if (contextMenuState.isLineDraftFeature) {
       // 对业务层来说，这里仍然是“地图要素属性写回”；
-      // 只是具体落到正式业务源还是托管预览源，由当前选中要素来源自动分流。
-      const result = mapInitRef.value?.extensions?.managedTunnelPreview?.saveProperties?.({
+      // 只是具体落到正式业务源还是插件内部草稿源，由当前选中要素来源自动分流。
+      const result = getLineDraftPreviewApi()?.saveProperties?.({
         featureId: contextMenuState.featureId,
         newProperties: updatedProperties,
         mode: 'replace',
       });
 
       if (!result?.success || !result.properties) {
-        ElMessage.warning(result?.message || '托管预览要素属性写回失败');
+        ElMessage.warning(result?.message || '线草稿要素属性写回失败');
         return;
       }
 
       syncSavedPropertiesToPanels(result.properties);
-      ElMessage.success('托管预览要素属性已写回（仅前端本地）');
+      ElMessage.success('线草稿要素属性已写回（仅前端本地）');
       return;
     }
 

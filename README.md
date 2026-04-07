@@ -1,157 +1,12 @@
 # vue-maplibre-kit
 
-A GIS toolkit based on **Vue 3**, **MapLibre GL**, and **TerraDraw**, designed for building reusable and extensible WebGIS applications.
+一个基于 Vue 3、MapLibre GL 与 TerraDraw 的 WebGIS 能力库。
 
-`vue-maplibre-kit` is extracted from real-world business scenarios and focuses on map initialization, layer management, interaction handling, drawing and measurement, and plugin-based extension. It helps developers integrate GIS capabilities in a more declarative and engineering-oriented way, reducing the complexity of WebGIS development.
+当前版本采用“核心宿主 + 显式导入插件”的结构：
 
-## Features
-
-- Built with **Vue 3 + TypeScript**
-- Uses **MapLibre GL** for map rendering
-- Uses **TerraDraw** for drawing and interaction
-- Encapsulates map initialization and base configuration
-- Supports layer management and business interaction extension
-- Supports common GIS tools such as drawing and measurement
-- Supports plugin-based extension for reusable business capabilities
-- Designed for real-world scenarios and suitable as a base engine layer for WebGIS projects
-
-## Use Cases
-
-- Map display pages in business systems
-- GIS applications requiring drawing, annotation, and measurement
-- Admin or enterprise projects that need unified map interaction protocols
-- Vue projects that need reusable GIS base capabilities
-- Personal or team projects that want to reuse MapLibre + TerraDraw capabilities
-
-## Tech Stack
-
-- [Vue 3](https://vuejs.org/)
-- [MapLibre GL JS](https://maplibre.org/)
-- [TerraDraw](https://terradraw.io/)
-- [@watergis/maplibre-gl-terradraw](https://www.npmjs.com/package/@watergis/maplibre-gl-terradraw)
-- TypeScript
-
-## Installation
-
-```bash
-npm install vue-maplibre-kit
-```
-
-If the package has not been published to npm yet, you can still develop and test it locally:
-
-```bash
-npm install
-npm run dev
-```
-
-## Project Positioning
-
-`vue-maplibre-kit` is not a single map component. It is a GIS capability toolkit centered around **map rendering**, **drawing and interaction**, and **business extensibility**.
-
-It mainly focuses on the following aspects:
-
-1. Standardizing map initialization
-2. Standardizing layer and interaction integration
-3. Standardizing drawing and measurement integration
-4. Supporting business plugin extension
-5. Reducing the complexity of directly operating low-level GIS libraries in business pages
-
-## Core Capabilities
-
-### 1. Map Foundation Encapsulation
-
-Provides unified encapsulation for MapLibre map instances, basemap initialization, and map control mounting.
-
-### 2. Layer Management
-
-Supports business layer configuration, rendering, and interaction logic management.
-
-### 3. Interaction Handling
-
-Supports interaction extension such as click, hover, and selection, making GIS page behavior easier to standardize.
-
-### 4. Drawing and Measurement
-
-Built on TerraDraw and its related ecosystem to support common GIS operations such as drawing, editing, and measurement.
-
-### 5. Plugin Extension
-
-Supports mounting complex business logic into the map engine in a plugin-based way, improving reusability and maintainability.
-
-## Development
-
-Start the development environment:
-
-```bash
-npm install
-npm run dev
-```
-
-Build the project:
-
-```bash
-npm run build
-```
-
-## Design Goals
-
-- **Declarative**: describe map capabilities through configuration as much as possible, instead of directly operating low-level APIs in business code
-- **Reusable**: extract common GIS capabilities from specific business scenarios
-- **Extensible**: support plugin-based access for complex business capabilities
-- **Engineering-oriented**: reduce the maintenance cost of GIS business pages
-- **Open and lightweight**: built on open-source ecosystems for long-term evolution
-
-## Roadmap
-
-- Extract more stable public APIs
-- Improve layer management and interaction configuration
-- Refine drawing and measurement tool encapsulation
-- Add more complete example pages
-- Improve documentation and usage guides
-- Publish to npm for reuse in independent projects
-
-## License
-
-[MIT](./LICENSE)
-
-## Notes
-
-This is an evolving personal GIS toolkit project, currently used to accumulate WebGIS development capabilities based on Vue 3, MapLibre GL, and TerraDraw. Documentation, examples, and release workflows will be improved gradually.
-
----
-
-# 中文说明
-
-一个基于 **Vue 3**、**MapLibre GL** 和 **TerraDraw** 的 GIS 工具库，用于快速构建可复用、可扩展的 WebGIS 应用。
-
-`vue-maplibre-kit` 从实际业务场景中沉淀而来，围绕地图初始化、图层管理、交互控制、绘制测量和插件扩展等能力进行封装，帮助开发者以更声明式、更工程化的方式集成地图能力，降低 WebGIS 页面开发成本。
-
-## 特性
-
-- 基于 **Vue 3 + TypeScript**
-- 基于 **MapLibre GL** 提供地图渲染能力
-- 基于 **TerraDraw** 提供绘制与交互能力
-- 支持地图初始化与基础配置封装
-- 支持图层管理与业务交互扩展
-- 支持绘制、测量等常见 GIS 工具能力
-- 支持插件化扩展，便于沉淀业务能力
-- 面向业务场景设计，适合作为 WebGIS 项目的基础引擎层
-
-## 适用场景
-
-- 业务系统中的地图展示页面
-- 需要绘制、标注、测量的 GIS 应用
-- 需要统一地图交互协议的中后台项目
-- 需要沉淀地图基础能力的 Vue 项目
-- 需要复用 MapLibre + TerraDraw 能力的个人或团队项目
-
-## 技术栈
-
-- [Vue 3](https://vuejs.org/)
-- [MapLibre GL JS](https://maplibre.org/)
-- [TerraDraw](https://terradraw.io/)
-- [@watergis/maplibre-gl-terradraw](https://www.npmjs.com/package/@watergis/maplibre-gl-terradraw)
-- TypeScript
+- 核心入口只负责地图容器、交互托管、绘制与测量控件整合。
+- 官方能力以子路径插件形式提供，例如吸附插件、线草稿预览插件。
+- 通用几何能力通过 `geometry` 子路径单独导出，避免业务语义直接进入公共 API。
 
 ## 安装
 
@@ -159,83 +14,124 @@ This is an evolving personal GIS toolkit project, currently used to accumulate W
 npm install vue-maplibre-kit
 ```
 
-如果当前阶段还未正式发布到 npm，也可以先在本地开发和调试：
+## 公共入口
 
-```bash
-npm install
-npm run dev
+```ts
+import { MapLibreInit, type MapLibreInitExpose } from 'vue-maplibre-kit';
+import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature-snap';
+import {
+  createLineDraftPreviewPlugin,
+  type LineDraftPreviewPluginApi,
+} from 'vue-maplibre-kit/plugins/line-draft-preview';
+import { MapLineExtensionTool, MapLineCorridorTool } from 'vue-maplibre-kit/geometry';
 ```
 
-## 项目定位
+## 接入方式
 
-`vue-maplibre-kit` 不是单一地图组件，而是一个围绕 **地图渲染、绘制交互、业务扩展** 的 GIS 能力封装项目。
+```vue
+<template>
+  <map-libre-init
+    ref="mapInitRef"
+    :mapOptions="mapOptions"
+    :controls="mapControls"
+    :mapInteractive="mapInteractive"
+    :plugins="mapPlugins"
+    @pluginStateChange="handlePluginStateChange"
+  />
+</template>
 
-它更关注以下几个方面：
+<script setup lang="ts">
+import { ref } from 'vue';
+import { MapLibreInit, type MapLibreInitExpose } from 'vue-maplibre-kit';
+import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature-snap';
+import {
+  createLineDraftPreviewPlugin,
+  LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
+  type LineDraftPreviewPluginApi,
+} from 'vue-maplibre-kit/plugins/line-draft-preview';
+import type { MapPluginStateChangePayload } from 'vue-maplibre-kit';
 
-1. 统一地图初始化方式
-2. 统一图层和交互接入方式
-3. 统一绘制与测量能力接入方式
-4. 支持业务插件扩展
-5. 降低业务页面直接操作底层地图库的复杂度
+const mapInitRef = ref<MapLibreInitExpose | null>(null);
 
-## 核心能力
+const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
+  enabled: true,
+  ordinaryLayers: {
+    rules: [
+      {
+        id: 'demo-line-snap',
+        layerIds: ['lineLayer'],
+        snapTo: ['vertex', 'segment'],
+      },
+    ],
+  },
+});
 
-### 1. 地图基础封装
+const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
+  enabled: true,
+  inheritInteractiveFromLayerId: 'lineLayer',
+});
 
-对 MapLibre 地图实例、底图初始化、地图控件挂载等进行统一封装。
+const mapPlugins = [mapFeatureSnapPlugin, lineDraftPreviewPlugin];
 
-### 2. 图层管理
+/**
+ * 通过插件宿主读取线草稿插件 API。
+ * 业务层不再访问固定字段，而是通过插件 ID 查询对应 API。
+ * @returns 当前线草稿插件 API；未初始化时返回 null
+ */
+function getLineDraftPreviewApi(): LineDraftPreviewPluginApi | null {
+  return (
+    mapInitRef.value?.plugins?.getApi<LineDraftPreviewPluginApi>(lineDraftPreviewPlugin.id) || null
+  );
+}
 
-支持业务图层配置、图层渲染和图层交互逻辑管理。
+/**
+ * 统一处理插件状态变化。
+ * @param payload 插件状态变化载荷
+ */
+function handlePluginStateChange(payload: MapPluginStateChangePayload): void {
+  if (payload.pluginType !== LINE_DRAFT_PREVIEW_PLUGIN_TYPE) {
+    return;
+  }
 
-### 3. 交互能力
-
-支持地图点击、悬浮、选中等交互扩展，便于统一 GIS 页面行为。
-
-### 4. 绘制与测量
-
-基于 TerraDraw 及其相关生态能力，支持绘制、编辑、测量等常用 GIS 操作。
-
-### 5. 插件扩展
-
-支持将复杂业务逻辑以插件方式挂载到地图引擎中，提升复用性与可维护性。
-
-## 开发说明
-
-启动开发环境：
-
-```bash
-npm install
-npm run dev
+  console.log('lineDraftPreview state', payload.state);
+}
+</script>
 ```
 
-构建项目：
+## 设计约定
 
-```bash
-npm run build
-```
+- `plugins` 按声明顺序执行，渲染顺序与交互补丁覆盖顺序也按该顺序处理。
+- `mapInitRef.value.plugins` 只提供查询接口：
+  `has(pluginId)`
+  `getApi(pluginId)`
+  `getState(pluginId)`
+  `list()`
+- “按需加载”的实现方式是“显式导入插件 + 子路径导出 + tree-shaking”，而不是按字符串名动态注册。
 
-## 设计目标
+## 官方子路径
 
-- **声明式**：尽量通过配置描述地图能力，而不是让业务代码直接操作底层 API
-- **可复用**：将通用 GIS 能力从具体业务中抽离出来
-- **可扩展**：支持插件化接入复杂业务能力
-- **工程化**：降低地图业务页面的维护成本
-- **轻量开放**：基于开源生态构建，便于后续持续演进
+- `vue-maplibre-kit`
+  核心地图容器、插件契约、宿主查询接口、基础类型
+- `vue-maplibre-kit/plugins/map-feature-snap`
+  普通图层吸附预览与 TerraDraw / Measure 吸附桥接
+- `vue-maplibre-kit/plugins/line-draft-preview`
+  线草稿与线廊草稿管理、渲染、交互继承
+- `vue-maplibre-kit/geometry`
+  线延长、线廊生成、来源引用等中立几何工具
 
-## 未来规划
+## 示例
 
-- 抽离更稳定的公共 API
-- 优化图层管理与交互配置方式
-- 完善绘制与测量工具封装
-- 补充更完整的示例页面
-- 完善文档与使用说明
-- 发布到 npm 供独立项目复用
+完整示例请参考：
 
-## License
+- [src/views/NG/GI/NGGI00.vue](./src/views/NG/GI/NGGI00.vue)
+
+该示例展示了以下内容：
+
+- 显式导入并注册插件
+- 通过宿主读取插件 API
+- 正式业务数据与临时草稿数据分流
+- 普通图层交互、吸附、线草稿和 TerraDraw 的协同方式
+
+## 许可证
 
 [MIT](./LICENSE)
-
-## 说明
-
-这是一个持续演进中的个人 GIS 工具库项目，当前主要用于沉淀基于 Vue 3、MapLibre GL 和 TerraDraw 的 WebGIS 开发能力。后续会逐步完善文档、示例和发布流程。

@@ -12,7 +12,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { ref, onBeforeUnmount, watch, nextTick } from 'vue';
 import { Popup, type LngLatLike, type PopupOptions } from 'maplibre-gl';
 import { useMap } from 'vue-maplibre-gl';
 

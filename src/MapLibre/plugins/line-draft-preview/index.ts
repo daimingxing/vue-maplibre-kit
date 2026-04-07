@@ -1,0 +1,51 @@
+import type { MapPluginDescriptor } from '../types';
+import type { LineDraftPreviewOptions } from './types';
+import {
+  lineDraftPreviewPlugin,
+  LINE_DRAFT_PREVIEW_CORRIDOR_KIND,
+  LINE_DRAFT_PREVIEW_FILL_LAYER_ID,
+  LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
+  LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
+  LINE_DRAFT_PREVIEW_SOURCE_ID,
+} from './useLineDraftPreviewPlugin';
+
+/** 线草稿预览插件描述对象。 */
+export interface LineDraftPreviewPluginDescriptor
+  extends MapPluginDescriptor<typeof LINE_DRAFT_PREVIEW_PLUGIN_TYPE, LineDraftPreviewOptions> {}
+
+/**
+ * 创建线草稿预览插件描述对象。
+ * @param options 线草稿预览插件配置
+ * @param id 插件唯一标识；未传时默认使用 lineDraftPreview
+ * @returns 标准化后的插件描述对象
+ */
+export function createLineDraftPreviewPlugin(
+  options: LineDraftPreviewOptions,
+  id = 'lineDraftPreview'
+): LineDraftPreviewPluginDescriptor {
+  return {
+    id,
+    type: LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
+    options,
+    plugin: lineDraftPreviewPlugin,
+  };
+}
+
+export {
+  lineDraftPreviewPlugin,
+  LINE_DRAFT_PREVIEW_CORRIDOR_KIND,
+  LINE_DRAFT_PREVIEW_FILL_LAYER_ID,
+  LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
+  LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
+  LINE_DRAFT_PREVIEW_SOURCE_ID,
+};
+export type {
+  LineDraftPreviewPluginApi,
+  LineDraftPreviewStateChangePayload,
+} from './useLineDraftPreviewPlugin';
+export type {
+  LineDraftPreviewFillStyleOverrides,
+  LineDraftPreviewLineStyleOverrides,
+  LineDraftPreviewOptions,
+  LineDraftPreviewStyleOverrides,
+} from './types';

@@ -1953,6 +1953,12 @@ export function createTerradrawLineDecoration(
     return emptyBinding;
   }
 
+  /**
+   * 经过空值收窄后的 TerraDraw 实例。
+   * 后续闭包统一使用这个引用，避免 TypeScript 在嵌套函数里丢失已完成的空值判断。
+   */
+  const terradrawInstance = drawInstance;
+
   const enabled = ref(true);
   const data = ref<MapCommonFeatureCollection>(createEmptyFeatureCollection());
   const sourceId = `td-line-decoration-${controlType}-source`;
@@ -2449,13 +2455,20 @@ export function createTerradrawLineDecoration(
   function resolveDecorationStyleByFeatureId(
     featureId: TerradrawFeatureId
   ): NormalizedLineDecorationStyle | null {
-    const feature = drawInstance.getSnapshotFeature(featureId);
+    const feature = terradrawInstance.getSnapshotFeature(featureId);
 
     if (!feature || !isDecoratableLineFeature(feature)) {
       return null;
     }
 
-    return resolveFeatureDecorationStyle(feature, options, controlType, control, drawInstance, map);
+    return resolveFeatureDecorationStyle(
+      feature,
+      options,
+      controlType,
+      control,
+      terradrawInstance,
+      map
+    );
   }
 
   /**
@@ -2492,7 +2505,7 @@ export function createTerradrawLineDecoration(
     const currentSyncRevision = requestedSyncRevision;
     isSyncing = true;
     try {
-      const snapshot = drawInstance.getSnapshot();
+      const snapshot = terradrawInstance.getSnapshot();
       const pendingImageKeys = new Set<string>();
       const symbolGroupMap = new Map<
         string,
@@ -2506,7 +2519,7 @@ export function createTerradrawLineDecoration(
           options,
           controlType,
           control,
-          drawInstance,
+          terradrawInstance,
           map
         );
 
@@ -2661,7 +2674,7 @@ export function createTerradrawLineDecoration(
         }
 
         if (style.mode === LINE_PATTERN_MODE) {
-          const currentFeature = drawInstance.getSnapshotFeature(featureId);
+          const currentFeature = terradrawInstance.getSnapshotFeature(featureId);
 
           if (!currentFeature || !isDecoratableLineFeature(currentFeature)) {
             shouldSyncVisibleDecoration = true;
@@ -2717,7 +2730,7 @@ export function createTerradrawLineDecoration(
    * 当用户退出交互态并回到 render 时，把仍处于预览态的 pattern 线统一恢复。
    */
   function handleDecorationModeChanged(): void {
-    if (drawInstance.getMode() === 'render' && linePatternPreviewFeatureIds.size > 0) {
+    if (terradrawInstance.getMode() === 'render' && linePatternPreviewFeatureIds.size > 0) {
       scheduleLinePatternFinalizeSync([...linePatternPreviewFeatureIds]);
       return;
     }
