@@ -1,0 +1,178 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "stroke": "#b84c4c",
+        "stroke-width": 2,
+        "stroke-opacity": 1,
+        "fill": "#555555",
+        "fill-opacity": 0.5,
+        "name": "矿区总范围",
+        "type": "boundary",
+        "category": "矿区边界",
+        "description": "矿区整体规划范围边界",
+        "layer": "base"
+      },
+      "geometry": {
+        "coordinates": [[[85.14702628196261,43.190022245502945],[85.14702628196261,43.11357987657641],[85.31519728484841,43.11357987657641],[85.31519728484841,43.190022245502945],[85.14702628196261,43.190022245502945]]],
+        "type": "Polygon"
+      },
+      "id": 0
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "一水平巷道腰线",
+        "type": "roadway_waist",
+        "category": "巷道腰线",
+        "level": 1,
+        "description": "第一水平巷道腰线，用于标示巷道坡度和方向",
+        "stroke": "#00ff00",
+        "stroke-width": 2,
+        "stroke-opacity": 0.9,
+        "layer": "roadway"
+      },
+      "geometry": {
+        "coordinates": [[85.17077657666584,43.17038146671072],[85.20048193740269,43.170337001169116],[85.22381524372167,43.16232176084614],[85.2506501050708,43.166044289357984],[85.27657795800906,43.16535245767315]],
+        "type": "LineString"
+      },
+      "id": 1
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "二水平巷道腰线",
+        "type": "roadway_waist",
+        "category": "巷道腰线",
+        "level": 2,
+        "description": "第二水平（中间）巷道腰线，用于标示巷道坡度和方向",
+        "stroke": "#00ff00",
+        "stroke-width": 2,
+        "stroke-opacity": 0.9,
+        "layer": "roadway"
+      },
+      "geometry": {
+        "coordinates": [[85.17105436706572,43.155282560365606],[85.19970703770144,43.15536403533969],[85.22262821248069,43.149745782100695],[85.25161561300314,43.15389312414183],[85.27506297741661,43.15349596111088]],
+        "type": "LineString"
+      },
+      "id": 2
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "三水平巷道腰线",
+        "type": "roadway_waist",
+        "category": "巷道腰线",
+        "level": 3,
+        "description": "第三水平巷道腰线，用于标示巷道坡度和方向",
+        "stroke": "#00ff00",
+        "stroke-width": 2,
+        "stroke-opacity": 0.9,
+        "layer": "roadway"
+      },
+      "geometry": {
+        "coordinates": [[85.17041492151236,43.14299709958837],[85.19819158576445,43.14311378326144],[85.22196448475057,43.13819525626943],[85.25229687816977,43.1429598501019],[85.27555603945859,43.14256944147897]],
+        "type": "LineString"
+      },
+      "id": 3
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "marker-color": "#b03b3b",
+        "marker-size": "medium",
+        "marker-symbol": "circle-stroked",
+        "name": "爆破点",
+        "type": "blast_point",
+        "category": "爆破作业点",
+        "description": "爆破作业位置，需设置安全警戒区域",
+        "safety_radius": 300,
+        "layer": "operation"
+      },
+      "geometry": {
+        "coordinates": [85.25913115303462,43.15384027128559],
+        "type": "Point"
+      },
+      "id": 4
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "监测点",
+        "type": "monitor_point",
+        "category": "安全监测",
+        "monitor_type": "综合监测",
+        "description": "矿区安全监测点，用于监测瓦斯、顶板、位移等参数",
+        "marker-color": "#00ff00",
+        "marker-size": "medium",
+        "marker-symbol": "circle",
+        "status": "active",
+        "layer": "monitor"
+      },
+      "geometry": {
+        "coordinates": [85.20736818156882,43.15359037715993],
+        "type": "Point"
+      },
+      "id": 5
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "纵向剖面线A",
+        "type": "section_line",
+        "category": "剖面线",
+        "description": "地质剖面参考线",
+        "stroke": "#00ff00",
+        "stroke-width": 1.5,
+        "stroke-opacity": 0.6,
+        "layer": "survey"
+      },
+      "geometry": {
+        "coordinates": [[85.1877630445303,43.17625004574242],[85.18684138409452,43.13497829822154]],
+        "type": "LineString"
+      },
+      "id": 6
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "纵向剖面线B",
+        "type": "section_line",
+        "category": "剖面线",
+        "description": "地质剖面参考线",
+        "stroke": "#00ff00",
+        "stroke-width": 1.5,
+        "stroke-opacity": 0.6,
+        "layer": "survey"
+      },
+      "geometry": {
+        "coordinates": [[85.22930498165368,43.17363069734361],[85.24305202816305,43.13560303990866]],
+        "type": "LineString"
+      },
+      "id": 7
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "特定功能区",
+        "type": "functional_zone",
+        "category": "功能区",
+        "zone_type": "特定功能",
+        "description": "矿区特定功能区域（如开采区、储备区或保护区）",
+        "stroke": "#00aa00",
+        "stroke-width": 2,
+        "stroke-opacity": 1,
+        "fill": "#00ff00",
+        "fill-opacity": 0.35,
+        "layer": "zone"
+      },
+      "geometry": {
+        "coordinates": [[[85.30326382065556,43.1712122369002],[85.2770928600188,43.177639741683606],[85.25743323498182,43.171633084260606],[85.28108234587592,43.13287243713597],[85.30069767929206,43.169974773674454],[85.30326382065556,43.1712122369002]]],
+        "type": "Polygon"
+      },
+      "id": 8
+    }
+  ]
+}
