@@ -922,7 +922,7 @@ const mapControls: MapControlsConfig = {
   // 注意两种绘图控件 二选一，否则容易出现图层覆盖问题。
   // 绘图控件：提供点、线、面等绘制工具
   MaplibreTerradrawControl: {
-    isUse: true,
+    isUse: false,
     position: 'top-left',
     // 默认是否展开工具栏
     open: false,
