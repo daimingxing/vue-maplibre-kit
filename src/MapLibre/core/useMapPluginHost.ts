@@ -43,6 +43,17 @@ interface MapPluginRecord {
   stopStateWatch?: () => void;
 }
 
+interface MapPluginDescriptorDependency {
+  /** 插件唯一标识。 */
+  id: string;
+  /** 插件类型标识。 */
+  type: string;
+  /** 插件定义对象引用。 */
+  plugin: AnyMapPluginDescriptor['plugin'];
+  /** 插件配置对象引用。 */
+  options: AnyMapPluginDescriptor['options'];
+}
+
 /**
  * 合并普通图层交互配置。
  * @param baseConfig 基础配置
@@ -153,27 +164,46 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    */
   function createPluginRecord(descriptor: AnyMapPluginDescriptor): MapPluginRecord {
     const descriptorRef = shallowRef<AnyMapPluginDescriptor>(descriptor);
-    const instance = descriptor.plugin.createInstance(createPluginContext(descriptor, descriptorRef));
-    const pluginRecord: MapPluginRecord = {
-      descriptorRef,
-      instance,
-    };
+    try {
+      const instance = descriptor.plugin.createInstance(createPluginContext(descriptor, descriptorRef));
+      const pluginRecord: MapPluginRecord = {
+        descriptorRef,
+        instance,
+      };
 
-    if (instance.state) {
-      pluginRecord.stopStateWatch = watch(
-        () => instance.state?.value,
-        (stateSnapshot) => {
-          onPluginStateChange?.({
-            pluginId: descriptorRef.value.id,
-            pluginType: descriptorRef.value.type,
-            state: stateSnapshot,
-          });
-        },
-        { immediate: true, deep: true }
-      );
+      if (instance.state) {
+        pluginRecord.stopStateWatch = watch(
+          () => instance.state?.value,
+          (stateSnapshot) => {
+            onPluginStateChange?.({
+              pluginId: descriptorRef.value.id,
+              pluginType: descriptorRef.value.type,
+              state: stateSnapshot,
+            });
+          },
+          { immediate: true, deep: true }
+        );
+      }
+
+      return pluginRecord;
+    } catch (error) {
+      console.error(`[MapPluginHost] 插件 '${descriptor.id}' 初始化失败`, error);
+      throw error;
     }
+  }
 
-    return pluginRecord;
+  /**
+   * 提取插件描述符的顶层依赖。
+   * 这里只跟踪 id / type / plugin / options 引用变化，避免 deep watch 对函数配置做递归遍历。
+   * @returns 当前插件描述符的同步依赖快照
+   */
+  function getDescriptorDependencies(): MapPluginDescriptorDependency[] {
+    return (getDescriptors() || []).map((descriptor) => ({
+      id: descriptor.id,
+      type: descriptor.type,
+      plugin: descriptor.plugin,
+      options: descriptor.options,
+    }));
   }
 
   /**
@@ -199,11 +229,13 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
         return;
       }
 
-      if (currentPluginRecord) {
-        destroyPluginRecord(currentPluginRecord);
+      try {
+        const nextPluginRecord = createPluginRecord(descriptor);
+        currentPluginRecord && destroyPluginRecord(currentPluginRecord);
+        nextPluginRecordMap.set(descriptor.id, nextPluginRecord);
+      } catch {
+        currentPluginRecord && destroyPluginRecord(currentPluginRecord);
       }
-
-      nextPluginRecordMap.set(descriptor.id, createPluginRecord(descriptor));
     });
 
     currentPluginRecordMap.forEach((pluginRecord, pluginId) => {
@@ -216,11 +248,11 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
   }
 
   watch(
-    () => getDescriptors(),
+    () => getDescriptorDependencies(),
     () => {
       syncPluginRecords();
     },
-    { immediate: true, deep: true }
+    { immediate: true }
   );
 
   onBeforeUnmount(() => {

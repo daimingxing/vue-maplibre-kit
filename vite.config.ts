@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
 import fs from 'node:fs';
@@ -7,7 +7,7 @@ import fs from 'node:fs';
 function geojsonPlugin() {
   return {
     name: 'vite-plugin-geojson',
-    transform(code, id) {
+    transform(_code: string, id: string) {
       if (id.endsWith('.geojson')) {
         // 读取文件内容并将其作为默认导出的 JavaScript 对象返回
         const fileContent = fs.readFileSync(id, 'utf-8');
@@ -17,7 +17,7 @@ function geojsonPlugin() {
         };
       }
     },
-  };
+  } satisfies Plugin;
 }
 
 /**

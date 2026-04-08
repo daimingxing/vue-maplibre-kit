@@ -1,4 +1,3 @@
-import type { MapPluginDescriptor } from '../types';
 import type { LineDraftPreviewOptions } from './types';
 import {
   lineDraftPreviewPlugin,
@@ -7,15 +6,12 @@ import {
   LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
   LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
+  type LineDraftPreviewPluginDescriptor,
 } from './useLineDraftPreviewPlugin';
 import type {
   LineDraftPreviewPluginApi,
   LineDraftPreviewStateChangePayload,
 } from './useLineDraftPreviewController';
-
-/** 线草稿预览插件描述对象。 */
-export interface LineDraftPreviewPluginDescriptor
-  extends MapPluginDescriptor<typeof LINE_DRAFT_PREVIEW_PLUGIN_TYPE, LineDraftPreviewOptions> {}
 
 /**
  * 创建线草稿预览插件描述对象。
@@ -43,7 +39,11 @@ export {
   LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
 };
-export type { LineDraftPreviewPluginApi, LineDraftPreviewStateChangePayload };
+export type {
+  LineDraftPreviewPluginApi,
+  LineDraftPreviewPluginDescriptor,
+  LineDraftPreviewStateChangePayload,
+};
 export type {
   LineDraftPreviewFillStyleOverrides,
   LineDraftPreviewLineStyleOverrides,

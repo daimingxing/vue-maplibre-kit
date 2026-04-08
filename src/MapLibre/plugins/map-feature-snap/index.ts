@@ -7,14 +7,13 @@ import {
   MAP_FEATURE_SNAP_PREVIEW_SOURCE_ID,
 } from './useMapFeatureSnapBinding';
 import MapFeatureSnapPreviewLayers from './MapFeatureSnapPreviewLayers.vue';
-import type { MapPluginDescriptor } from '../types';
 import type { MapFeatureSnapOptions } from './types';
-import { mapFeatureSnapPlugin, MAP_FEATURE_SNAP_PLUGIN_TYPE } from './useMapFeatureSnapPlugin';
+import {
+  mapFeatureSnapPlugin,
+  MAP_FEATURE_SNAP_PLUGIN_TYPE,
+  type MapFeatureSnapPluginDescriptor,
+} from './useMapFeatureSnapPlugin';
 import type { ResolvedTerradrawSnapOptions } from '../types';
-
-/** 地图吸附插件工厂函数返回值。 */
-export interface MapFeatureSnapPluginDescriptor
-  extends MapPluginDescriptor<typeof MAP_FEATURE_SNAP_PLUGIN_TYPE, MapFeatureSnapOptions> {}
 
 /**
  * 创建地图吸附插件描述对象。
@@ -44,7 +43,11 @@ export {
   MAP_FEATURE_SNAP_PREVIEW_POINT_LAYER_ID,
   MAP_FEATURE_SNAP_PREVIEW_SOURCE_ID,
 };
-export type { MapFeatureSnapBinding, ResolvedTerradrawSnapOptions };
+export type {
+  MapFeatureSnapBinding,
+  MapFeatureSnapPluginDescriptor,
+  ResolvedTerradrawSnapOptions,
+};
 export type {
   MapFeatureSnapGeometryType,
   MapFeatureSnapKind,

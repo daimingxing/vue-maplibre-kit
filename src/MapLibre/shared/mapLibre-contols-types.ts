@@ -1,13 +1,24 @@
 import type {
+  CircleLayerSpecification,
   ControlPosition,
+  FitBoundsOptions,
   Map as MaplibreMap,
   MapGeoJSONFeature,
+  SymbolLayerSpecification,
 } from 'maplibre-gl';
 import type {
   MaplibreTerradrawControl,
   MaplibreMeasureControl,
+  MeasureControlOptions as WatergisMeasureControlOptions,
+  TerradrawControlOptions as WatergisTerradrawControlOptions,
 } from '@watergis/maplibre-gl-terradraw';
 import type { TerraDraw, GeoJSONStoreFeatures, GeoJSONStoreGeometries } from 'terra-draw';
+import type {
+  MapFeatureSnapKind,
+  MapFeatureSnapResult,
+  MapFeatureSnapSegmentInfo,
+} from './map-feature-snap-types';
+import type { TerradrawModeOptionsInput } from './terradraw-mode-types';
 
 /** TerraDraw / Measure 控件的统一实例类型 */
 export type TerradrawManagedControl = MaplibreTerradrawControl | MaplibreMeasureControl;
@@ -20,6 +31,8 @@ export type TerradrawFeature = GeoJSONStoreFeatures<GeoJSONStoreGeometries>;
 
 /** TerraDraw 要素 ID 类型 */
 export type TerradrawFeatureId = string | number;
+
+export type { MapFeatureSnapKind, MapFeatureSnapResult, MapFeatureSnapSegmentInfo };
 
 /** TerraDraw 线装饰模式 */
 export type TerradrawLineDecorationMode = 'symbol-repeat' | 'line-pattern' | 'segment-stretch';
@@ -213,23 +226,6 @@ export interface TerradrawLineDecorationOptions {
   ) => TerradrawLineDecorationStyle | null | false;
 }
 
-/** 地图吸附类型 */
-export type MapFeatureSnapKind = 'vertex' | 'segment';
-
-/** 吸附命中的线段信息 */
-export interface MapFeatureSnapSegmentInfo {
-  /** 当前命中的坐标路径索引（多几何场景下用于区分第几段路径） */
-  pathIndex: number;
-  /** 多边形场景下的 ring 索引；非多边形场景固定为 0 */
-  ringIndex: number;
-  /** 当前命中的线段索引 */
-  segmentIndex: number;
-  /** 命中线段起点坐标 */
-  startCoordinate: [number, number];
-  /** 命中线段终点坐标 */
-  endCoordinate: [number, number];
-}
-
 /** TerraDraw / Measure 共享吸附配置 */
 export interface TerradrawSnapSharedOptions {
   /** 是否启用吸附；默认 true */
@@ -240,30 +236,6 @@ export interface TerradrawSnapSharedOptions {
   useNative?: boolean;
   /** 是否启用普通图层候选吸附；默认 true */
   useMapTargets?: boolean;
-}
-
-/** 统一吸附结果 */
-export interface MapFeatureSnapResult {
-  /** 当前是否命中吸附 */
-  matched: boolean;
-  /** 吸附后的有效经纬度；未命中时为 null */
-  lngLat: { lng: number; lat: number } | null;
-  /** 当前命中的像素距离；未命中时为 null */
-  distancePx: number | null;
-  /** 当前命中的吸附方式 */
-  snapKind: MapFeatureSnapKind | null;
-  /** 当前命中的规则 ID */
-  ruleId: string | null;
-  /** 当前命中的目标渲染要素 */
-  targetFeature: MapGeoJSONFeature | null;
-  /** 当前命中的目标图层 ID */
-  targetLayerId: string | null;
-  /** 当前命中的目标 source ID */
-  targetSourceId: string | null;
-  /** 当前命中的目标坐标 */
-  targetCoordinate: [number, number] | null;
-  /** 当前命中的线段信息 */
-  segment: MapFeatureSnapSegmentInfo | null;
 }
 
 /** 普通 MapLibre 图层交互事件类型 */
@@ -388,7 +360,7 @@ export interface GeolocationControlOptions extends BaseControlOptions {
   /** 传递给浏览器 Geolocation API 的 PositionOptions 对象 */
   positionOptions?: PositionOptions;
   /** 传递给地图 fitBounds 方法的选项，用于控制定位时的视图平移和缩放动画 */
-  fitBoundsOptions?: any; // FitBoundsOptions
+  fitBoundsOptions?: FitBoundsOptions;
   /** 是否自动跟踪并持续更新用户的位置 */
   trackUserLocation?: boolean;
   /** 是否在用户位置周围显示代表定位精度的圆圈 */
@@ -458,7 +430,7 @@ export interface TerradrawControlOptions extends BaseControlOptions {
    * 可选值包括：'point', 'linestring', 'polygon', 'rectangle', 'circle', 'freehand',
    * 'angled-rectangle', 'sensor', 'sector', 'select', 'delete-selection', 'delete', 'download'
    */
-  modes?: string[];
+  modes?: WatergisTerradrawControlOptions['modes'];
   /** 初始化时是否默认展开工具栏，true为展开，false为折叠 */
   open?: boolean;
   /** 是否在删除要素前弹出确认框 */
@@ -467,16 +439,13 @@ export interface TerradrawControlOptions extends BaseControlOptions {
    * 绘图底层的其他配置选项 (如修改默认的坐标精度)。
    * 例如: { coordinatePrecision: 6 } 可以将坐标精度从默认的9位修改为6位。
    */
-  adapterOptions?: {
-    coordinatePrecision?: number;
-    // [key: string]: any;
-  };
+  adapterOptions?: WatergisTerradrawControlOptions['adapterOptions'];
   /**
    * 对具体模式进行深度的行为配置覆盖。
    * 可以传入对应的 TerraDraw Mode 实例来重写默认行为，
    * 例如禁止拖拽多边形、禁止在边缘添加节点等。
    */
-  modeOptions?: any;
+  modeOptions?: TerradrawModeOptionsInput;
   /** 绘图控件吸附配置；支持业务层局部开启、关闭和范围覆写 */
   snapping?: boolean | TerradrawSnapSharedOptions;
   /** TerraDraw 线装饰配置；业务层只声明 SVG 与模式，底层渲染细节由容器层统一接管 */
@@ -493,19 +462,19 @@ export interface MeasureControlOptions extends BaseControlOptions {
    * 需要显示的测量工具栏模式列表。
    * 仅支持：'point' (测点高程), 'linestring' (测线), 'polygon' (测面), 'circle' (测圆), 'freehand' (自由测线), 'freehand-polygon' (自由测面), 'delete', 'download'
    */
-  modes?: string[];
+  modes?: WatergisMeasureControlOptions['modes'];
   /** 初始化时是否默认展开工具栏 */
   open?: boolean;
   /** 是否在删除测量要素前弹出确认框 */
   showDeleteConfirmation?: boolean;
   /** 自定义测量点标签的样式规范 */
-  pointLayerLabelSpec?: any;
+  pointLayerLabelSpec?: SymbolLayerSpecification;
   /** 自定义测量线标签的样式规范 */
-  lineLayerLabelSpec?: any;
+  lineLayerLabelSpec?: SymbolLayerSpecification;
   /** 自定义测量路由线节点的样式规范 */
-  routingLineLayerNodeSpec?: any;
+  routingLineLayerNodeSpec?: CircleLayerSpecification;
   /** 自定义测量面标签的样式规范 */
-  polygonLayerSpec?: any;
+  polygonLayerSpec?: SymbolLayerSpecification;
   /** 测量单位体系：metric 为公制，imperial 为英制 */
   measureUnitType?: MeasureUnitType;
   /** 测距结果保留的小数位数 */
@@ -527,9 +496,9 @@ export interface MeasureControlOptions extends BaseControlOptions {
   /** 自定义测量文本的字体栈，需对应地图的 glyphs 配置，如 ['Noto Sans Regular'] */
   textFont?: string[];
   /** 其他适配器配置 */
-  adapterOptions?: any;
+  adapterOptions?: WatergisMeasureControlOptions['adapterOptions'];
   /** 具体模式深度配置 */
-  modeOptions?: any;
+  modeOptions?: TerradrawModeOptionsInput;
   /** 测量控件吸附配置；支持业务层局部开启、关闭和范围覆写 */
   snapping?: boolean | TerradrawSnapSharedOptions;
   /** 测量线装饰配置；业务层只声明 SVG 与模式，底层渲染细节由容器层统一接管 */

@@ -1,31 +1,21 @@
-import type { Map as MaplibreMap, MapGeoJSONFeature } from 'maplibre-gl';
+import type { Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
 import type {
   TerradrawControlType,
   TerradrawSnapSharedOptions,
 } from '../../shared/mapLibre-contols-types';
+import type { MapFeatureSnapResult } from '../../shared/map-feature-snap-types';
 
-/** 地图吸附类型。 */
-export type MapFeatureSnapKind = 'vertex' | 'segment';
+export type {
+  MapFeatureSnapKind,
+  MapFeatureSnapResult,
+  MapFeatureSnapSegmentInfo,
+} from '../../shared/map-feature-snap-types';
 
 /** 单条吸附规则可命中的几何类型。 */
 export type MapFeatureSnapGeometryType = 'Point' | 'LineString' | 'Polygon';
 
 /** 单条吸附规则支持的吸附方式。 */
 export type MapFeatureSnapMode = 'vertex' | 'segment';
-
-/** 吸附命中的线段信息。 */
-export interface MapFeatureSnapSegmentInfo {
-  /** 当前命中的坐标路径索引。 */
-  pathIndex: number;
-  /** 多边形场景下的 ring 索引。 */
-  ringIndex: number;
-  /** 当前命中的线段索引。 */
-  segmentIndex: number;
-  /** 命中线段起点坐标。 */
-  startCoordinate: [number, number];
-  /** 命中线段终点坐标。 */
-  endCoordinate: [number, number];
-}
 
 /** 单条吸附规则高级过滤上下文。 */
 export interface MapFeatureSnapRuleFilterContext {
@@ -110,36 +100,12 @@ export interface MapFeatureSnapOptions {
   };
 }
 
-/** 统一吸附结果。 */
-export interface MapFeatureSnapResult {
-  /** 当前是否命中吸附。 */
-  matched: boolean;
-  /** 吸附后的有效经纬度。 */
-  lngLat: { lng: number; lat: number } | null;
-  /** 当前命中的像素距离。 */
-  distancePx: number | null;
-  /** 当前命中的吸附方式。 */
-  snapKind: MapFeatureSnapKind | null;
-  /** 当前命中的规则 ID。 */
-  ruleId: string | null;
-  /** 当前命中的目标渲染要素。 */
-  targetFeature: MapGeoJSONFeature | null;
-  /** 当前命中的目标图层 ID。 */
-  targetLayerId: string | null;
-  /** 当前命中的目标 source ID。 */
-  targetSourceId: string | null;
-  /** 当前命中的目标坐标。 */
-  targetCoordinate: [number, number] | null;
-  /** 当前命中的线段信息。 */
-  segment: MapFeatureSnapSegmentInfo | null;
-}
-
 /** 地图吸附插件 API。 */
 export interface MapFeatureSnapPluginApi {
   /** 主动清空当前吸附预览。 */
   clearPreview: () => void;
   /** 根据普通地图事件解析吸附结果。 */
-  resolveMapEvent: (event: any) => MapFeatureSnapResult;
+  resolveMapEvent: (event: MapMouseEvent) => MapFeatureSnapResult;
   /** 读取控件最终吸附配置。 */
   resolveTerradrawSnapOptions: (
     controlType: TerradrawControlType,

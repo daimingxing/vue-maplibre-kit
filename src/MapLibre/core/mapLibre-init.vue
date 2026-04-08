@@ -1,5 +1,5 @@
 <template>
-  <mgl-map :mapKey="mapKey" v-bind="{ ...mergedOptions, ...$attrs } as any">
+  <mgl-map :mapKey="mapKey" v-bind="{ ...mergedOptions, ...$attrs } as Record<string, unknown>">
     <!-- 控件 -->
     <!-- 导航控件 缩放与罗盘 -->
     <mgl-navigation-control
@@ -87,13 +87,22 @@ import {
   MglFrameRateControl,
   useMap,
 } from 'vue-maplibre-gl';
-import { MaplibreTerradrawControl, MaplibreMeasureControl } from '@watergis/maplibre-gl-terradraw';
+import {
+  MaplibreTerradrawControl,
+  MaplibreMeasureControl,
+  type TerradrawModeClass,
+} from '@watergis/maplibre-gl-terradraw';
 import '@watergis/maplibre-gl-terradraw/dist/maplibre-gl-terradraw.css';
-import type { MapOptions } from 'maplibre-gl';
+import type { MapGeoJSONFeature, MapOptions } from 'maplibre-gl';
 import type {
   MapControlsConfig,
   MapLayerInteractiveOptions,
+  MeasureControlOptions,
   TerradrawSnapSharedOptions,
+  TerradrawControlOptions,
+  TerradrawFeature,
+  TerradrawInteractiveOptions,
+  TerradrawLineDecorationOptions,
 } from '../shared/mapLibre-contols-types';
 import { terradrawStyleConfig, measureStyleConfig } from '../terradraw/terradraw-config';
 import {
@@ -104,16 +113,20 @@ import {
   resolveDecorationBaseLineStyleConfig,
 } from '../terradraw/terradraw-decoration-base-line';
 import {
+  TerraDraw,
   TerraDrawPointMode,
+  TerraDrawMarkerMode,
   TerraDrawLineStringMode,
   TerraDrawPolygonMode,
   TerraDrawSelectMode,
   TerraDrawRectangleMode,
   TerraDrawCircleMode,
   TerraDrawFreehandMode,
+  TerraDrawFreehandLineStringMode,
   TerraDrawAngledRectangleMode,
   TerraDrawSensorMode,
   TerraDrawSectorMode,
+  type TerraDrawMouseEvent,
 } from 'terra-draw';
 import { cloneDeep, merge } from 'lodash-es';
 import {
@@ -133,6 +146,172 @@ import type {
   ResolvedTerradrawSnapOptions,
   MapPluginStateChangePayload,
 } from '../plugins/types';
+
+type MapLibreComponentOptions = Partial<MapOptions & { mapStyle: string | object }>;
+type TerradrawModePatch = Record<string, unknown>;
+interface TerradrawSnappingPatch extends TerradrawModePatch {
+  /** TerraDraw 模式指针容差。 */
+  pointerDistance: number;
+  /** TerraDraw 模式吸附配置。 */
+  snapping: Record<string, unknown>;
+}
+type TerradrawModeOptionsInput = NonNullable<TerradrawControlOptions['modeOptions']>;
+type MeasureModeOptionsInput = NonNullable<MeasureControlOptions['modeOptions']>;
+type SelectSnapModeName = 'polygon' | 'linestring';
+
+interface SelectCoordinateFlags {
+  /** 是否允许显示中点。 */
+  midpoints: boolean;
+  /** 是否允许拖拽坐标点。 */
+  draggable: boolean;
+  /** 是否允许删除坐标点。 */
+  deletable: boolean;
+  /** TerraDraw select 模式下的坐标吸附配置。 */
+  snappable?: false | Record<string, unknown>;
+}
+
+interface SelectFeatureFlags {
+  /** 是否允许拖拽整个要素。 */
+  draggable: boolean;
+  /** 是否允许旋转整个要素。 */
+  rotateable: boolean;
+  /** 是否允许缩放整个要素。 */
+  scaleable: boolean;
+  /** 坐标级交互配置。 */
+  coordinates: SelectCoordinateFlags;
+}
+
+type SelectSnapFlagsMap = Record<SelectSnapModeName, { feature: SelectFeatureFlags }>;
+
+/**
+ * 判断当前模式配置值是否已经是 TerraDraw 模式实例。
+ * @param modeOption 待判断的模式配置值
+ * @returns 是否为可直接复用的模式实例
+ */
+function isTerradrawModeInstance(modeOption: unknown): modeOption is TerradrawModeClass {
+  return Boolean(
+    modeOption &&
+      typeof modeOption === 'object' &&
+      typeof (modeOption as { mode?: unknown }).mode === 'string' &&
+      typeof (modeOption as { updateOptions?: unknown }).updateOptions === 'function'
+  );
+}
+
+/**
+ * 将业务层传入的模式配置统一转换为 TerraDraw 模式实例。
+ * 已经是模式实例的值会直接复用，未知模式键则保持原值，避免误删业务层扩展。
+ * @param modeOptions TerraDraw / Measure 模式配置集合
+ * @returns 可直接传给底层控件的模式实例集合
+ */
+function instantiateTerradrawModeOptions(
+  modeOptions: TerradrawModeOptionsInput | MeasureModeOptionsInput | null | undefined
+): Record<string, TerradrawModeClass | object> {
+  const instantiatedModeOptions: Record<string, TerradrawModeClass | object> = {};
+
+  Object.entries(modeOptions || {}).forEach(([modeName, modeOption]) => {
+    if (!modeOption) {
+      return;
+    }
+
+    if (isTerradrawModeInstance(modeOption)) {
+      instantiatedModeOptions[modeName] = modeOption;
+      return;
+    }
+
+    switch (modeName) {
+      case 'point':
+        instantiatedModeOptions.point = new TerraDrawPointMode(
+          modeOption as ConstructorParameters<typeof TerraDrawPointMode>[0]
+        );
+        break;
+      case 'marker':
+        instantiatedModeOptions.marker = new TerraDrawMarkerMode(
+          modeOption as ConstructorParameters<typeof TerraDrawMarkerMode>[0]
+        );
+        break;
+      case 'linestring':
+        instantiatedModeOptions.linestring = new TerraDrawLineStringMode(
+          modeOption as ConstructorParameters<typeof TerraDrawLineStringMode>[0]
+        );
+        break;
+      case 'polygon':
+        instantiatedModeOptions.polygon = new TerraDrawPolygonMode(
+          modeOption as ConstructorParameters<typeof TerraDrawPolygonMode>[0]
+        );
+        break;
+      case 'rectangle':
+        instantiatedModeOptions.rectangle = new TerraDrawRectangleMode(
+          modeOption as ConstructorParameters<typeof TerraDrawRectangleMode>[0]
+        );
+        break;
+      case 'circle':
+        instantiatedModeOptions.circle = new TerraDrawCircleMode(
+          modeOption as ConstructorParameters<typeof TerraDrawCircleMode>[0]
+        );
+        break;
+      case 'freehand':
+        instantiatedModeOptions.freehand = new TerraDrawFreehandMode(
+          modeOption as ConstructorParameters<typeof TerraDrawFreehandMode>[0]
+        );
+        break;
+      case 'freehand-linestring':
+        instantiatedModeOptions['freehand-linestring'] = new TerraDrawFreehandLineStringMode(
+          modeOption as ConstructorParameters<typeof TerraDrawFreehandLineStringMode>[0]
+        );
+        break;
+      case 'angled-rectangle':
+        instantiatedModeOptions['angled-rectangle'] = new TerraDrawAngledRectangleMode(
+          modeOption as ConstructorParameters<typeof TerraDrawAngledRectangleMode>[0]
+        );
+        break;
+      case 'sensor':
+        instantiatedModeOptions.sensor = new TerraDrawSensorMode(
+          modeOption as ConstructorParameters<typeof TerraDrawSensorMode>[0]
+        );
+        break;
+      case 'sector':
+        instantiatedModeOptions.sector = new TerraDrawSectorMode(
+          modeOption as ConstructorParameters<typeof TerraDrawSectorMode>[0]
+        );
+        break;
+      case 'select':
+        instantiatedModeOptions.select = new TerraDrawSelectMode(
+          modeOption as ConstructorParameters<typeof TerraDrawSelectMode>[0]
+        );
+        break;
+      default:
+        // 对未知模式键保持透传，避免把业务侧的扩展配置静默丢掉。
+        instantiatedModeOptions[modeName] = modeOption;
+        break;
+    }
+  });
+
+  return instantiatedModeOptions;
+}
+
+/**
+ * 提取 select 模式的原始配置快照，供吸附补丁合并默认 flags。
+ * @param modeOption 当前 select 模式配置
+ * @returns 仅包含可安全读取字段的普通对象；无法提取时返回 null
+ */
+function extractSelectModeOptionsSnapshot(
+  modeOption: TerradrawModeOptionsInput['select'] | MeasureModeOptionsInput['select'] | null | undefined
+): Record<string, unknown> | null {
+  if (!modeOption) {
+    return null;
+  }
+
+  if (isTerradrawModeInstance(modeOption)) {
+    const runtimeFlags = Reflect.get(modeOption as object, 'flags');
+    return runtimeFlags && typeof runtimeFlags === 'object'
+      ? {
+          flags: cloneDeep(runtimeFlags as Record<string, unknown>),
+        }
+      : null;
+  }
+
+  return cloneDeep(modeOption as Record<string, unknown>);
+}
 
 const props = defineProps({
   // 用于区分多个地图实例的唯一名字。如果你一个页面有两个地图，就靠它来区分。
@@ -172,18 +351,15 @@ const emit = defineEmits<{
  * @param controlRef 控件的响应式引用（里面存着控件实例）
  * @returns 包含所有图形数据的 GeoJSON 数组；如果控件没开，返回 null
  */
-function getControlFeatures(controlRef: { value: any } | null | undefined): any[] | null {
+function getControlFeatures<TControl extends MaplibreTerradrawControl | MaplibreMeasureControl>(
+  controlRef: { value: TControl | null } | null | undefined
+): TerradrawFeature[] | null {
   const control = controlRef?.value;
   if (!control) {
     return null;
   }
 
-  const drawInstance = control.getTerraDrawInstance?.();
-  if (!drawInstance) {
-    return null;
-  }
-
-  return drawInstance.getSnapshot();
+  return control.getFeatures()?.features || null;
 }
 
 function getDrawControl() {
@@ -194,11 +370,11 @@ function getMeasureControl() {
   return measureControlRef.value;
 }
 
-function getDrawFeatures(): any[] | null {
+function getDrawFeatures(): TerradrawFeature[] | null {
   return getControlFeatures(drawControlRef);
 }
 
-function getMeasureFeatures(): any[] | null {
+function getMeasureFeatures(): TerradrawFeature[] | null {
   return getControlFeatures(measureControlRef);
 }
 
@@ -208,7 +384,7 @@ function getMeasureFeatures(): any[] | null {
  * @param feature 当前命中的 MapLibre 渲染态要素
  * @returns 干净的标准 GeoJSON 要素；无法转换时返回 null
  */
-function toMapFeatureSnapshot(feature: any): MapCommonFeature | null {
+function toMapFeatureSnapshot(feature: MapGeoJSONFeature | null | undefined): MapCommonFeature | null {
   if (!feature?.geometry?.type) {
     return null;
   }
@@ -227,7 +403,7 @@ function toMapFeatureSnapshot(feature: any): MapCommonFeature | null {
  * @param config 业务层传进来的某个控件配置对象
  * @returns 过滤掉 isUse 后的干净属性对象
  */
-const getControlProps = (config: any) => {
+const getControlProps = <TConfig extends { isUse?: boolean }>(config: TConfig | null | undefined) => {
   if (!config) return {};
   const { isUse, ...rest } = config;
   return rest;
@@ -247,7 +423,7 @@ const mergedOptions = computed(() => {
   const options = {
     ...defaultOptions,
     ...props.mapOptions,
-  } as any;
+  } as MapLibreComponentOptions;
 
   // 兼容原生的 style 属性到 vue-maplibre-gl 的 mapStyle
   if (options.style && !options.mapStyle) {
@@ -259,7 +435,7 @@ const mergedOptions = computed(() => {
 
 // 初始化地图实例引用。
 // 后续普通图层交互、吸附模块、绘图控件和测量控件都统一复用这一个 map 句柄。
-const map = useMap(props.mapKey as any);
+const map = useMap(props.mapKey as string | symbol | undefined);
 
 /**
  * 普通图层交互绑定实例。
@@ -365,7 +541,7 @@ function getSelectedMapFeatureSnapshot(): MapCommonFeature | null {
  * Select 模式下线要素与面要素的默认可编辑 flags。
  * 当业务层没有显式声明对应 flags 时，吸附模块会回退到这组默认值，确保线/面节点编辑仍然可用。
  */
-const defaultSelectSnapFlags = {
+const defaultSelectSnapFlags: SelectSnapFlagsMap = {
   polygon: {
     feature: {
       draggable: true,
@@ -424,16 +600,16 @@ function resolveTerradrawSnapOptions(
  * @param modeOptions 该模式最新的局部配置
  */
 function safeUpdateTerradrawModeOptions(
-  drawInstance: any,
+  drawInstance: TerraDraw | null | undefined,
   modeName: string,
-  modeOptions: Record<string, any>
+  modeOptions: TerradrawModePatch
 ): void {
   if (!drawInstance?.updateModeOptions) {
     return;
   }
 
   try {
-    drawInstance.updateModeOptions(modeName as any, modeOptions);
+    drawInstance.updateModeOptions(modeName, modeOptions);
   } catch (error) {
     console.warn(`[MapFeatureSnap] 同步模式 '${modeName}' 吸附配置失败`, error);
   }
@@ -446,8 +622,12 @@ function safeUpdateTerradrawModeOptions(
  */
 function buildTerradrawModeSnappingPatch(
   resolvedSnapOptions: ResolvedTerradrawSnapOptions
-): Record<string, any> {
-  const snappingConfig: Record<string, any> = {};
+): TerradrawSnappingPatch {
+  const snappingConfig: {
+    toLine?: boolean;
+    toCoordinate?: boolean;
+    toCustom?: (event: TerraDrawMouseEvent) => [number, number] | undefined;
+  } = {};
 
   if (resolvedSnapOptions.enabled && resolvedSnapOptions.useNative) {
     snappingConfig.toLine = true;
@@ -455,7 +635,7 @@ function buildTerradrawModeSnappingPatch(
   }
 
   if (resolvedSnapOptions.enabled && resolvedSnapOptions.useMapTargets) {
-    snappingConfig.toCustom = (event: any) => {
+    snappingConfig.toCustom = (event: TerraDrawMouseEvent) => {
       const snapResult = pluginHost.getMapSnapService()?.getBinding()?.resolveTerradrawEvent(event);
       return snapResult?.matched ? snapResult.targetCoordinate || undefined : undefined;
     };
@@ -476,35 +656,27 @@ function buildTerradrawModeSnappingPatch(
  * @returns 可直接传给 TerraDraw SelectMode 的局部配置
  */
 function buildSelectModeSnappingPatch(
-  baseSelectModeOptions: Record<string, any> | null | undefined,
+  baseSelectModeOptions: Record<string, unknown> | null | undefined,
   resolvedSnapOptions: ResolvedTerradrawSnapOptions
-): Record<string, any> {
+): TerradrawModePatch {
   const baseFlags = merge(
     cloneDeep(defaultSelectSnapFlags),
     cloneDeep(baseSelectModeOptions?.flags || {})
-  );
+  ) as SelectSnapFlagsMap;
   const snappableConfig =
     resolvedSnapOptions.enabled &&
     (resolvedSnapOptions.useNative || resolvedSnapOptions.useMapTargets)
       ? buildTerradrawModeSnappingPatch(resolvedSnapOptions).snapping
       : false;
 
-  const nextFlags = cloneDeep(baseFlags);
+  const nextFlags = cloneDeep(baseFlags) as SelectSnapFlagsMap;
 
-  ['polygon', 'linestring'].forEach((modeName) => {
+  (['polygon', 'linestring'] as const).forEach((modeName) => {
     nextFlags[modeName] = merge(
       {},
       defaultSelectSnapFlags[modeName as 'polygon' | 'linestring'],
       nextFlags[modeName] || {}
-    );
-
-    if (!nextFlags[modeName].feature) {
-      nextFlags[modeName].feature = {};
-    }
-
-    if (!nextFlags[modeName].feature.coordinates) {
-      nextFlags[modeName].feature.coordinates = {};
-    }
+    ) as SelectSnapFlagsMap[typeof modeName];
 
     nextFlags[modeName].feature.coordinates.snappable = snappableConfig;
   });
@@ -522,7 +694,7 @@ function buildSelectModeSnappingPatch(
  */
 function syncDrawSnapping(
   localSnapConfig: TerradrawSnapSharedOptions | boolean | null | undefined,
-  baseSelectModeOptions: Record<string, any> | null | undefined
+  baseSelectModeOptions: Record<string, unknown> | null | undefined
 ): void {
   const drawInstance = drawControlRef.value?.getTerraDrawInstance?.();
   if (!drawInstance) {
@@ -564,7 +736,7 @@ function syncMeasureSnapping(
 // 初始化 MaplibreTerradrawControl 绘图控件
 // 并在属性改变时动态同步它的行为
 // ==========================================
-const drawControlRef = shallowRef<any>(null);
+const drawControlRef = shallowRef<MaplibreTerradrawControl | null>(null);
 const drawInteractiveRef = shallowRef<TerradrawInteractiveBinding | null>(null);
 const drawLineDecorationRef = shallowRef<TerradrawLineDecorationBinding | null>(null);
 const drawLineDecorationLayerProps = createLineDecorationLayerProps(drawLineDecorationRef);
@@ -589,7 +761,7 @@ const destroyDrawLineDecoration = () => {
  * 根据最新配置同步绘图控件的业务交互管理器。
  * @param interactiveConfig 业务层传入的交互配置
  */
-const syncDrawInteractive = (interactiveConfig: any) => {
+const syncDrawInteractive = (interactiveConfig: TerradrawInteractiveOptions | null | undefined) => {
   destroyDrawInteractive();
 
   if (
@@ -614,7 +786,9 @@ const syncDrawInteractive = (interactiveConfig: any) => {
  * 根据最新配置同步绘图控件的线装饰管理器。
  * @param lineDecorationConfig 业务层传入的线装饰配置
  */
-const syncDrawLineDecoration = (lineDecorationConfig: any) => {
+const syncDrawLineDecoration = (
+  lineDecorationConfig: TerradrawLineDecorationOptions | null | undefined
+) => {
   destroyDrawLineDecoration();
 
   if (
@@ -639,7 +813,6 @@ watch(
     map.isLoaded,
     props.controls.MaplibreTerradrawControl?.isUse,
     props.controls.MaplibreTerradrawControl,
-    props.plugins,
   ],
   ([isLoaded, isUse, config]) => {
     if (isLoaded && map.map) {
@@ -648,10 +821,9 @@ watch(
           isUse: _,
           position = 'top-left',
           interactive,
-          snapping,
           lineDecoration,
           ...rest
-        } = (config || {}) as any;
+        } = (config || {}) as TerradrawControlOptions;
         const terradrawConfig = merge(
           cloneDeep(terradrawStyleConfig),
           resolveDecorationBaseLineStyleConfig(
@@ -660,43 +832,22 @@ watch(
             drawPatternDecorationPreviewLineStyleConfig
           ),
           rest
-        );
-        const rawModeOptions = cloneDeep(terradrawConfig.modeOptions || {});
+        ) as TerradrawControlOptions;
 
         if (!drawControlRef.value) {
-          // 1. 深度合并全局样式配置与业务传入的配置
           const mergedConfig = terradrawConfig;
+          // 容器层统一负责把 plain object 配置实例化为 TerraDraw 模式。
+          mergedConfig.modeOptions = instantiateTerradrawModeOptions(mergedConfig.modeOptions);
 
-          // 2. 将合并后的普通对象实例化为对应的 TerraDraw Mode
-          const modeOptions: any = {};
-          if (mergedConfig.modeOptions) {
-            const mo = mergedConfig.modeOptions;
-            if (mo.point) modeOptions.point = new TerraDrawPointMode(mo.point);
-            if (mo.linestring) modeOptions.linestring = new TerraDrawLineStringMode(mo.linestring);
-            if (mo.polygon) modeOptions.polygon = new TerraDrawPolygonMode(mo.polygon);
-            if (mo.rectangle) modeOptions.rectangle = new TerraDrawRectangleMode(mo.rectangle);
-            if (mo.circle) modeOptions.circle = new TerraDrawCircleMode(mo.circle);
-            if (mo.freehand) modeOptions.freehand = new TerraDrawFreehandMode(mo.freehand);
-            if (mo['angled-rectangle'])
-              modeOptions['angled-rectangle'] = new TerraDrawAngledRectangleMode(
-                mo['angled-rectangle']
-              );
-            if (mo.sensor) modeOptions.sensor = new TerraDrawSensorMode(mo.sensor);
-            if (mo.sector) modeOptions.sector = new TerraDrawSectorMode(mo.sector);
-            if (mo.select) modeOptions.select = new TerraDrawSelectMode(mo.select);
-          }
-
-          // 3. 覆盖实例化后的 modeOptions
-          mergedConfig.modeOptions = modeOptions;
-
-          const drawControl = new MaplibreTerradrawControl(mergedConfig);
+          const drawControl = new MaplibreTerradrawControl(
+            mergedConfig as ConstructorParameters<typeof MaplibreTerradrawControl>[0]
+          );
           drawControlRef.value = drawControl;
           map.map.addControl(drawControl, position);
         }
 
         syncDrawInteractive(interactive);
         syncDrawLineDecoration(lineDecoration);
-        syncDrawSnapping(snapping, rawModeOptions.select || null);
       } else {
         destroyDrawInteractive();
         destroyDrawLineDecoration();
@@ -710,12 +861,36 @@ watch(
   { immediate: true, deep: true }
 );
 
+/**
+ * 单独监听绘图控件吸附依赖，避免插件列表变化时把交互管理器和线装饰一并重建。
+ */
+watch(
+  () => ({
+    isLoaded: map.isLoaded,
+    isUse: props.controls.MaplibreTerradrawControl?.isUse,
+    snapping: props.controls.MaplibreTerradrawControl?.snapping,
+    selectModeOption: props.controls.MaplibreTerradrawControl?.modeOptions?.select,
+    resolvedSnapOptions: resolveTerradrawSnapOptions(
+      'draw',
+      props.controls.MaplibreTerradrawControl?.snapping
+    ),
+  }),
+  ({ isLoaded, isUse, snapping, selectModeOption }) => {
+    if (!isLoaded || !isUse || !drawControlRef.value) {
+      return;
+    }
+
+    syncDrawSnapping(snapping, extractSelectModeOptionsSnapshot(selectModeOption));
+  },
+  { immediate: true, deep: true }
+);
+
 // 初始化 maplibre-gl-terradraw 测量控件
 // ==========================================
 // 初始化 MaplibreMeasureControl 测量控件
 // 并在属性改变时动态同步它的行为
 // ==========================================
-const measureControlRef = shallowRef<any>(null);
+const measureControlRef = shallowRef<MaplibreMeasureControl | null>(null);
 const measureInteractiveRef = shallowRef<TerradrawInteractiveBinding | null>(null);
 const measureLineDecorationRef = shallowRef<TerradrawLineDecorationBinding | null>(null);
 const measureLineDecorationLayerProps = createLineDecorationLayerProps(measureLineDecorationRef);
@@ -740,7 +915,9 @@ const destroyMeasureLineDecoration = () => {
  * 根据最新配置同步测量控件的业务交互管理器。
  * @param interactiveConfig 业务层传入的交互配置
  */
-const syncMeasureInteractive = (interactiveConfig: any) => {
+const syncMeasureInteractive = (
+  interactiveConfig: TerradrawInteractiveOptions | null | undefined
+) => {
   destroyMeasureInteractive();
 
   if (
@@ -765,7 +942,9 @@ const syncMeasureInteractive = (interactiveConfig: any) => {
  * 根据最新配置同步测量控件的线装饰管理器。
  * @param lineDecorationConfig 业务层传入的线装饰配置
  */
-const syncMeasureLineDecoration = (lineDecorationConfig: any) => {
+const syncMeasureLineDecoration = (
+  lineDecorationConfig: TerradrawLineDecorationOptions | null | undefined
+) => {
   destroyMeasureLineDecoration();
 
   if (
@@ -790,7 +969,6 @@ watch(
     map.isLoaded,
     props.controls.MaplibreMeasureControl?.isUse,
     props.controls.MaplibreMeasureControl,
-    props.plugins,
   ],
   ([isLoaded, isUse, config]) => {
     if (isLoaded && map.map) {
@@ -799,10 +977,9 @@ watch(
           isUse: _,
           position = 'top-right',
           interactive,
-          snapping,
           lineDecoration,
           ...rest
-        } = (config || {}) as any;
+        } = (config || {}) as MeasureControlOptions;
         const measureConfig = merge(
           cloneDeep(measureStyleConfig),
           resolveDecorationBaseLineStyleConfig(
@@ -811,31 +988,22 @@ watch(
             measurePatternDecorationPreviewLineStyleConfig
           ),
           rest
-        );
+        ) as MeasureControlOptions;
 
         if (!measureControlRef.value) {
-          // 1. 深度合并全局样式配置与业务传入的配置
           const mergedConfig = measureConfig;
+          // 测量控件同样支持直接传配置对象，由容器层统一实例化。
+          mergedConfig.modeOptions = instantiateTerradrawModeOptions(mergedConfig.modeOptions);
 
-          // 2. 将合并后的普通对象实例化为对应的 TerraDraw Mode
-          const modeOptions: any = {};
-          if (mergedConfig.modeOptions) {
-            const mo = mergedConfig.modeOptions;
-            if (mo.linestring) modeOptions.linestring = new TerraDrawLineStringMode(mo.linestring);
-            if (mo.polygon) modeOptions.polygon = new TerraDrawPolygonMode(mo.polygon);
-          }
-
-          // 3. 覆盖实例化后的 modeOptions
-          mergedConfig.modeOptions = modeOptions;
-
-          const measureControl = new MaplibreMeasureControl(mergedConfig);
+          const measureControl = new MaplibreMeasureControl(
+            mergedConfig as ConstructorParameters<typeof MaplibreMeasureControl>[0]
+          );
           measureControlRef.value = measureControl;
           map.map.addControl(measureControl, position);
         }
 
         syncMeasureInteractive(interactive);
         syncMeasureLineDecoration(lineDecoration);
-        syncMeasureSnapping(snapping);
       } else {
         destroyMeasureInteractive();
         destroyMeasureLineDecoration();
@@ -845,6 +1013,29 @@ watch(
         }
       }
     }
+  },
+  { immediate: true, deep: true }
+);
+
+/**
+ * 单独监听测量控件吸附依赖，避免无关插件变化触发整套测量交互重建。
+ */
+watch(
+  () => ({
+    isLoaded: map.isLoaded,
+    isUse: props.controls.MaplibreMeasureControl?.isUse,
+    snapping: props.controls.MaplibreMeasureControl?.snapping,
+    resolvedSnapOptions: resolveTerradrawSnapOptions(
+      'measure',
+      props.controls.MaplibreMeasureControl?.snapping
+    ),
+  }),
+  ({ isLoaded, isUse, snapping }) => {
+    if (!isLoaded || !isUse || !measureControlRef.value) {
+      return;
+    }
+
+    syncMeasureSnapping(snapping);
   },
   { immediate: true, deep: true }
 );

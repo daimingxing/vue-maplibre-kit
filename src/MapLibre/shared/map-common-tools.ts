@@ -3,6 +3,20 @@ import { point as turfPoint } from '@turf/helpers';
 import { distance as turfDistance } from '@turf/distance';
 import { destination as turfDestination } from '@turf/destination';
 import type { MapFeatureId } from '../composables/useMapDataUpdate';
+import {
+  addMercatorPoint,
+  getInfiniteLineIntersection,
+  getLeftNormalVector,
+  getMercatorVectorLength,
+  lngLatToMercatorPoint,
+  mercatorPointToLngLat,
+  projectPointToSegment,
+  scaleMercatorPoint,
+  subtractMercatorPoint,
+  type MercatorPoint,
+  toDegrees,
+  toRadians,
+} from './map-mercator-tools';
 
 /** 通用 GeoJSON 属性对象 */
 export type MapCommonProperties = Record<string, any>;
@@ -99,16 +113,6 @@ export interface MapLineCorridorOptions {
   /** 生成区域的业务 ID */
   regionId?: string;
 }
-
-/** 墨卡托平面坐标 */
-interface MercatorPoint {
-  /** X 轴坐标 */
-  x: number;
-  /** Y 轴坐标 */
-  y: number;
-}
-
-const MERCATOR_RADIUS_METERS = 6378137;
 
 /**
  * 通用线测量工具类。
@@ -225,20 +229,20 @@ export class MapLineMeasureTool {
     cumulativeDistances: number[],
     target: Position
   ): MapLineLocatedPoint | null {
-    const targetMercatorPoint = MapLineMeasureTool.lngLatToMercatorPoint(target);
+    const targetMercatorPoint = lngLatToMercatorPoint(target);
     let bestLocation: MapLineLocatedPoint | null = null;
 
     for (let index = 0; index < coordinates.length - 1; index += 1) {
       const segmentStart = coordinates[index];
       const segmentEnd = coordinates[index + 1];
-      const segmentStartMercator = MapLineMeasureTool.lngLatToMercatorPoint(segmentStart);
-      const segmentEndMercator = MapLineMeasureTool.lngLatToMercatorPoint(segmentEnd);
-      const projectedPoint = MapLineMeasureTool.projectPointToSegment(
+      const segmentStartMercator = lngLatToMercatorPoint(segmentStart);
+      const segmentEndMercator = lngLatToMercatorPoint(segmentEnd);
+      const projectedPoint = projectPointToSegment(
         targetMercatorPoint,
         segmentStartMercator,
         segmentEndMercator
       );
-      const snappedCoordinate = MapLineMeasureTool.mercatorPointToLngLat(projectedPoint.point);
+      const snappedCoordinate = mercatorPointToLngLat(projectedPoint.point);
       const distanceToLineMeters = MapLineExtensionTool.getDistanceInMeters(
         target,
         snappedCoordinate
@@ -282,108 +286,6 @@ export class MapLineMeasureTool {
     }
 
     return cumulativeDistances;
-  }
-
-  /**
-   * 计算点到线段的最近投影点。
-   * @param point 目标点
-   * @param start 线段起点
-   * @param end 线段终点
-   * @returns 最近投影点及其在线段内的比例
-   */
-  private static projectPointToSegment(
-    point: MercatorPoint,
-    start: MercatorPoint,
-    end: MercatorPoint
-  ): { point: MercatorPoint; ratio: number } {
-    const segmentVector = MapLineMeasureTool.subtractMercatorPoint(end, start);
-    const segmentLengthSquared =
-      segmentVector.x * segmentVector.x + segmentVector.y * segmentVector.y;
-
-    if (segmentLengthSquared === 0) {
-      return {
-        point: start,
-        ratio: 0,
-      };
-    }
-
-    const pointVector = MapLineMeasureTool.subtractMercatorPoint(point, start);
-    const rawRatio =
-      (pointVector.x * segmentVector.x + pointVector.y * segmentVector.y) / segmentLengthSquared;
-    const ratio = Math.max(0, Math.min(1, rawRatio));
-
-    return {
-      point: {
-        x: start.x + segmentVector.x * ratio,
-        y: start.y + segmentVector.y * ratio,
-      },
-      ratio,
-    };
-  }
-
-  /**
-   * 将经纬度坐标转换为 Web Mercator 米制坐标。
-   * @param position 经纬度坐标
-   * @returns 墨卡托平面坐标
-   */
-  private static lngLatToMercatorPoint(position: Position): MercatorPoint {
-    const [lng, lat] = position;
-    const clampedLatitude = Math.max(Math.min(lat, 85.0511287798), -85.0511287798);
-
-    return {
-      x: MERCATOR_RADIUS_METERS * MapLineMeasureTool.toRadians(lng),
-      y:
-        MERCATOR_RADIUS_METERS *
-        Math.log(Math.tan(Math.PI / 4 + MapLineMeasureTool.toRadians(clampedLatitude) / 2)),
-    };
-  }
-
-  /**
-   * 将 Web Mercator 米制坐标还原为经纬度坐标。
-   * @param point 墨卡托平面坐标
-   * @returns 经纬度坐标
-   */
-  private static mercatorPointToLngLat(point: MercatorPoint): Position {
-    return [
-      MapLineMeasureTool.toDegrees(point.x / MERCATOR_RADIUS_METERS),
-      MapLineMeasureTool.toDegrees(
-        2 * Math.atan(Math.exp(point.y / MERCATOR_RADIUS_METERS)) - Math.PI / 2
-      ),
-    ];
-  }
-
-  /**
-   * 计算两个平面点的向量差。
-   * @param target 目标点
-   * @param source 起始点
-   * @returns 从 source 指向 target 的向量
-   */
-  private static subtractMercatorPoint(
-    target: MercatorPoint,
-    source: MercatorPoint
-  ): MercatorPoint {
-    return {
-      x: target.x - source.x,
-      y: target.y - source.y,
-    };
-  }
-
-  /**
-   * 将角度转换为弧度。
-   * @param degree 角度值
-   * @returns 对应弧度值
-   */
-  private static toRadians(degree: number): number {
-    return (degree * Math.PI) / 180;
-  }
-
-  /**
-   * 将弧度转换为角度。
-   * @param radians 弧度值
-   * @returns 对应角度值
-   */
-  private static toDegrees(radians: number): number {
-    return (radians * 180) / Math.PI;
   }
 }
 
@@ -581,16 +483,16 @@ export class MapLineCorridorTool {
     if (normalizedCoordinates.length < 2) return null;
 
     const mercatorCoordinates = normalizedCoordinates.map((coordinate) =>
-      MapLineCorridorTool.lngLatToMercatorPoint(coordinate)
+      lngLatToMercatorPoint(coordinate)
     );
     const leftPath = MapLineCorridorTool.buildOffsetPath(mercatorCoordinates, widthMeters, 1);
     const rightPath = MapLineCorridorTool.buildOffsetPath(mercatorCoordinates, widthMeters, -1);
 
     const ring = [
-      ...leftPath.map((coordinate) => MapLineCorridorTool.mercatorPointToLngLat(coordinate)),
+      ...leftPath.map((coordinate) => mercatorPointToLngLat(coordinate)),
       ...rightPath
         .reverse()
-        .map((coordinate) => MapLineCorridorTool.mercatorPointToLngLat(coordinate)),
+        .map((coordinate) => mercatorPointToLngLat(coordinate)),
     ];
 
     if (ring.length < 4) return null;
@@ -613,57 +515,48 @@ export class MapLineCorridorTool {
   ): MercatorPoint[] {
     return coordinates.map((currentCoordinate, index) => {
       if (index === 0) {
-        const firstNormal = MapLineCorridorTool.getLeftNormalVector(
+        const firstNormal = getLeftNormalVector(currentCoordinate, coordinates[index + 1]);
+        return addMercatorPoint(
           currentCoordinate,
-          coordinates[index + 1]
-        );
-        return MapLineCorridorTool.addMercatorPoint(
-          currentCoordinate,
-          MapLineCorridorTool.scaleMercatorPoint(firstNormal || { x: 0, y: 0 }, offsetMeters * side)
+          scaleMercatorPoint(firstNormal || { x: 0, y: 0 }, offsetMeters * side)
         );
       }
 
       if (index === coordinates.length - 1) {
-        const lastNormal = MapLineCorridorTool.getLeftNormalVector(
-          coordinates[index - 1],
-          currentCoordinate
-        );
-        return MapLineCorridorTool.addMercatorPoint(
+        const lastNormal = getLeftNormalVector(coordinates[index - 1], currentCoordinate);
+        return addMercatorPoint(
           currentCoordinate,
-          MapLineCorridorTool.scaleMercatorPoint(lastNormal || { x: 0, y: 0 }, offsetMeters * side)
+          scaleMercatorPoint(lastNormal || { x: 0, y: 0 }, offsetMeters * side)
         );
       }
 
       const previousCoordinate = coordinates[index - 1];
       const nextCoordinate = coordinates[index + 1];
-      const previousNormal = MapLineCorridorTool.getLeftNormalVector(
-        previousCoordinate,
-        currentCoordinate
-      );
-      const nextNormal = MapLineCorridorTool.getLeftNormalVector(currentCoordinate, nextCoordinate);
+      const previousNormal = getLeftNormalVector(previousCoordinate, currentCoordinate);
+      const nextNormal = getLeftNormalVector(currentCoordinate, nextCoordinate);
 
       if (!previousNormal || !nextNormal) {
         return currentCoordinate;
       }
 
-      const previousOffsetStart = MapLineCorridorTool.addMercatorPoint(
+      const previousOffsetStart = addMercatorPoint(
         previousCoordinate,
-        MapLineCorridorTool.scaleMercatorPoint(previousNormal, offsetMeters * side)
+        scaleMercatorPoint(previousNormal, offsetMeters * side)
       );
-      const previousOffsetEnd = MapLineCorridorTool.addMercatorPoint(
+      const previousOffsetEnd = addMercatorPoint(
         currentCoordinate,
-        MapLineCorridorTool.scaleMercatorPoint(previousNormal, offsetMeters * side)
+        scaleMercatorPoint(previousNormal, offsetMeters * side)
       );
-      const nextOffsetStart = MapLineCorridorTool.addMercatorPoint(
+      const nextOffsetStart = addMercatorPoint(
         currentCoordinate,
-        MapLineCorridorTool.scaleMercatorPoint(nextNormal, offsetMeters * side)
+        scaleMercatorPoint(nextNormal, offsetMeters * side)
       );
-      const nextOffsetEnd = MapLineCorridorTool.addMercatorPoint(
+      const nextOffsetEnd = addMercatorPoint(
         nextCoordinate,
-        MapLineCorridorTool.scaleMercatorPoint(nextNormal, offsetMeters * side)
+        scaleMercatorPoint(nextNormal, offsetMeters * side)
       );
 
-      const intersection = MapLineCorridorTool.getInfiniteLineIntersection(
+      const intersection = getInfiniteLineIntersection(
         previousOffsetStart,
         previousOffsetEnd,
         nextOffsetStart,
@@ -677,8 +570,8 @@ export class MapLineCorridorTool {
         };
       }
 
-      const miterLength = MapLineCorridorTool.getMercatorVectorLength(
-        MapLineCorridorTool.subtractMercatorPoint(intersection, previousOffsetEnd)
+      const miterLength = getMercatorVectorLength(
+        subtractMercatorPoint(intersection, previousOffsetEnd)
       );
       if (miterLength > offsetMeters * 6) {
         return {
@@ -689,155 +582,6 @@ export class MapLineCorridorTool {
 
       return intersection;
     });
-  }
-
-  /**
-   * 根据线段方向计算其左侧法向量。
-   * @param start 线段起点
-   * @param end 线段终点
-   * @returns 左法向量；零长度线段返回 null
-   */
-  private static getLeftNormalVector(
-    start: MercatorPoint,
-    end: MercatorPoint
-  ): MercatorPoint | null {
-    const direction = MapLineCorridorTool.normalizeMercatorVector(
-      MapLineCorridorTool.subtractMercatorPoint(end, start)
-    );
-    if (!direction) return null;
-
-    return {
-      x: -direction.y,
-      y: direction.x,
-    };
-  }
-
-  /**
-   * 计算两条无限延长直线的交点。
-   * @param firstStart 第一条线的起点
-   * @param firstEnd 第一条线的终点
-   * @param secondStart 第二条线的起点
-   * @param secondEnd 第二条线的终点
-   * @returns 交点；平行或近似平行时返回 null
-   */
-  private static getInfiniteLineIntersection(
-    firstStart: MercatorPoint,
-    firstEnd: MercatorPoint,
-    secondStart: MercatorPoint,
-    secondEnd: MercatorPoint
-  ): MercatorPoint | null {
-    const firstVector = MapLineCorridorTool.subtractMercatorPoint(firstEnd, firstStart);
-    const secondVector = MapLineCorridorTool.subtractMercatorPoint(secondEnd, secondStart);
-    const determinant = firstVector.x * secondVector.y - firstVector.y * secondVector.x;
-
-    if (Math.abs(determinant) < 1e-9) {
-      return null;
-    }
-
-    const delta = MapLineCorridorTool.subtractMercatorPoint(secondStart, firstStart);
-    const ratio = (delta.x * secondVector.y - delta.y * secondVector.x) / determinant;
-
-    return {
-      x: firstStart.x + firstVector.x * ratio,
-      y: firstStart.y + firstVector.y * ratio,
-    };
-  }
-
-  /**
-   * 将经纬度坐标转换为 Web Mercator 米制坐标。
-   * @param position 经纬度坐标
-   * @returns 墨卡托平面坐标
-   */
-  private static lngLatToMercatorPoint(position: Position): MercatorPoint {
-    const [lng, lat] = position;
-    const clampedLatitude = Math.max(Math.min(lat, 85.0511287798), -85.0511287798);
-
-    return {
-      x: MERCATOR_RADIUS_METERS * MapLineCorridorTool.toRadians(lng),
-      y:
-        MERCATOR_RADIUS_METERS *
-        Math.log(Math.tan(Math.PI / 4 + MapLineCorridorTool.toRadians(clampedLatitude) / 2)),
-    };
-  }
-
-  /**
-   * 将 Web Mercator 米制坐标还原为经纬度坐标。
-   * @param point 墨卡托平面坐标
-   * @returns 经纬度坐标
-   */
-  private static mercatorPointToLngLat(point: MercatorPoint): Position {
-    return [
-      MapLineCorridorTool.toDegrees(point.x / MERCATOR_RADIUS_METERS),
-      MapLineCorridorTool.toDegrees(
-        2 * Math.atan(Math.exp(point.y / MERCATOR_RADIUS_METERS)) - Math.PI / 2
-      ),
-    ];
-  }
-
-  /**
-   * 计算两个平面点的向量差。
-   * @param target 目标点
-   * @param source 起始点
-   * @returns 从 source 指向 target 的向量
-   */
-  private static subtractMercatorPoint(
-    target: MercatorPoint,
-    source: MercatorPoint
-  ): MercatorPoint {
-    return {
-      x: target.x - source.x,
-      y: target.y - source.y,
-    };
-  }
-
-  /**
-   * 将两个平面向量相加。
-   * @param left 左侧向量
-   * @param right 右侧向量
-   * @returns 相加后的向量
-   */
-  private static addMercatorPoint(left: MercatorPoint, right: MercatorPoint): MercatorPoint {
-    return {
-      x: left.x + right.x,
-      y: left.y + right.y,
-    };
-  }
-
-  /**
-   * 将平面向量按比例缩放。
-   * @param point 原始向量
-   * @param scale 缩放倍数
-   * @returns 缩放后的向量
-   */
-  private static scaleMercatorPoint(point: MercatorPoint, scale: number): MercatorPoint {
-    return {
-      x: point.x * scale,
-      y: point.y * scale,
-    };
-  }
-
-  /**
-   * 计算平面向量长度。
-   * @param vector 平面向量
-   * @returns 向量长度
-   */
-  private static getMercatorVectorLength(vector: MercatorPoint): number {
-    return Math.sqrt(vector.x * vector.x + vector.y * vector.y);
-  }
-
-  /**
-   * 将平面向量归一化。
-   * @param vector 原始向量
-   * @returns 单位向量；零向量时返回 null
-   */
-  private static normalizeMercatorVector(vector: MercatorPoint): MercatorPoint | null {
-    const vectorLength = MapLineCorridorTool.getMercatorVectorLength(vector);
-    if (vectorLength === 0) return null;
-
-    return {
-      x: vector.x / vectorLength,
-      y: vector.y / vectorLength,
-    };
   }
 
   /**
@@ -852,24 +596,6 @@ export class MapLineCorridorTool {
     }
 
     return feature.id ?? null;
-  }
-
-  /**
-   * 将角度转换为弧度。
-   * @param degree 角度值
-   * @returns 对应弧度值
-   */
-  private static toRadians(degree: number): number {
-    return (degree * Math.PI) / 180;
-  }
-
-  /**
-   * 将弧度转换为角度。
-   * @param radians 弧度值
-   * @returns 对应角度值
-   */
-  private static toDegrees(radians: number): number {
-    return (radians * 180) / Math.PI;
   }
 }
 
@@ -954,24 +680,16 @@ export class MapLineExtensionTool {
     const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(coordinates);
     if (normalizedCoordinates.length < 2) return null;
 
-    const clickedPoint = MapLineExtensionTool.lngLatToMercatorPoint([lngLat.lng, lngLat.lat]);
+    const clickedPoint = lngLatToMercatorPoint([lngLat.lng, lngLat.lat]);
     let bestSegmentIndex = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
 
     for (let index = 0; index < normalizedCoordinates.length - 1; index += 1) {
-      const segmentStart = MapLineExtensionTool.lngLatToMercatorPoint(
-        normalizedCoordinates[index]
-      );
-      const segmentEnd = MapLineExtensionTool.lngLatToMercatorPoint(
-        normalizedCoordinates[index + 1]
-      );
-      const projectedPoint = MapLineExtensionTool.projectPointToSegment(
-        clickedPoint,
-        segmentStart,
-        segmentEnd
-      ).point;
-      const projectedDistance = MapLineExtensionTool.getMercatorVectorLength(
-        MapLineExtensionTool.subtractMercatorPoint(projectedPoint, clickedPoint)
+      const segmentStart = lngLatToMercatorPoint(normalizedCoordinates[index]);
+      const segmentEnd = lngLatToMercatorPoint(normalizedCoordinates[index + 1]);
+      const projectedPoint = projectPointToSegment(clickedPoint, segmentStart, segmentEnd).point;
+      const projectedDistance = getMercatorVectorLength(
+        subtractMercatorPoint(projectedPoint, clickedPoint)
       );
 
       if (projectedDistance < bestDistance) {
@@ -1133,52 +851,15 @@ export class MapLineExtensionTool {
   private static getSegmentBearing(start: Position, end: Position): number {
     const [startLng, startLat] = start;
     const [endLng, endLat] = end;
-    const longitudeDelta = MapLineExtensionTool.toRadians(endLng - startLng);
-    const startLatitude = MapLineExtensionTool.toRadians(startLat);
-    const endLatitude = MapLineExtensionTool.toRadians(endLat);
+    const longitudeDelta = toRadians(endLng - startLng);
+    const startLatitude = toRadians(startLat);
+    const endLatitude = toRadians(endLat);
     const y = Math.sin(longitudeDelta) * Math.cos(endLatitude);
     const x =
       Math.cos(startLatitude) * Math.sin(endLatitude) -
       Math.sin(startLatitude) * Math.cos(endLatitude) * Math.cos(longitudeDelta);
 
-    return ((MapLineExtensionTool.toDegrees(Math.atan2(y, x)) + 540) % 360) - 180;
-  }
-
-  /**
-   * 计算点到线段的最近投影点。
-   * @param point 鼠标点击位置
-   * @param start 线段起点
-   * @param end 线段终点
-   * @returns 最近投影点及其在线段上的归一化比例
-   */
-  private static projectPointToSegment(
-    point: MercatorPoint,
-    start: MercatorPoint,
-    end: MercatorPoint
-  ): { point: MercatorPoint; ratio: number } {
-    const segmentVector = MapLineExtensionTool.subtractMercatorPoint(end, start);
-    const segmentLengthSquared =
-      segmentVector.x * segmentVector.x + segmentVector.y * segmentVector.y;
-
-    if (segmentLengthSquared === 0) {
-      return {
-        point: start,
-        ratio: 0,
-      };
-    }
-
-    const pointVector = MapLineExtensionTool.subtractMercatorPoint(point, start);
-    const rawRatio =
-      (pointVector.x * segmentVector.x + pointVector.y * segmentVector.y) / segmentLengthSquared;
-    const ratio = Math.max(0, Math.min(1, rawRatio));
-
-    return {
-      point: {
-        x: start.x + segmentVector.x * ratio,
-        y: start.y + segmentVector.y * ratio,
-      },
-      ratio,
-    };
+    return ((toDegrees(Math.atan2(y, x)) + 540) % 360) - 180;
   }
 
   /**
@@ -1233,65 +914,5 @@ export class MapLineExtensionTool {
     }
 
     return feature.id ?? null;
-  }
-
-  /**
-   * 将经纬度坐标转换为 Web Mercator 米制坐标。
-   * @param position 经纬度坐标
-   * @returns 墨卡托平面坐标
-   */
-  private static lngLatToMercatorPoint(position: Position): MercatorPoint {
-    const [lng, lat] = position;
-    const clampedLatitude = Math.max(Math.min(lat, 85.0511287798), -85.0511287798);
-
-    return {
-      x: MERCATOR_RADIUS_METERS * MapLineExtensionTool.toRadians(lng),
-      y:
-        MERCATOR_RADIUS_METERS *
-        Math.log(Math.tan(Math.PI / 4 + MapLineExtensionTool.toRadians(clampedLatitude) / 2)),
-    };
-  }
-
-  /**
-   * 计算两个平面点的向量差。
-   * @param target 目标点
-   * @param source 起始点
-   * @returns 从 source 指向 target 的向量
-   */
-  private static subtractMercatorPoint(
-    target: MercatorPoint,
-    source: MercatorPoint
-  ): MercatorPoint {
-    return {
-      x: target.x - source.x,
-      y: target.y - source.y,
-    };
-  }
-
-  /**
-   * 计算平面向量长度。
-   * @param vector 平面向量
-   * @returns 向量长度
-   */
-  private static getMercatorVectorLength(vector: MercatorPoint): number {
-    return Math.sqrt(vector.x * vector.x + vector.y * vector.y);
-  }
-
-  /**
-   * 将角度转换为弧度。
-   * @param degree 角度值
-   * @returns 对应弧度值
-   */
-  private static toRadians(degree: number): number {
-    return (degree * Math.PI) / 180;
-  }
-
-  /**
-   * 将弧度转换为角度。
-   * @param radians 弧度值
-   * @returns 对应角度值
-   */
-  private static toDegrees(radians: number): number {
-    return (radians * 180) / Math.PI;
   }
 }
