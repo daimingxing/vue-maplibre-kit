@@ -1,4 +1,5 @@
 export { default as MapLibreInit } from './MapLibre/core/mapLibre-init.vue';
+export { default as MglPopup } from './MapLibre/core/mgl-popup.vue';
 export type { MapLibreInitExpose } from './MapLibre/core/mapLibre-init.types';
 export {
   defineMapPlugin,
@@ -32,12 +33,41 @@ export type {
   TerradrawFeatureId,
   TerradrawManagedControl,
 } from './MapLibre/shared/mapLibre-contols-types';
+export {
+  TERRADRAW_RESERVED_PROPERTY_KEYS,
+  omitTerradrawReservedProperties,
+  saveFeatureProperties,
+  saveMapFeatureProperties,
+  saveTerradrawFeatureProperties,
+  updateFeatureProperties,
+} from './MapLibre/composables/useMapDataUpdate';
 export type {
   FeatureProperties,
   FeaturePropertySaveMode,
   MapFeatureId,
+  SaveFeaturePropertiesOptions,
+  SaveMapFeaturePropertiesOptions,
   SaveFeaturePropertiesResult,
+  SaveTerradrawFeaturePropertiesOptions,
+  UpdateFeaturePropertyOptions,
 } from './MapLibre/composables/useMapDataUpdate';
+export { useMapEffect, withFlashColor } from './MapLibre/composables/useMapEffect';
+export {
+  createCircleLayerStyle,
+  createFillLayerStyle,
+  createLineLayerStyle,
+  createRasterLayerStyle,
+  createSymbolLayerStyle,
+  defaultCircleLayerStyle,
+  defaultFillLayerStyle,
+  defaultLineLayerStyle,
+  defaultRasterLayerStyle,
+  defaultSymbolLayerStyle,
+} from './MapLibre/shared/map-layer-style-config';
+export type {
+  MapLayerStyle,
+  MapLayerStyleOverrides,
+} from './MapLibre/shared/map-layer-style-config';
 export type {
   MapCommonFeature,
   MapCommonFeatureCollection,

@@ -37,6 +37,39 @@ function resolveLibraryEntries() {
   };
 }
 
+/**
+ * 解析开发态别名配置。
+ * 让仓库内的示例页面可以直接按 npm 消费方的方式导入 `vue-maplibre-kit`，
+ * 从而避免示例层继续依赖库内部源码路径。
+ * @returns Vite 别名配置列表
+ */
+function resolveDevAliases() {
+  return [
+    {
+      find: /^vue-maplibre-kit$/,
+      replacement: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
+    },
+    {
+      find: /^vue-maplibre-kit\/geometry$/,
+      replacement: fileURLToPath(new URL('./src/geometry.ts', import.meta.url)),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins\/map-feature-snap$/,
+      replacement: fileURLToPath(new URL('./src/plugins/map-feature-snap.ts', import.meta.url)),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins\/line-draft-preview$/,
+      replacement: fileURLToPath(
+        new URL('./src/plugins/line-draft-preview.ts', import.meta.url)
+      ),
+    },
+    {
+      find: '@',
+      replacement: fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  ];
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ command }) => {
   const isBuildCommand = command === 'build';
@@ -44,9 +77,7 @@ export default defineConfig(({ command }) => {
   return {
     plugins: [vue(), geojsonPlugin()],
     resolve: {
-      alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
-      },
+      alias: resolveDevAliases(),
     },
     build: isBuildCommand
       ? {

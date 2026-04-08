@@ -253,9 +253,28 @@
 /**
  * 引入地图初始化组件，作为地图页面的容器。
  */
-import { MapLibreInit, type MapLibreInitExpose, type MapControlsConfig, type MapPluginStateChangePayload } from '@/index';
+import {
+  MapLibreInit,
+  MglPopup,
+  TERRADRAW_RESERVED_PROPERTY_KEYS,
+  createCircleLayerStyle,
+  createFillLayerStyle,
+  createLineLayerStyle,
+  createSymbolLayerStyle,
+  saveFeatureProperties,
+  useMapEffect,
+  withFlashColor,
+  type MapControlsConfig,
+  type MapLayerInteractiveContext,
+  type MapLayerInteractiveOptions,
+  type MapLibreInitExpose,
+  type MapPluginStateChangePayload,
+  type TerradrawControlType,
+  type TerradrawInteractiveContext,
+  type TerradrawLineDecorationStyle,
+} from 'vue-maplibre-kit';
 import FeaturePropertyEditor from './components/FeaturePropertyEditor.vue';
-import type { MapOptions } from 'maplibre-gl';
+import type { LngLatLike, MapOptions } from 'maplibre-gl';
 import {
   useMap,
   MglGeoJsonSource,
@@ -266,29 +285,10 @@ import {
   MglCustomControl,
 } from 'vue-maplibre-gl';
 import { ref, reactive, type Ref } from 'vue';
-import mapGeojson from '../../../../docs/map.geojson';
-import mapGeojson2 from '../../../../docs/map2.geojson';
+import mapGeojson from './mock/map.geojson';
+import mapGeojson2 from './mock/map2.geojson';
 import { ElButton, ElInputNumber, ElMessage } from 'element-plus';
 import { InfoFilled, Location } from '@element-plus/icons-vue';
-// 引入自定义的 MglPopup 组件和相关类型
-import MglPopup, { type LngLatLike } from '@/MapLibre/core/mgl-popup.vue';
-// useMapEffect 提供了 startFlash 和 stopFlash 方法，用于控制地图要素的闪烁特效
-// withFlashColor 是一个辅助函数，用于在 paint 属性中设置支持闪烁的颜色表达式
-import { useMapEffect, withFlashColor } from '@/MapLibre/composables/useMapEffect';
-// useTerradrawInteractive 提供了 TerraDraw 控件的交互事件处理，以及 TerraDraw 控件的属性查询和更新方法
-// TERRADRAW_RESERVED_PROPERTY_KEYS 是一个数组，包含了 TerraDraw 控件保留的属性名，不能直接修改
-import {
-  TERRADRAW_RESERVED_PROPERTY_KEYS,
-  saveFeatureProperties,
-} from '@/MapLibre/composables/useMapDataUpdate';
-
-// 创建CircleLayer、FillLayer、LineLayer、SymbolLayer的默认样式
-import {
-  createCircleLayerStyle,
-  createFillLayerStyle,
-  createLineLayerStyle,
-  createSymbolLayerStyle,
-} from '@/MapLibre/shared/map-layer-style-config';
 import {
   MapLineMeasureTool,
   MapLineCorridorTool,
@@ -298,22 +298,15 @@ import {
   type MapCommonFeature,
   type MapCommonLineFeature,
   type MapSourceFeatureRef,
-} from '@/geometry';
-import type {
-  MapLayerInteractiveContext,
-  MapLayerInteractiveOptions,
-  TerradrawControlType,
-  TerradrawInteractiveContext,
-  TerradrawLineDecorationStyle,
-} from '@/MapLibre/shared/mapLibre-contols-types';
+} from 'vue-maplibre-kit/geometry';
 import {
   createLineDraftPreviewPlugin,
   LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
   type LineDraftPreviewPluginApi,
   type LineDraftPreviewStateChangePayload,
-} from '@/plugins/line-draft-preview';
-import { createMapFeatureSnapPlugin } from '@/plugins/map-feature-snap';
+} from 'vue-maplibre-kit/plugins/line-draft-preview';
+import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature-snap';
 
 /** 主业务 GeoJSON source ID */
 const PRIMARY_SOURCE_ID = 'test_geojson_source';
@@ -330,8 +323,9 @@ const SECONDARY_LINE_LAYER_ID = 'lineLayerSecondary';
 /** 第二业务面图层 ID */
 const SECONDARY_FILL_LAYER_ID = 'fillLayerSecondary';
 
-import sendIcon from '@/assets/image/send.svg';
-import texturelabsWater from '@/assets/image/Texturelabs_Water.jpg';
+import sendIcon from './assets/send.svg';
+import segment_stretch_test from './assets/segment-stretch.svg';
+import texturelabsWater from './assets/Texturelabs_Water.jpg';
 
 /**
  * 这里需要搞清楚两个概念：
@@ -928,7 +922,7 @@ const mapControls: MapControlsConfig = {
   // 注意两种绘图控件 二选一，否则容易出现图层覆盖问题。
   // 绘图控件：提供点、线、面等绘制工具
   MaplibreTerradrawControl: {
-    isUse: false,
+    isUse: true,
     position: 'top-left',
     // 默认是否展开工具栏
     open: false,
