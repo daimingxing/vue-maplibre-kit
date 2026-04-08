@@ -616,6 +616,124 @@ function safeUpdateTerradrawModeOptions(
 }
 
 /**
+ * TerraDraw ready 重试同步状态。
+ * 将同一实例的任务集合与监听器收拢到一起，便于统一维护。
+ */
+interface TerradrawReadySyncState {
+  /** ready 前暂存的同步任务；同名任务只保留最后一次 */
+  tasks: Map<string, () => void>;
+  /** 当前实例已注册的 ready 监听器 */
+  handler?: () => void;
+}
+
+/**
+ * 缓存 TerraDraw ready 前暂存的同步状态。
+ * 使用 WeakMap 避免在极端漏清理场景下额外强引用已失效实例。
+ */
+const terradrawReadySyncStateMap = new WeakMap<TerraDraw, TerradrawReadySyncState>();
+
+/**
+ * 获取 TerraDraw ready 重试同步状态；不存在时自动初始化。
+ * @param drawInstance 当前 TerraDraw 实例
+ * @returns 当前实例对应的重试同步状态
+ */
+function getTerradrawReadySyncState(drawInstance: TerraDraw): TerradrawReadySyncState {
+  const existingState = terradrawReadySyncStateMap.get(drawInstance);
+  if (existingState) {
+    return existingState;
+  }
+
+  const nextState: TerradrawReadySyncState = {
+    tasks: new Map<string, () => void>(),
+  };
+  terradrawReadySyncStateMap.set(drawInstance, nextState);
+  return nextState;
+}
+
+/**
+ * 清理某个 TerraDraw 实例上挂起的 ready 同步任务与监听器。
+ * @param drawInstance 当前 TerraDraw 实例
+ */
+function clearTerradrawReadySync(drawInstance: TerraDraw | null | undefined): void {
+  if (!drawInstance) {
+    return;
+  }
+
+  const readySyncState = terradrawReadySyncStateMap.get(drawInstance);
+  if (!readySyncState) {
+    return;
+  }
+
+  if (readySyncState.handler) {
+    drawInstance.off('ready', readySyncState.handler);
+  }
+
+  terradrawReadySyncStateMap.delete(drawInstance);
+}
+
+/**
+ * 当 TerraDraw 尚未启用时，把同步任务延后到 ready 事件后再执行。
+ * @param drawInstance 当前 TerraDraw 实例
+ * @param taskKey 当前同步任务标识
+ * @param task ready 后需要执行的同步逻辑
+ */
+function queueTerradrawReadySync(
+  drawInstance: TerraDraw,
+  taskKey: string,
+  task: () => void
+): void {
+  const readySyncState = getTerradrawReadySyncState(drawInstance);
+  readySyncState.tasks.set(taskKey, task);
+
+  if (readySyncState.handler) {
+    return;
+  }
+
+  const handleReady = () => {
+    if (!drawInstance.enabled) {
+      return;
+    }
+
+    const pendingTasks = [...readySyncState.tasks.values()];
+    clearTerradrawReadySync(drawInstance);
+
+    pendingTasks.forEach((pendingTask) => {
+      pendingTask();
+    });
+  };
+
+  readySyncState.handler = handleReady;
+  drawInstance.on('ready', handleReady);
+}
+
+/**
+ * 确保 TerraDraw 已进入 enabled 状态后再执行模式配置同步。
+ * 若当前仍处于初始化阶段，则自动登记一次 ready 后重试，避免刷新时出现竞态告警。
+ * @param drawInstance 当前 TerraDraw 实例
+ * @param taskKey 当前同步任务标识
+ * @param retryTask ready 后重新执行的同步逻辑
+ * @returns 当前实例是否已经可以立即执行同步
+ */
+function ensureTerradrawReadyForModeSync(
+  drawInstance: TerraDraw | null | undefined,
+  taskKey: string,
+  retryTask: () => void
+): drawInstance is TerraDraw {
+  if (!drawInstance?.updateModeOptions) {
+    return false;
+  }
+
+  if (drawInstance.enabled) {
+    // 实例一旦已经启用，说明之前挂起的 ready 重试任务可以直接取消，避免重复执行。
+    clearTerradrawReadySync(drawInstance);
+    return true;
+  }
+
+  queueTerradrawReadySync(drawInstance, taskKey, retryTask);
+  return false;
+}
+
+/**
  * 构建绘制/测量线面模式最终使用的 snapping 配置对象。
  * @param resolvedSnapOptions 当前控件最终生效的吸附配置
  * @returns 可直接传给 TerraDraw mode 的局部配置
@@ -697,7 +815,14 @@ function syncDrawSnapping(
   baseSelectModeOptions: Record<string, unknown> | null | undefined
 ): void {
   const drawInstance = drawControlRef.value?.getTerraDrawInstance?.();
-  if (!drawInstance) {
+  if (
+    !ensureTerradrawReadyForModeSync(drawInstance, 'draw-snapping', () => {
+      syncDrawSnapping(
+        props.controls.MaplibreTerradrawControl?.snapping,
+        extractSelectModeOptionsSnapshot(props.controls.MaplibreTerradrawControl?.modeOptions?.select)
+      );
+    })
+  ) {
     return;
   }
 
@@ -721,7 +846,11 @@ function syncMeasureSnapping(
   localSnapConfig: TerradrawSnapSharedOptions | boolean | null | undefined
 ): void {
   const drawInstance = measureControlRef.value?.getTerraDrawInstance?.();
-  if (!drawInstance) {
+  if (
+    !ensureTerradrawReadyForModeSync(drawInstance, 'measure-snapping', () => {
+      syncMeasureSnapping(props.controls.MaplibreMeasureControl?.snapping);
+    })
+  ) {
     return;
   }
 
@@ -852,6 +981,7 @@ watch(
         destroyDrawInteractive();
         destroyDrawLineDecoration();
         if (drawControlRef.value) {
+          clearTerradrawReadySync(drawControlRef.value.getTerraDrawInstance?.());
           map.map.removeControl(drawControlRef.value);
           drawControlRef.value = null;
         }
@@ -1008,6 +1138,7 @@ watch(
         destroyMeasureInteractive();
         destroyMeasureLineDecoration();
         if (measureControlRef.value) {
+          clearTerradrawReadySync(measureControlRef.value.getTerraDrawInstance?.());
           map.map.removeControl(measureControlRef.value);
           measureControlRef.value = null;
         }
@@ -1066,6 +1197,8 @@ defineExpose({
  * 组件卸载前统一销毁 TerraDraw 业务交互管理器。
  */
 onBeforeUnmount(() => {
+  clearTerradrawReadySync(drawControlRef.value?.getTerraDrawInstance?.());
+  clearTerradrawReadySync(measureControlRef.value?.getTerraDrawInstance?.());
   destroyDrawInteractive();
   destroyDrawLineDecoration();
   destroyMeasureInteractive();
