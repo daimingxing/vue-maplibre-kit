@@ -26,7 +26,7 @@ export interface MapLibreInitExpose {
   getSelectedMapFeatureContext: () => MapLayerInteractiveContext | null;
   /** 获取当前普通图层交互选中的标准化要素快照。 */
   getSelectedMapFeatureSnapshot: () => MapCommonFeature | null;
-  /** 清空当前普通图层的选中状态。 */
+  /** 清空当前普通图层的整个选中集。 */
   clearSelectedMapFeature: () => void;
   /** 地图插件宿主查询接口。 */
   plugins: MapPluginHostExpose;

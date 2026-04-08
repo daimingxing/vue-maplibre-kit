@@ -498,6 +498,7 @@ mapInteractiveBinding = useMapInteractive({
   mapInstance: map,
   getInteractive: () => mergedMapInteractive.value,
   getSnapBinding: () => pluginHost.getMapSnapService()?.getBinding() || null,
+  getSelectionService: () => pluginHost.getMapSelectionService() || null,
 });
 
 /**
@@ -517,7 +518,7 @@ function getSelectedMapFeatureContext() {
 }
 
 /**
- * 清空当前普通图层交互封装记录的选中要素。
+ * 清空当前普通图层交互封装记录的整个选中集。
  */
 function clearSelectedMapFeature() {
   mapInteractiveBinding?.clearSelectionState();

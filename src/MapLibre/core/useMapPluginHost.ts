@@ -104,6 +104,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     onPluginStateChange,
   } = options;
   const pluginRecordMapRef = shallowRef<Map<string, MapPluginRecord>>(new Map());
+  let hasWarnedDuplicateMapSelectionService = false;
 
   /**
    * 销毁单个插件记录。
@@ -245,6 +246,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     });
 
     pluginRecordMapRef.value = nextPluginRecordMap;
+    hasWarnedDuplicateMapSelectionService = false;
   }
 
   watch(
@@ -309,6 +311,38 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
       }
 
       resolvedService = currentService;
+    }
+
+    return resolvedService;
+  }
+
+  /**
+   * 解析当前唯一允许存在的地图选择服务。
+   * @returns 当前选择服务；未注册时返回 null
+   */
+  function getMapSelectionService(): MapPluginServices['mapSelection'] | null {
+    let resolvedService: MapPluginServices['mapSelection'] | null = null;
+    const duplicatedPluginIds: string[] = [];
+
+    for (const [pluginId, pluginRecord] of pluginRecordMapRef.value.entries()) {
+      const currentService = pluginRecord.instance.services?.mapSelection || null;
+      if (!currentService) {
+        continue;
+      }
+
+      if (resolvedService) {
+        duplicatedPluginIds.push(pluginId);
+        continue;
+      }
+
+      resolvedService = currentService;
+    }
+
+    if (resolvedService && duplicatedPluginIds.length > 0 && !hasWarnedDuplicateMapSelectionService) {
+      hasWarnedDuplicateMapSelectionService = true;
+      console.warn(
+        `[MapPluginHost] 检测到多个 mapSelection 服务插件，当前将仅使用第一个服务。重复插件：${duplicatedPluginIds.join(', ')}`
+      );
     }
 
     return resolvedService;
@@ -380,6 +414,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     renderItems,
     mergedMapInteractive,
     getMapSnapService,
+    getMapSelectionService,
     resolveSelectedFeatureSnapshot,
     hostExpose,
   };

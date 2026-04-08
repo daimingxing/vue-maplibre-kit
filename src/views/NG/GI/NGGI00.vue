@@ -11,6 +11,25 @@
       >
         <!-- 自定义控件插槽 -->
         <template #MglCustomControl>
+          <mgl-custom-control position="top-left" :noClasses="false">
+            <div class="selection-demo-card">
+              <div class="selection-demo-card__title">要素多选示例</div>
+              <div class="selection-demo-card__row">
+                <span>当前模式</span>
+                <strong>{{ getSelectionModeText(selectionDemoState.mode) }}</strong>
+              </div>
+              <div class="selection-demo-card__row">
+                <span>当前选中</span>
+                <strong>{{ selectionDemoState.selectedCount }} 个</strong>
+              </div>
+              <div class="selection-demo-card__summary">
+                {{ selectionDemoState.lastChangeSummary }}
+              </div>
+              <div class="selection-demo-card__hint">
+                {{ selectionDemoState.contextMenuSummary }}
+              </div>
+            </div>
+          </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
             <ElButton style="background: white; width: 120px" @click="getDrawnData"
               >获取绘制数据</ElButton
@@ -244,6 +263,7 @@
       v-model:visible="contextMenuState.visible"
       :position="contextMenuState.position"
       :properties="contextMenuState.properties"
+      :summaryRows="contextMenuState.summaryRows"
       :forbiddenKeys="contextMenuState.targetType === 'map' ? [] : terraDrawReservedPropertyKeys"
       @save="handleSaveProperty"
     />
@@ -267,7 +287,10 @@ import {
   type MapControlsConfig,
   type MapLayerInteractiveContext,
   type MapLayerInteractiveOptions,
+  type MapLayerSelectedFeature,
+  type MapLayerSelectionChangeContext,
   type MapLibreInitExpose,
+  type MapSelectionMode,
   type MapPluginStateChangePayload,
   type TerradrawControlType,
   type TerradrawInteractiveContext,
@@ -306,6 +329,11 @@ import {
   type LineDraftPreviewPluginApi,
   type LineDraftPreviewStateChangePayload,
 } from 'vue-maplibre-kit/plugins/line-draft-preview';
+import {
+  MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE,
+  createMapFeatureMultiSelectPlugin,
+  type MapFeatureMultiSelectState,
+} from 'vue-maplibre-kit/plugins/map-feature-multi-select';
 import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature-snap';
 
 /** 主业务 GeoJSON source ID */
@@ -452,6 +480,28 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
 });
 
 /**
+ * 要素多选插件配置示例。
+ * 当前示例同时演示：
+ * 1. `retain` 退出策略
+ * 2. 通过 `excludeLayerIds` 排除整个图层
+ * 3. 通过 `canSelect` 排除同图层中的特定业务要素
+ */
+const mapFeatureMultiSelectPlugin = createMapFeatureMultiSelectPlugin({
+  enabled: true,
+  position: 'top-right',
+  deactivateBehavior: 'retain',
+  closeOnEscape: true,
+  excludeLayerIds: ['circleLayerDec'],
+  canSelect: ({ layerId, properties }) => {
+    if (layerId !== 'circleLayer') {
+      return true;
+    }
+
+    return properties?.id !== 'point_4';
+  },
+});
+
+/**
  * 统一吸附扩展配置示例。
  * 业务层在这里仅声明：
  * 1. 哪些普通图层允许参与吸附
@@ -543,7 +593,7 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
  * 当前页面注册到地图容器中的插件集合。
  * 业务层通过显式 import + 注册插件的方式启用能力，而不是继续给 map-libre-init 传专属 prop。
  */
-const mapPlugins = [mapFeatureSnapPlugin, lineDraftPreviewPlugin];
+const mapPlugins = [mapFeatureSnapPlugin, lineDraftPreviewPlugin, mapFeatureMultiSelectPlugin];
 
 /**
  * 当前页面是否存在线草稿要素。
@@ -690,26 +740,162 @@ const getFeatureRef = (
   return createMapSourceFeatureRef(context?.sourceId || null, context?.featureId ?? null);
 };
 
+interface SelectionSummaryRow {
+  label: string;
+  value: string;
+}
+
+/**
+ * 业务层维护的多选示例状态。
+ * 这里专门用于演示：业务页可以独立拿到当前模式、选中数量和最近一次选择变化摘要。
+ */
+const selectionDemoState = reactive({
+  mode: 'single' as MapSelectionMode,
+  selectedCount: 0,
+  lastChangeSummary: '当前还没有发生选中集变化',
+  contextMenuSummary: '当前未展示选中集摘要',
+});
+
+/**
+ * 将选择模式转换为便于示例展示的中文文本。
+ * @param mode 当前选择模式
+ * @returns 中文模式文本
+ */
+const getSelectionModeText = (mode: MapSelectionMode): string => {
+  return mode === 'multiple' ? '多选' : '单选';
+};
+
+/**
+ * 将当前选中集中的业务 ID 列表格式化为展示文本。
+ * @param selectedFeatures 当前选中集
+ * @returns 适合直接渲染到面板中的 ID 文本
+ */
+const formatSelectedFeatureIds = (selectedFeatures: MapLayerSelectedFeature[]): string => {
+  const featureIdList = selectedFeatures
+    .map((selectedFeature) => selectedFeature.featureId)
+    .filter((featureId) => featureId !== null)
+    .map((featureId) => String(featureId));
+
+  return featureIdList.length > 0 ? featureIdList.join('、') : '无';
+};
+
+/**
+ * 将当前选中集的图层分布格式化为摘要文本。
+ * @param selectedFeatures 当前选中集
+ * @returns 图层分布摘要
+ */
+const formatLayerDistribution = (selectedFeatures: MapLayerSelectedFeature[]): string => {
+  const layerCountMap = new Map<string, number>();
+
+  selectedFeatures.forEach((selectedFeature) => {
+    const layerId = selectedFeature.layerId || '未知图层';
+    layerCountMap.set(layerId, (layerCountMap.get(layerId) || 0) + 1);
+  });
+
+  if (layerCountMap.size === 0) {
+    return '无';
+  }
+
+  return Array.from(layerCountMap.entries())
+    .map(([layerId, count]) => `${layerId} x${count}`)
+    .join('，');
+};
+
+/**
+ * 将当前选中集转换为右键面板摘要行。
+ * @param selectedFeatures 当前选中集
+ * @param selectionMode 当前选择模式
+ * @returns 适合直接传给属性面板的摘要行
+ */
+const buildSelectionSummaryRows = (
+  selectedFeatures: MapLayerSelectedFeature[],
+  selectionMode: MapSelectionMode
+): SelectionSummaryRow[] => {
+  return [
+    {
+      label: '当前模式',
+      value: getSelectionModeText(selectionMode),
+    },
+    {
+      label: '选中数量',
+      value: `${selectedFeatures.length} 个`,
+    },
+    {
+      label: '要素 ID',
+      value: formatSelectedFeatureIds(selectedFeatures),
+    },
+    {
+      label: '图层分布',
+      value: formatLayerDistribution(selectedFeatures),
+    },
+  ];
+};
+
+/**
+ * 将摘要行压缩为单行文本，便于业务层记录日志或展示提示。
+ * @param summaryRows 当前摘要行
+ * @returns 压缩后的摘要文本
+ */
+const buildSelectionSummaryText = (summaryRows: SelectionSummaryRow[]): string => {
+  if (summaryRows.length === 0) {
+    return '当前没有可展示的选中集摘要';
+  }
+
+  return summaryRows.map((summaryRow) => `${summaryRow.label}：${summaryRow.value}`).join(' | ');
+};
+
+/**
+ * 用插件状态快照同步业务层的模式与选中数量。
+ * @param pluginState 多选插件最新状态
+ */
+const syncSelectionDemoStateFromPlugin = (pluginState: MapFeatureMultiSelectState): void => {
+  selectionDemoState.mode = pluginState.selectionMode;
+  selectionDemoState.selectedCount = pluginState.selectedCount;
+};
+
+/**
+ * 用统一选择变化上下文同步业务层摘要。
+ * @param context 选中集变化上下文
+ */
+const syncSelectionDemoStateFromChange = (context: MapLayerSelectionChangeContext): void => {
+  const addedIds = formatSelectedFeatureIds(context.addedFeatures);
+  const removedIds = formatSelectedFeatureIds(context.removedFeatures);
+
+  selectionDemoState.mode = context.selectionMode || 'single';
+  selectionDemoState.selectedCount = context.selectedCount;
+  selectionDemoState.lastChangeSummary =
+    `原因：${context.reason}；模式：${getSelectionModeText(context.selectionMode || 'single')}；` +
+    `当前 ${context.selectedCount} 个；新增 ${addedIds}；移除 ${removedIds}`;
+};
+
 /**
  * 统一处理地图插件状态变更事件。
  * 当前页面只消费线草稿插件的状态，但事件机制已经支持多个插件共存。
  * @param payload 地图插件状态变更事件载荷
  */
 const handlePluginStateChange = (payload: MapPluginStateChangePayload): void => {
-  // 当前页面只关心线草稿插件，其余插件状态变更直接忽略。
   if (
-    payload.pluginType !== LINE_DRAFT_PREVIEW_PLUGIN_TYPE ||
-    payload.pluginId !== lineDraftPreviewPlugin.id
+    payload.pluginType === LINE_DRAFT_PREVIEW_PLUGIN_TYPE &&
+    payload.pluginId === lineDraftPreviewPlugin.id
   ) {
+    const previewState = payload.state as LineDraftPreviewStateChangePayload;
+
+    // 同时参考 hasFeatures 与 featureCount，
+    // 是为了让页面态与容器层返回的数据保持一致，避免只依赖单个字段造成误判。
+    hasLineDraftFeatures.value = previewState.hasFeatures && previewState.featureCount > 0;
+    console.log('[NGGI00 示例] 线草稿插件状态变化', previewState);
     return;
   }
 
-  const previewState = payload.state as LineDraftPreviewStateChangePayload;
+  if (
+    payload.pluginType === MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE &&
+    payload.pluginId === mapFeatureMultiSelectPlugin.id
+  ) {
+    const multiSelectState = payload.state as MapFeatureMultiSelectState;
 
-  // 同时参考 hasFeatures 与 featureCount，
-  // 是为了让页面态与容器层返回的数据保持一致，避免只依赖单个字段造成误判。
-  hasLineDraftFeatures.value = previewState.hasFeatures && previewState.featureCount > 0;
-  console.log('previewState', payload);
+    syncSelectionDemoStateFromPlugin(multiSelectState);
+    console.log('[NGGI00 示例] 多选插件状态变化', multiSelectState);
+  }
 };
 
 /**
@@ -1387,6 +1573,8 @@ const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
     'line-color': withFlashColor(
       [
         'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        '#f97316',
         ['boolean', ['feature-state', 'hover'], false],
         '#00ff00',
         ['==', ['get', 'id'], 'line_1'],
@@ -1395,7 +1583,14 @@ const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
       ],
       '#ffff00'
     ),
-    'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 6, 3],
+    'line-width': [
+      'case',
+      ['boolean', ['feature-state', 'selected'], false],
+      7,
+      ['boolean', ['feature-state', 'hover'], false],
+      6,
+      3,
+    ],
   },
 });
 
@@ -1416,8 +1611,28 @@ const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
  */
 const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
   paint: {
-    'circle-color': withFlashColor('#0000ff', '#ff0000'),
-    'circle-stroke-color': withFlashColor('#ffffff', '#ffff00'),
+    'circle-color': withFlashColor(
+      [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        '#f97316',
+        ['boolean', ['feature-state', 'hover'], false],
+        '#22c55e',
+        '#0000ff',
+      ],
+      '#ff0000'
+    ),
+    'circle-stroke-color': withFlashColor(
+      [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        '#7c2d12',
+        '#ffffff',
+      ],
+      '#ffff00'
+    ),
+    'circle-radius': ['case', ['boolean', ['feature-state', 'selected'], false], 8, 6],
+    'circle-stroke-width': ['case', ['boolean', ['feature-state', 'selected'], false], 3, 2],
   },
 });
 
@@ -1652,6 +1867,8 @@ const openMapFeaturePopup = (context: MapLayerInteractiveContext) => {
   if (!context.feature || !context.lngLat) return;
 
   contextMenuState.visible = false;
+  contextMenuState.summaryRows = [];
+  selectionDemoState.contextMenuSummary = '当前未展示选中集摘要';
   popupState.type =
     context.feature.geometry?.type === 'LineString' ? popupType.line : popupType.point;
   popupState.geometryType = context.feature.geometry?.type || '';
@@ -1704,9 +1921,14 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
 
   context.originalEvent.preventDefault();
   popupState.visible = false;
+  const summaryRows =
+    context.selectionMode === 'multiple'
+      ? buildSelectionSummaryRows(context.selectedFeatures || [], context.selectionMode)
+      : [];
 
   contextMenuState.position = { x: context.point.x, y: context.point.y };
   contextMenuState.properties = JSON.parse(JSON.stringify(context.feature.properties || {}));
+  contextMenuState.summaryRows = summaryRows;
   contextMenuState.featureId = context.featureId;
   contextMenuState.targetType = 'map';
   contextMenuState.sourceId = context.sourceId || '';
@@ -1715,6 +1937,8 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
     getLineDraftPreviewApi()?.isFeatureById?.(context.featureId) || false;
   contextMenuState.controlType = '';
   contextMenuState.visible = true;
+  selectionDemoState.contextMenuSummary =
+    summaryRows.length > 0 ? buildSelectionSummaryText(summaryRows) : '单选右键仅展示当前要素属性';
 };
 
 /**
@@ -1725,6 +1949,9 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
 const logMapInteractiveEvent = (label: string, context: MapLayerInteractiveContext) => {
   console.log(`[Map 图层示例] ${label}`, {
     eventType: context.eventType, // 当前回调对应的交互事件类型
+    selectionMode: context.selectionMode, // 当前交互层生效的选择模式
+    isMultiSelectActive: context.isMultiSelectActive, // 当前是否处于多选模式
+    selectedCount: context.selectedCount, // 当前选中项数量
     layerId: context.layerId, // 当前命中的图层 ID
     featureId: context.featureId, // 当前主目标要素 ID
     properties: context.properties, // 当前主目标要素的业务属性对象
@@ -1805,10 +2032,36 @@ const mapInteractive: MapLayerInteractiveOptions = {
     openMapFeaturePopup(context);
   },
 
+  // 普通图层选中集变化入口。
+  // 业务层可在这里统一处理多图层批量选择，而不需要分别给每个 layer 写回调。
+  onSelectionChange: (context: MapLayerSelectionChangeContext) => {
+    syncSelectionDemoStateFromChange(context);
+    console.log('[NGGI00 示例] 选中集变化示例', {
+      reason: context.reason,
+      selectionMode: context.selectionMode,
+      selectedCount: context.selectedCount,
+      addedFeatures: context.addedFeatures,
+      removedFeatures: context.removedFeatures,
+      summary: selectionDemoState.lastChangeSummary,
+    });
+  },
+
   // 普通图层统一 double click 入口。
   // 适合做 flyTo、进入详情页、切换侧边栏等通用行为。
   onDoubleClick: (context: MapLayerInteractiveContext) => {
     logMapInteractiveEvent('顶层双击地图', context);
+
+    if (context.selectionMode === 'multiple') {
+      console.log('[NGGI00 示例] 多选模式下双击事件由业务层自行分发', {
+        selectedCount: context.selectedCount,
+        featureId: context.featureId,
+      });
+      return;
+    }
+
+    console.log('[NGGI00 示例] 单选模式下双击事件示例逻辑', {
+      featureId: context.featureId,
+    });
   },
 
   // 普通图层统一右键入口。
@@ -1818,6 +2071,13 @@ const mapInteractive: MapLayerInteractiveOptions = {
 
     if (!context.feature) {
       return;
+    }
+
+    if (context.selectionMode === 'multiple') {
+      console.log('[NGGI00 示例] 多选模式右键摘要', {
+        selectedCount: context.selectedCount,
+        selectedFeatures: context.selectedFeatures,
+      });
     }
 
     openMapFeatureContextMenu(context);
@@ -1890,6 +2150,7 @@ const contextMenuState = reactive({
   visible: false,
   position: { x: 0, y: 0 },
   properties: {} as Record<string, any>,
+  summaryRows: [] as SelectionSummaryRow[],
   featureId: null as string | number | null,
   targetType: '' as 'map' | 'terradraw' | '',
   sourceId: '',
@@ -1938,12 +2199,14 @@ const closeBusinessPanels = () => {
   popupState.lineLengthMeters = 0;
   contextMenuState.visible = false;
   contextMenuState.properties = {};
+  contextMenuState.summaryRows = [];
   contextMenuState.featureId = null;
   contextMenuState.targetType = '';
   contextMenuState.sourceId = '';
   contextMenuState.layerId = '';
   contextMenuState.isLineDraftFeature = false;
   contextMenuState.controlType = '';
+  selectionDemoState.contextMenuSummary = '当前未展示选中集摘要';
 };
 
 /**
@@ -1981,6 +2244,8 @@ const openTerradrawPopup = (context: TerradrawInteractiveContext) => {
   if (!context.feature || !context.lngLat) return;
 
   contextMenuState.visible = false;
+  contextMenuState.summaryRows = [];
+  selectionDemoState.contextMenuSummary = '当前未展示选中集摘要';
   popupState.type = popupType.terradraw;
   popupState.featureId = (context.feature.id as string | number | null) ?? null;
   popupState.geometryType = context.feature.geometry?.type || '';
@@ -2001,6 +2266,7 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
 
   contextMenuState.position = { x: context.point.x, y: context.point.y };
   contextMenuState.properties = JSON.parse(JSON.stringify(context.feature.properties || {}));
+  contextMenuState.summaryRows = [];
   contextMenuState.featureId = (context.feature.id as string | number | null) ?? null;
   contextMenuState.targetType = 'terradraw';
   contextMenuState.sourceId = '';
@@ -2008,6 +2274,7 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
   contextMenuState.isLineDraftFeature = false;
   contextMenuState.controlType = context.controlType;
   contextMenuState.visible = true;
+  selectionDemoState.contextMenuSummary = 'TerraDraw 右键仅展示当前要素属性';
 };
 
 /**
@@ -2131,6 +2398,43 @@ const handleSaveProperty = (updatedProperties: Record<string, any>) => {
   // 地图容器的宽度和高度
   width: 1500px;
   height: 800px;
+}
+
+.selection-demo-card {
+  width: 240px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 8px;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.14);
+}
+
+.selection-demo-card__title {
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+.selection-demo-card__row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.selection-demo-card__summary {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.selection-demo-card__hint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
 }
 
 .terradraw-popup-json {

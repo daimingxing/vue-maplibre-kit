@@ -19,6 +19,7 @@ import type {
   MapFeatureSnapSegmentInfo,
 } from './map-feature-snap-types';
 import type { TerradrawModeOptionsInput } from './terradraw-mode-types';
+import type { MapCommonFeature } from './map-common-tools';
 
 /** TerraDraw / Measure 控件的统一实例类型 */
 export type TerradrawManagedControl = MaplibreTerradrawControl | MaplibreMeasureControl;
@@ -247,8 +248,102 @@ export type MapLayerInteractiveEventType =
   | 'dblclick'
   | 'contextmenu'
   | 'blankclick'
+  | 'selectionchange'
   | 'featureselect'
   | 'featuredeselect';
+
+/** 普通图层当前选择模式。 */
+export type MapSelectionMode = 'single' | 'multiple';
+
+/** 多选模式退出后的处理策略。 */
+export type MapSelectionDeactivateBehavior = 'clear' | 'retain';
+
+/** 选中集变化原因。 */
+export type MapSelectionChangeReason = 'click' | 'box' | 'clear' | 'deactivate' | 'api';
+
+/** 普通图层选中要素快照。 */
+export interface MapLayerSelectedFeature {
+  /** 当前选中项唯一键。 */
+  key: string;
+  /** 当前选中项要素 ID。 */
+  featureId: string | number | null;
+  /** 当前选中项所属图层 ID。 */
+  layerId: string | null;
+  /** 当前选中项所属 source ID。 */
+  sourceId: string | null;
+  /** 当前选中项所属 source-layer。 */
+  sourceLayer: string | null;
+  /** 当前选中项属性快照。 */
+  properties: Record<string, any> | null;
+  /** 当前选中项标准化 GeoJSON 快照。 */
+  snapshot: MapCommonFeature | null;
+}
+
+/** 多选候选过滤上下文。 */
+export interface MapSelectionFilterContext {
+  /** 当前候选渲染要素。 */
+  feature: MapGeoJSONFeature;
+  /** 当前候选要素 ID。 */
+  featureId: string | number | null;
+  /** 当前候选图层 ID。 */
+  layerId: string;
+  /** 当前候选 source ID。 */
+  sourceId: string | null;
+  /** 当前候选 source-layer。 */
+  sourceLayer: string | null;
+  /** 当前候选属性对象。 */
+  properties: Record<string, any> | null;
+  /** 当前已经选中的要素集合。 */
+  selectedFeatures: MapLayerSelectedFeature[];
+  /** 当前地图实例。 */
+  map: MaplibreMap;
+}
+
+/** 普通图层多选工具配置。 */
+export interface MapSelectionToolOptions {
+  /** 是否启用多选工具；默认 true。 */
+  enabled?: boolean;
+  /** 多选模式退出后的处理策略；默认 clear。 */
+  deactivateBehavior?: MapSelectionDeactivateBehavior;
+  /** 是否允许通过 Esc 快捷键退出多选模式；默认 true。 */
+  closeOnEscape?: boolean;
+  /** 允许参与多选的图层 ID 集合；不传时默认使用普通图层交互已声明的全部图层。 */
+  targetLayerIds?: string[];
+  /** 不允许参与多选的图层 ID 集合。 */
+  excludeLayerIds?: string[];
+  /** 业务层自定义候选过滤函数；返回 false 时当前要素不可加入多选集。 */
+  canSelect?: (context: MapSelectionFilterContext) => boolean;
+}
+
+/** 归一化后的多选工具配置。 */
+export interface ResolvedMapSelectionToolOptions {
+  /** 是否启用多选工具。 */
+  enabled: boolean;
+  /** 多选模式退出后的处理策略。 */
+  deactivateBehavior: MapSelectionDeactivateBehavior;
+  /** 是否允许通过 Esc 快捷键退出多选模式。 */
+  closeOnEscape: boolean;
+  /** 显式指定的目标图层；未指定时由交互层兜底。 */
+  targetLayerIds: string[] | null;
+  /** 不允许参与多选的图层 ID 集合。 */
+  excludeLayerIds: string[];
+  /** 业务层自定义候选过滤函数。 */
+  canSelect?: (context: MapSelectionFilterContext) => boolean;
+}
+
+/** 普通图层选择服务状态。 */
+export interface MapSelectionState {
+  /** 当前多选模式是否处于激活状态。 */
+  isActive: boolean;
+  /** 当前交互层生效的选择模式。 */
+  selectionMode: MapSelectionMode;
+  /** 当前全部选中项。 */
+  selectedFeatures: MapLayerSelectedFeature[];
+  /** 当前选中项数量。 */
+  selectedCount: number;
+  /** 当前退出策略。 */
+  deactivateBehavior: MapSelectionDeactivateBehavior;
+}
 
 /** 普通 MapLibre 图层交互上下文 */
 export interface MapLayerInteractiveContext {
@@ -280,6 +375,28 @@ export interface MapLayerInteractiveContext {
   originalEvent?: MouseEvent;
   /** 当前事件命中的吸附结果 */
   snapResult?: MapFeatureSnapResult | null;
+  /** 当前交互层生效的选择模式。 */
+  selectionMode?: MapSelectionMode;
+  /** 当前是否处于多选模式。 */
+  isMultiSelectActive?: boolean;
+  /** 当前完整选中集快照。 */
+  selectedFeatures?: MapLayerSelectedFeature[];
+  /** 当前选中项数量。 */
+  selectedCount?: number;
+}
+
+/** 普通图层选中集变化上下文。 */
+export interface MapLayerSelectionChangeContext extends MapLayerInteractiveContext {
+  /** 当前完整选中集快照。 */
+  selectedFeatures: MapLayerSelectedFeature[];
+  /** 当前选中项数量。 */
+  selectedCount: number;
+  /** 本次新增的选中项。 */
+  addedFeatures: MapLayerSelectedFeature[];
+  /** 本次移除的选中项。 */
+  removedFeatures: MapLayerSelectedFeature[];
+  /** 本次变化原因。 */
+  reason: MapSelectionChangeReason;
 }
 
 /** 单个普通图层的业务交互配置 */
@@ -326,6 +443,8 @@ export interface MapLayerInteractiveOptions {
   onContextMenu?: (context: MapLayerInteractiveContext) => void;
   /** 单击地图空白处回调 */
   onBlankClick?: (context: MapLayerInteractiveContext) => void;
+  /** 选中集变化回调。 */
+  onSelectionChange?: (context: MapLayerSelectionChangeContext) => void;
 }
 
 /** 基础控件配置接口 */

@@ -9,6 +9,17 @@
       <el-icon class="close-icon" @click="handleClose"><Close /></el-icon>
     </div>
     <div class="editor-body">
+      <div v-if="summaryRows.length > 0" class="summary-panel">
+        <div class="summary-panel__title">选中集摘要</div>
+        <div
+          v-for="summaryRow in summaryRows"
+          :key="summaryRow.label"
+          class="summary-panel__row"
+        >
+          <span class="summary-panel__label">{{ summaryRow.label }}</span>
+          <span class="summary-panel__value">{{ summaryRow.value }}</span>
+        </div>
+      </div>
       <el-table :data="tableData" size="small" border max-height="250">
         <el-table-column prop="key" label="属性名" width="100" />
         <el-table-column prop="value" label="属性值" width="120" />
@@ -27,11 +38,17 @@ import { ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Close } from '@element-plus/icons-vue';
 
+interface SummaryRow {
+  label: string;
+  value: string;
+}
+
 interface Props {
   visible: boolean;
   position: { x: number; y: number };
   properties: Record<string, any>;
   forbiddenKeys?: string[];
+  summaryRows?: SummaryRow[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -39,6 +56,7 @@ const props = withDefaults(defineProps<Props>(), {
   position: () => ({ x: 0, y: 0 }),
   properties: () => ({}),
   forbiddenKeys: () => [],
+  summaryRows: () => [],
 });
 
 const emit = defineEmits(['update:visible', 'save']);
@@ -146,6 +164,41 @@ const handleClose = () => {
 
 .editor-body {
   padding: 10px;
+
+  .summary-panel {
+    margin-bottom: 10px;
+    padding: 10px;
+    background: #f8fbff;
+    border: 1px solid #dbeafe;
+    border-radius: 4px;
+  }
+
+  .summary-panel__title {
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d4ed8;
+  }
+
+  .summary-panel__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #374151;
+  }
+
+  .summary-panel__label {
+    flex: 0 0 auto;
+    color: #6b7280;
+  }
+
+  .summary-panel__value {
+    flex: 1 1 auto;
+    text-align: right;
+    word-break: break-all;
+  }
 
   .add-row {
     display: flex;

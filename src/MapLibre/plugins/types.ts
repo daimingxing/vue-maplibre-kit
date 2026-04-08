@@ -7,6 +7,8 @@ import type {
   MapFeatureSnapResult,
   MapLayerInteractiveContext,
   MapLayerInteractiveOptions,
+  MapSelectionState,
+  ResolvedMapSelectionToolOptions,
   TerradrawControlType,
   TerradrawSnapSharedOptions,
 } from '../shared/mapLibre-contols-types';
@@ -56,6 +58,40 @@ export interface MapSnapService {
   clearPreview?: () => void;
 }
 
+/** 交互核心挂接给选择服务的控制器接口。 */
+export interface MapSelectionBindingController {
+  /** 激活多选模式。 */
+  activate: () => void;
+  /** 退出多选模式。 */
+  deactivate: () => void;
+  /** 清空当前选中集。 */
+  clear: () => void;
+  /** 读取当前多选模式是否已激活。 */
+  isActive: () => boolean;
+}
+
+/** 地图选择服务统一接口。 */
+export interface MapSelectionService {
+  /** 当前选择服务状态。 */
+  state: Ref<MapSelectionState>;
+  /** 读取当前生效的多选工具配置。 */
+  getOptions: () => ResolvedMapSelectionToolOptions;
+  /** 挂接交互核心控制器。 */
+  attachBinding: (binding: MapSelectionBindingController) => () => void;
+  /** 同步交互核心最新状态。 */
+  syncState: (statePatch: Partial<MapSelectionState>) => void;
+  /** 激活多选模式。 */
+  activate: () => void;
+  /** 退出多选模式。 */
+  deactivate: () => void;
+  /** 切换多选模式。 */
+  toggle: () => void;
+  /** 清空当前选中集。 */
+  clear: () => void;
+  /** 读取当前多选模式是否已激活。 */
+  isActive: () => boolean;
+}
+
 /** 单个插件渲染项。 */
 export interface MapPluginRenderItem {
   /** 当前渲染项唯一标识。 */
@@ -70,6 +106,8 @@ export interface MapPluginRenderItem {
 export interface MapPluginServices {
   /** 普通图层 / TerraDraw / Measure 共用的吸附服务。 */
   mapSnap?: MapSnapService;
+  /** 普通图层选择服务。 */
+  mapSelection?: MapSelectionService;
 }
 
 /** 宿主消费用的已擦除插件描述对象。 */

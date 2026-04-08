@@ -25,6 +25,10 @@
     "./plugins/line-draft-preview": {
       "types": "./dist/plugins/line-draft-preview.d.ts",
       "import": "./dist/plugins/line-draft-preview.js"
+    },
+    "./plugins/map-feature-multi-select": {
+      "types": "./dist/plugins/map-feature-multi-select.d.ts",
+      "import": "./dist/plugins/map-feature-multi-select.js"
     }
   },
   "scripts": {
