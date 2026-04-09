@@ -1,4 +1,5 @@
 <template>
+  <div class="page">
     <!-- 需要一个地图容器，设置地图容器宽高 -->
     <div class="maplibre-area">
       <map-libre-init
@@ -12,27 +13,37 @@
         <!-- 自定义控件插槽 -->
         <template #MglCustomControl>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="getDrawnData"
+            <ElButton
+              style="background: white; width: 120px"
+              @click="getDrawnData"
               >获取绘制数据</ElButton
             >
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="getMeasureData"
+            <ElButton
+              style="background: white; width: 120px"
+              @click="getMeasureData"
               >获取测量数据</ElButton
             >
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="changeStyle"
+            <ElButton
+              style="background: white; width: 120px"
+              @click="changeStyle"
               >改变图层样式</ElButton
             >
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="changeFeatureStyle"
+            <ElButton
+              style="background: white; width: 120px"
+              @click="changeFeatureStyle"
               >改变特定要素样式</ElButton
             >
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="toggleFlash"
+            <ElButton
+              style="background: white; width: 120px"
+              @click="toggleFlash"
               >切换要素闪烁</ElButton
             >
           </mgl-custom-control>
@@ -41,14 +52,22 @@
           <!-- 这里给 source 加上 promoteId="id"，这非常重要！
                它的作用是把 properties 里的 'id' 字段提升为 Feature 顶层的原生 id，
                因为 Feature State 必须依赖顶层原生 id 才能工作。 -->
-          <mgl-geo-json-source :sourceId="PRIMARY_SOURCE_ID" :data="test_geojson" promoteId="id">
+          <mgl-geo-json-source
+            :sourceId="PRIMARY_SOURCE_ID"
+            :data="test_geojson"
+            promoteId="id"
+          >
             <!-- 1. 渲染点数据 (Point / MultiPoint) -->
             <!-- 过滤条件：几何类型必须是 Point，且属性(properties)中的 mark 字段必须等于 'hole' -->
             <mgl-circle-layer
               layer-id="circleLayer"
               :layout="circleLayout"
               :paint="circlePaint"
-              :filter="['all', ['==', '$type', 'Point'], ['==', 'mark', 'hole']]"
+              :filter="[
+                'all',
+                ['==', '$type', 'Point'],
+                ['==', 'mark', 'hole'],
+              ]"
             />
             <!-- 2. 渲染点数据 根据属性匹配 (多条件过滤示例) -->
             <!-- 过滤条件：几何类型必须是 Point，且属性(properties)中的 mark 字段必须等于 'dec' -->
@@ -114,11 +133,22 @@
           <p>直接使用 `useMapSelection(mapInitRef)` 驱动 UI。</p>
         </div>
         <div class="demo-panel-actions">
-          <el-button type="primary" plain :disabled="isSelectionActive" @click="activateSelection">
+          <el-button
+            type="primary"
+            plain
+            :disabled="isSelectionActive"
+            @click="activateSelection"
+          >
             进入多选
           </el-button>
-          <el-button plain :disabled="!hasSelection" @click="clearSelection">清空选中</el-button>
-          <el-button plain :disabled="!isSelectionActive" @click="deactivateSelection">
+          <el-button plain :disabled="!hasSelection" @click="clearSelection"
+            >清空选中</el-button
+          >
+          <el-button
+            plain
+            :disabled="!isSelectionActive"
+            @click="deactivateSelection"
+          >
             退出多选
           </el-button>
         </div>
@@ -152,7 +182,9 @@
           <h3>选中集变化日志</h3>
           <p>这里只演示 `onSelectionChange` 的快捷提取方法。</p>
         </div>
-        <p class="demo-panel-summary">{{ selectionPanelState.lastChangeSummary }}</p>
+        <p class="demo-panel-summary">
+          {{ selectionPanelState.lastChangeSummary }}
+        </p>
       </section>
 
       <section class="demo-panel-card">
@@ -160,7 +192,9 @@
           <h3>多选右键摘要</h3>
           <p>右键时直接复用 helper，快速生成业务摘要。</p>
         </div>
-        <p class="demo-panel-summary">{{ selectionPanelState.contextMenuSummary }}</p>
+        <p class="demo-panel-summary">
+          {{ selectionPanelState.contextMenuSummary }}
+        </p>
       </section>
 
       <section class="demo-panel-card">
@@ -179,7 +213,9 @@
         <div class="demo-panel-kv-list">
           <div class="demo-panel-kv">
             <span>当前状态</span>
-            <strong>{{ hasLineDraftFeatures ? '已有草稿' : '暂无草稿' }}</strong>
+            <strong>{{
+              hasLineDraftFeatures ? "已有草稿" : "暂无草稿"
+            }}</strong>
           </div>
         </div>
         <p class="demo-panel-summary">{{ lineDraftStatusText }}</p>
@@ -208,7 +244,10 @@
         style="min-width: 320px"
       >
         <h3 style="margin: 0 0 10px 0; color: #409eff">
-          <el-icon><InfoFilled /></el-icon> 线操作
+          <el-icon>
+            <InfoFilled />
+          </el-icon>
+          线操作
         </h3>
         <el-descriptions :column="1" border size="small">
           <el-descriptions-item label="编号">
@@ -221,7 +260,7 @@
             {{
               popupState.selectedSegmentIndex >= 0
                 ? `第 ${popupState.selectedSegmentIndex + 1} 段`
-                : '未识别'
+                : "未识别"
             }}
           </el-descriptions-item>
           <el-descriptions-item label="当前段长">
@@ -230,7 +269,9 @@
         </el-descriptions>
 
         <div style="margin-top: 12px">
-          <div style="margin-bottom: 6px; font-size: 13px; color: #606266">区域宽度（米）</div>
+          <div style="margin-bottom: 6px; font-size: 13px; color: #606266">
+            区域宽度（米）
+          </div>
           <el-input-number
             v-model="lineActionForm.widthMeters"
             :min="0.1"
@@ -241,7 +282,9 @@
         </div>
 
         <div style="margin-top: 12px">
-          <div style="margin-bottom: 6px; font-size: 13px; color: #606266">延长长度（米）</div>
+          <div style="margin-bottom: 6px; font-size: 13px; color: #606266">
+            延长长度（米）
+          </div>
           <el-input-number
             v-model="lineActionForm.extendLengthMeters"
             :min="0.1"
@@ -260,7 +303,12 @@
           >
             生成线廊
           </el-button>
-          <el-button type="success" size="small" style="flex: 1" @click="handleCreateLineDraft">
+          <el-button
+            type="success"
+            size="small"
+            style="flex: 1"
+            @click="handleCreateLineDraft"
+          >
             创建线草稿
           </el-button>
         </div>
@@ -283,19 +331,32 @@
         style="min-width: 200px"
       >
         <h3 style="margin: 0 0 10px 0; color: #67c23a">
-          <el-icon><Location /></el-icon> 站点信息
+          <el-icon>
+            <Location />
+          </el-icon>
+          站点信息
         </h3>
-        <p><strong>名称：</strong> {{ popupState.featureProps.name || '未命名站点' }}</p>
+        <p>
+          <strong>名称：</strong>
+          {{ popupState.featureProps.name || "未命名站点" }}
+        </p>
         <p>
           <strong>状态：</strong>
           <el-tag
-            :type="popupState.featureProps.status === 'normal' ? 'success' : 'danger'"
+            :type="
+              popupState.featureProps.status === 'normal' ? 'success' : 'danger'
+            "
             size="small"
           >
-            {{ popupState.featureProps.status === 'normal' ? '正常' : '异常' }}
+            {{ popupState.featureProps.status === "normal" ? "正常" : "异常" }}
           </el-tag>
         </p>
-        <el-button type="success" size="small" style="width: 100%" @click="handlePopupAction">
+        <el-button
+          type="success"
+          size="small"
+          style="width: 100%"
+          @click="handlePopupAction"
+        >
           进入站点视图
         </el-button>
       </div>
@@ -305,23 +366,28 @@
         style="min-width: 260px"
       >
         <h3 style="margin: 0 0 10px 0; color: #e6a23c">
-          <el-icon><InfoFilled /></el-icon> TerraDraw 要素
+          <el-icon>
+            <InfoFilled />
+          </el-icon>
+          TerraDraw 要素
         </h3>
         <el-descriptions :column="1" border size="small">
           <el-descriptions-item label="要素 ID">
             <el-tag size="small">
-              {{ popupState.featureId || popupState.featureProps.id || '无' }}
+              {{ popupState.featureId || popupState.featureProps.id || "无" }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="几何类型">
-            {{ popupState.geometryType || '未知' }}
+            {{ popupState.geometryType || "未知" }}
           </el-descriptions-item>
           <el-descriptions-item label="绘制模式">
-            {{ popupState.featureProps.mode || '未知' }}
+            {{ popupState.featureProps.mode || "未知" }}
           </el-descriptions-item>
         </el-descriptions>
         <div style="margin-top: 10px">
-          <div style="margin-bottom: 4px; font-weight: bold; color: #606266">属性快照</div>
+          <div style="margin-bottom: 4px; font-weight: bold; color: #606266">
+            属性快照
+          </div>
           <pre class="terradraw-popup-json">{{
             JSON.stringify(popupState.featureProps, null, 2)
           }}</pre>
@@ -334,9 +400,14 @@
       :position="contextMenuState.position"
       :properties="contextMenuState.properties"
       :summaryRows="contextMenuState.summaryRows"
-      :forbiddenKeys="contextMenuState.targetType === 'map' ? [] : terraDrawReservedPropertyKeys"
+      :forbiddenKeys="
+        contextMenuState.targetType === 'map'
+          ? []
+          : terraDrawReservedPropertyKeys
+      "
       @save="handleSaveProperty"
     />
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -369,9 +440,9 @@ import {
   type TerradrawControlType,
   type TerradrawInteractiveContext,
   type TerradrawLineDecorationStyle,
-} from 'vue-maplibre-kit';
-import FeaturePropertyEditor from './components/FeaturePropertyEditor.vue';
-import type { LngLatLike, MapOptions } from 'maplibre-gl';
+} from "vue-maplibre-kit";
+import FeaturePropertyEditor from "./components/FeaturePropertyEditor.vue";
+import type { LngLatLike, MapOptions } from "maplibre-gl";
 import {
   useMap,
   MglGeoJsonSource,
@@ -380,12 +451,12 @@ import {
   MglCircleLayer,
   MglSymbolLayer,
   MglCustomControl,
-} from 'vue-maplibre-gl';
-import { computed, ref, reactive, type Ref } from 'vue';
-import mapGeojson from './mock/map.geojson';
-import mapGeojson2 from './mock/map2.geojson';
-import { ElButton, ElInputNumber, ElMessage } from 'element-plus';
-import { InfoFilled, Location } from '@element-plus/icons-vue';
+} from "vue-maplibre-gl";
+import { computed, ref, reactive, type Ref } from "vue";
+import mapGeojson from "./mock/map.geojson";
+import mapGeojson2 from "./mock/map2.geojson";
+import { ElButton, ElInputNumber, ElMessage } from "element-plus";
+import { InfoFilled, Location } from "@element-plus/icons-vue";
 import {
   MapLineMeasureTool,
   MapLineCorridorTool,
@@ -395,37 +466,35 @@ import {
   type MapCommonFeature,
   type MapCommonLineFeature,
   type MapSourceFeatureRef,
-} from 'vue-maplibre-kit/geometry';
+} from "vue-maplibre-kit/geometry";
 import {
   createLineDraftPreviewPlugin,
   LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
   type LineDraftPreviewPluginApi,
   type LineDraftPreviewStateChangePayload,
-} from 'vue-maplibre-kit/plugins/line-draft-preview';
-import {
-  createMapFeatureMultiSelectPlugin,
-} from 'vue-maplibre-kit/plugins/map-feature-multi-select';
-import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature-snap';
+} from "vue-maplibre-kit/plugins/line-draft-preview";
+import { createMapFeatureMultiSelectPlugin } from "vue-maplibre-kit/plugins/map-feature-multi-select";
+import { createMapFeatureSnapPlugin } from "vue-maplibre-kit/plugins/map-feature-snap";
 
 /** 主业务 GeoJSON source ID */
-const PRIMARY_SOURCE_ID = 'test_geojson_source';
+const PRIMARY_SOURCE_ID = "test_geojson_source";
 
 /** 第二业务 GeoJSON source ID */
-const SECONDARY_SOURCE_ID = 'test_geojson_source_secondary';
+const SECONDARY_SOURCE_ID = "test_geojson_source_secondary";
 
 /** 主业务线图层 ID */
-const PRIMARY_LINE_LAYER_ID = 'lineLayer';
+const PRIMARY_LINE_LAYER_ID = "lineLayer";
 
 /** 第二业务线图层 ID */
-const SECONDARY_LINE_LAYER_ID = 'lineLayerSecondary';
+const SECONDARY_LINE_LAYER_ID = "lineLayerSecondary";
 
 /** 第二业务面图层 ID */
-const SECONDARY_FILL_LAYER_ID = 'fillLayerSecondary';
+const SECONDARY_FILL_LAYER_ID = "fillLayerSecondary";
 
-import sendIcon from './assets/send.svg';
+import sendIcon from "./assets/send.svg";
 // import segment_stretch_test from './assets/segment-stretch.svg';
-import texturelabsWater from './assets/Texturelabs_Water.jpg';
+import texturelabsWater from "./assets/Texturelabs_Water.jpg";
 
 /**
  * 这里需要搞清楚两个概念：
@@ -451,16 +520,21 @@ import texturelabsWater from './assets/Texturelabs_Water.jpg';
 
 // 正式业务数据源。
 // 业务页面通常直接 import 各自的 GeoJSON / 接口返回数据，这里不再在页面内临时构造第二数据源。
-const test_geojson = ref<MapCommonFeatureCollection>(mapGeojson as MapCommonFeatureCollection);
+const test_geojson = ref<MapCommonFeatureCollection>(
+  mapGeojson as MapCommonFeatureCollection,
+);
 const test_geojson_secondary = ref<MapCommonFeatureCollection>(
-  mapGeojson2 as MapCommonFeatureCollection
+  mapGeojson2 as MapCommonFeatureCollection,
 );
 
 /**
  * 把页面里用到的 GeoJSON 数据源统一登记在这里。
  * 作用：当需要修改地图上的要素时（比如生成了新的区域面），通过这个表就能知道该更新哪个变量。
  */
-const mapSourceGeoJsonRefMap: Record<string, Ref<MapCommonFeatureCollection>> = {
+const mapSourceGeoJsonRefMap: Record<
+  string,
+  Ref<MapCommonFeatureCollection>
+> = {
   [PRIMARY_SOURCE_ID]: test_geojson,
   [SECONDARY_SOURCE_ID]: test_geojson_secondary,
 };
@@ -500,20 +574,25 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
       paint: {
         // 线草稿颜色。
         // hover 时显示为更醒目的红色，默认态显示为橙红色。
-        'line-color': [
-          'case',
-          ['boolean', ['feature-state', 'hover'], false],
-          '#ff4d4f',
-          '#fa8c16',
+        "line-color": [
+          "case",
+          ["boolean", ["feature-state", "hover"], false],
+          "#ff4d4f",
+          "#fa8c16",
         ],
 
         // 线草稿宽度。
         // 这里略微调大，用于演示业务层如何只覆写单条样式。
-        'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 6, 5],
+        "line-width": [
+          "case",
+          ["boolean", ["feature-state", "hover"], false],
+          6,
+          5,
+        ],
 
         // 线草稿虚线样式。
         // [实线段长度, 空白段长度]，用于强调“草稿态”而非正式业务线。
-        'line-dasharray': [2, 1.2],
+        "line-dasharray": [2, 1.2],
       },
     },
 
@@ -528,14 +607,14 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
       // 面图层 paint 局部覆写。
       paint: {
         // 线廊草稿填充颜色。
-        'fill-color': '#fa8c16',
+        "fill-color": "#fa8c16",
 
         // 线廊草稿透明度。
         // 透明度略低，避免遮挡底图与正式业务图层。
-        'fill-opacity': 0.18,
+        "fill-opacity": 0.18,
 
         // 线廊草稿轮廓颜色。
-        'fill-outline-color': '#ff7a00',
+        "fill-outline-color": "#ff7a00",
       },
     },
   },
@@ -553,24 +632,24 @@ const mapFeatureMultiSelectPlugin = createMapFeatureMultiSelectPlugin({
   // 是否启用多选插件，默认为 true
   enabled: true,
   // 插件控件在地图上的显示位置，可选值如 'top-left', 'top-right', 'bottom-left', 'bottom-right'
-  position: 'top-right',
+  position: "top-right",
   // 退出多选模式时的行为策略：'clear'（清空选中集） 或 'retain'（保留选中集）
-  deactivateBehavior: 'retain',
+  deactivateBehavior: "retain",
   // 是否允许通过按下 Esc 快捷键退出多选模式，默认为 true
   closeOnEscape: true,
   // 不允许参与多选的图层 ID 集合，这里的 'circleLayerDec' 图层中的要素将无法被多选
-  excludeLayerIds: ['circleLayerDec'],
+  excludeLayerIds: ["circleLayerDec"],
   // 也可以通过 targetLayerIds: ['layer1', 'layer2'] 显式指定允许参与多选的图层 ID 集合
-  
+
   // 自定义候选过滤函数，返回 true 表示允许选中，返回 false 表示禁止选中
   canSelect: ({ layerId, properties }) => {
     // 如果不是 'circleLayer' 图层，则允许选中
-    if (layerId !== 'circleLayer') {
+    if (layerId !== "circleLayer") {
       return true;
     }
 
     // 对于 'circleLayer' 图层，拦截 id 为 'point_4' 的要素，使其无法被选中
-    return properties?.id !== 'point_4';
+    return properties?.id !== "point_4";
   },
 });
 
@@ -595,9 +674,9 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
   // 这里演示如何只关心效果层面的少数视觉参数。
   preview: {
     enabled: true,
-    pointColor: '#f56c6c',
+    pointColor: "#f56c6c",
     pointRadius: 6,
-    lineColor: '#f56c6c',
+    lineColor: "#f56c6c",
     lineWidth: 4,
   },
 
@@ -607,10 +686,10 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
     rules: [
       {
         // 主正式线图层：既允许吸附到顶点，也允许吸附到线段。
-        id: 'primary-line-snap',
+        id: "primary-line-snap",
         layerIds: [PRIMARY_LINE_LAYER_ID],
         priority: 30,
-        snapTo: ['vertex', 'segment'],
+        snapTo: ["vertex", "segment"],
         // filter示例，高级定制规则，返回fasle表示当前吸附规则失效
         // filter: (context) => {
         //   console.log('context', context);
@@ -622,29 +701,29 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
       },
       {
         // 第二正式线图层：继续参与吸附，但优先级略低于主线图层。
-        id: 'secondary-line-snap',
+        id: "secondary-line-snap",
         layerIds: [SECONDARY_LINE_LAYER_ID],
         priority: 20,
-        snapTo: ['vertex', 'segment'],
+        snapTo: ["vertex", "segment"],
       },
       {
         // 点图层示例：点要素只参与顶点吸附。
-        id: 'point-hole-snap',
-        layerIds: ['circleLayer', 'circleLayerDec'],
+        id: "point-hole-snap",
+        layerIds: ["circleLayer", "circleLayerDec"],
         priority: 10,
-        snapTo: ['vertex'],
+        snapTo: ["vertex"],
       },
       {
         // 特定条件要素示例：只允许吸附 mark === 'hole' 的点。
         // 用于演示“不是按点/线/面粗分，而是按具体业务条件筛选”的能力。
-        id: 'point-hole-filtered-snap',
-        layerIds: ['circleLayer', 'circleLayerDec'],
+        id: "point-hole-filtered-snap",
+        layerIds: ["circleLayer", "circleLayerDec"],
         priority: 40,
         tolerancePx: 20,
-        geometryTypes: ['Point'],
-        snapTo: ['vertex'],
+        geometryTypes: ["Point"],
+        snapTo: ["vertex"],
         where: {
-          mark: 'hole',
+          mark: "hole",
         },
       },
     ],
@@ -666,7 +745,11 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
  * 当前页面注册到地图容器中的插件集合。
  * 业务层通过显式 import + 注册插件的方式启用能力，而不是继续给 map-libre-init 传专属 prop。
  */
-const mapPlugins = [mapFeatureSnapPlugin, lineDraftPreviewPlugin, mapFeatureMultiSelectPlugin];
+const mapPlugins = [
+  mapFeatureSnapPlugin,
+  lineDraftPreviewPlugin,
+  mapFeatureMultiSelectPlugin,
+];
 
 /**
  * 当前页面是否存在线草稿要素。
@@ -680,7 +763,7 @@ const hasLineDraftFeatures = ref(false);
  * @returns 对应的 GeoJSON 响应式引用；找不到时返回 null
  */
 const getGeoJsonRefBySourceId = (
-  sourceId: string | null | undefined
+  sourceId: string | null | undefined,
 ): Ref<MapCommonFeatureCollection> | null => {
   if (!sourceId) {
     return null;
@@ -695,7 +778,9 @@ const getGeoJsonRefBySourceId = (
  */
 const getLineDraftPreviewApi = (): LineDraftPreviewPluginApi | null => {
   return (
-    mapInitRef.value?.plugins?.getApi<LineDraftPreviewPluginApi>(lineDraftPreviewPlugin.id) || null
+    mapInitRef.value?.plugins?.getApi<LineDraftPreviewPluginApi>(
+      lineDraftPreviewPlugin.id,
+    ) || null
   );
 };
 
@@ -705,7 +790,7 @@ const getLineDraftPreviewApi = (): LineDraftPreviewPluginApi | null => {
  * @returns 业务 ID；不存在时返回 null
  */
 const getFeatureBusinessId = (
-  feature: MapCommonFeature | null | undefined
+  feature: MapCommonFeature | null | undefined,
 ): string | number | null => {
   if (!feature) {
     return null;
@@ -725,9 +810,9 @@ const getFeatureBusinessId = (
  * @returns 是否为 LineString 要素
  */
 const isDemoLineFeature = (
-  feature: MapCommonFeature | null | undefined
+  feature: MapCommonFeature | null | undefined,
 ): feature is MapCommonLineFeature => {
-  return feature?.geometry?.type === 'LineString';
+  return feature?.geometry?.type === "LineString";
 };
 
 /**
@@ -742,17 +827,17 @@ const featureQuery = {
    */
   getFeatureRef: (
     contextOrRefLike:
-      | Pick<MapLayerInteractiveContext, 'sourceId' | 'featureId'>
+      | Pick<MapLayerInteractiveContext, "sourceId" | "featureId">
       | {
           sourceId?: string | null;
           featureId?: string | number | null;
         }
       | null
-      | undefined
+      | undefined,
   ): MapSourceFeatureRef | null => {
     return createMapSourceFeatureRef(
       contextOrRefLike?.sourceId || null,
-      contextOrRefLike?.featureId ?? null
+      contextOrRefLike?.featureId ?? null,
     );
   },
 
@@ -761,17 +846,23 @@ const featureQuery = {
    * @param featureRef 目标来源引用
    * @returns 最新要素快照；找不到时返回 null
    */
-  resolveFeature: (featureRef: MapSourceFeatureRef | null): MapCommonFeature | null => {
+  resolveFeature: (
+    featureRef: MapSourceFeatureRef | null,
+  ): MapCommonFeature | null => {
     if (!featureRef?.sourceId || featureRef.featureId === null) {
       return null;
     }
 
     if (featureRef.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID) {
-      return getLineDraftPreviewApi()?.getFeatureById?.(featureRef.featureId) || null;
+      return (
+        getLineDraftPreviewApi()?.getFeatureById?.(featureRef.featureId) || null
+      );
     }
 
-    const featureCollection = getGeoJsonRefBySourceId(featureRef.sourceId)?.value || null;
-    const currentFeatures = (featureCollection?.features || []) as MapCommonFeature[];
+    const featureCollection =
+      getGeoJsonRefBySourceId(featureRef.sourceId)?.value || null;
+    const currentFeatures = (featureCollection?.features ||
+      []) as MapCommonFeature[];
     return (
       currentFeatures.find((feature) => {
         return getFeatureBusinessId(feature) === featureRef.featureId;
@@ -784,8 +875,11 @@ const featureQuery = {
    * @returns 当前选中要素；未选中时返回 null
    */
   resolveSelectedFeature: (): MapCommonFeature | null => {
-    const selectedFeatureContext = mapInitRef.value?.getSelectedMapFeatureContext?.() || null;
-    const selectedFeatureRef = featureQuery.getFeatureRef(selectedFeatureContext);
+    const selectedFeatureContext =
+      mapInitRef.value?.getSelectedMapFeatureContext?.() || null;
+    const selectedFeatureRef = featureQuery.getFeatureRef(
+      selectedFeatureContext,
+    );
     return (
       featureQuery.resolveFeature(selectedFeatureRef) ||
       mapInitRef.value?.getSelectedMapFeatureSnapshot?.() ||
@@ -807,13 +901,17 @@ const featureQuery = {
    * @param sourceId 目标 source ID
    * @param nextFeatures 更新后的完整要素列表
    */
-  commitMapFeatures: (sourceId: string, nextFeatures: MapCommonFeature[]): void => {
+  commitMapFeatures: (
+    sourceId: string,
+    nextFeatures: MapCommonFeature[],
+  ): void => {
     const geoJsonRef = getGeoJsonRefBySourceId(sourceId);
     if (!geoJsonRef) {
       return;
     }
 
-    const currentFeatureCollection = geoJsonRef.value as MapCommonFeatureCollection;
+    const currentFeatureCollection =
+      geoJsonRef.value as MapCommonFeatureCollection;
     geoJsonRef.value = {
       ...currentFeatureCollection,
       features: nextFeatures,
@@ -832,8 +930,8 @@ interface SelectionSummaryRow {
  * 这里不再保存底层模式与数量，只保留示例面板里真正需要展示的摘要文本。
  */
 const selectionPanelState = reactive({
-  lastChangeSummary: '当前还没有发生选中集变化',
-  contextMenuSummary: '当前未展示选中集摘要',
+  lastChangeSummary: "当前还没有发生选中集变化",
+  contextMenuSummary: "当前未展示选中集摘要",
 });
 
 const {
@@ -855,7 +953,7 @@ const {
  * @returns 中文模式文本
  */
 const getSelectionModeText = (mode: MapSelectionMode): string => {
-  return mode === 'multiple' ? '多选' : '单选';
+  return mode === "multiple" ? "多选" : "单选";
 };
 
 /**
@@ -864,7 +962,9 @@ const getSelectionModeText = (mode: MapSelectionMode): string => {
  * @returns 单行展示文本
  */
 const formatValueList = (values: Array<string | number>): string => {
-  return values.length > 0 ? values.map((value) => String(value)).join('、') : '无';
+  return values.length > 0
+    ? values.map((value) => String(value)).join("、")
+    : "无";
 };
 
 /**
@@ -872,16 +972,18 @@ const formatValueList = (values: Array<string | number>): string => {
  * @param layerGroups 图层分组结果
  * @returns 图层分布摘要文本
  */
-const formatLayerDistribution = (layerGroups: MapSelectionLayerGroup[]): string => {
+const formatLayerDistribution = (
+  layerGroups: MapSelectionLayerGroup[],
+): string => {
   if (layerGroups.length === 0) {
-    return '无';
+    return "无";
   }
 
   return layerGroups
     .map((layerGroup) => {
-      return `${layerGroup.layerId || '未知图层'} x${layerGroup.features.length}`;
+      return `${layerGroup.layerId || "未知图层"} x${layerGroup.features.length}`;
     })
-    .join('，');
+    .join("，");
 };
 
 /**
@@ -892,24 +994,26 @@ const formatLayerDistribution = (layerGroups: MapSelectionLayerGroup[]): string 
  */
 const buildSelectionSummaryRows = (
   selectedFeatures: MapLayerSelectedFeature[],
-  currentSelectionMode: MapSelectionMode
+  currentSelectionMode: MapSelectionMode,
 ): SelectionSummaryRow[] => {
   return [
     {
-      label: '当前模式',
+      label: "当前模式",
       value: getSelectionModeText(currentSelectionMode),
     },
     {
-      label: '选中数量',
+      label: "选中数量",
       value: `${selectedFeatures.length} 个`,
     },
     {
-      label: '要素 ID',
+      label: "要素 ID",
       value: formatValueList(getSelectedFeatureIds(selectedFeatures)),
     },
     {
-      label: '图层分布',
-      value: formatLayerDistribution(groupSelectedFeaturesByLayer(selectedFeatures)),
+      label: "图层分布",
+      value: formatLayerDistribution(
+        groupSelectedFeaturesByLayer(selectedFeatures),
+      ),
     },
   ];
 };
@@ -919,12 +1023,16 @@ const buildSelectionSummaryRows = (
  * @param summaryRows 当前摘要行
  * @returns 压缩后的单行文本
  */
-const buildSelectionSummaryText = (summaryRows: SelectionSummaryRow[]): string => {
+const buildSelectionSummaryText = (
+  summaryRows: SelectionSummaryRow[],
+): string => {
   if (summaryRows.length === 0) {
-    return '当前没有可展示的选中集摘要';
+    return "当前没有可展示的选中集摘要";
   }
 
-  return summaryRows.map((summaryRow) => `${summaryRow.label}：${summaryRow.value}`).join(' | ');
+  return summaryRows
+    .map((summaryRow) => `${summaryRow.label}：${summaryRow.value}`)
+    .join(" | ");
 };
 
 /**
@@ -940,7 +1048,11 @@ const selectedLayerDistributionText = computed(() => {
  * 这里演示 useMapSelection 暴露的快捷属性提取方法。
  */
 const selectedCircleLayerIdsText = computed(() => {
-  return formatValueList(getSelectionPropertyValues<string | number>('id', { layerId: 'circleLayer' }));
+  return formatValueList(
+    getSelectionPropertyValues<string | number>("id", {
+      layerId: "circleLayer",
+    }),
+  );
 });
 
 /**
@@ -965,14 +1077,14 @@ const selectionModeText = computed(() => {
  */
 const selectionGuideText = computed(() => {
   if (!hasSelection.value) {
-    return '当前没有选中要素。点右上角的多选按钮后，就可以直接用这个面板观察数量和操作入口。';
+    return "当前没有选中要素。点右上角的多选按钮后，就可以直接用这个面板观察数量和操作入口。";
   }
 
   if (isSelectionActive.value) {
-    return '现在 UI 直接绑定选择态门面，不再手动同步数量、选中集和清空/退出按钮。';
+    return "现在 UI 直接绑定选择态门面，不再手动同步数量、选中集和清空/退出按钮。";
   }
 
-  return '当前展示的是已有选中结果；如果要批量处理，可以先进入多选模式。';
+  return "当前展示的是已有选中结果；如果要批量处理，可以先进入多选模式。";
 });
 
 /**
@@ -980,23 +1092,25 @@ const selectionGuideText = computed(() => {
  * 这里专门演示：业务层只调用 featureQuery.resolveSelectedLine() 取最新线要素。
  */
 const selectedLineOperationText = computed(() => {
-  const selectionSignature = selectedFeatureIds.value.join('|');
+  const selectionSignature = selectedFeatureIds.value.join("|");
   const selectedLineFeature = featureQuery.resolveSelectedLine();
 
   if (!selectedLineFeature) {
     return selectionSignature
-      ? '当前选中的不是线要素。请改为点选线，再去试“生成线廊”或“创建线草稿”。'
-      : '当前未选中线要素。先点一条线，再去试“生成线廊”或“创建线草稿”。';
+      ? "当前选中的不是线要素。请改为点选线，再去试“生成线廊”或“创建线草稿”。"
+      : "当前未选中线要素。先点一条线，再去试“生成线廊”或“创建线草稿”。";
   }
 
   const featureId = getFeatureBusinessId(selectedLineFeature);
   const selectedFeatureRef = featureQuery.getFeatureRef(
-    mapInitRef.value?.getSelectedMapFeatureContext?.() || null
+    mapInitRef.value?.getSelectedMapFeatureContext?.() || null,
   );
   const sourceText =
-    selectedFeatureRef?.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID ? '线草稿源' : '正式业务源';
+    selectedFeatureRef?.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID
+      ? "线草稿源"
+      : "正式业务源";
 
-  return `当前线操作会读取 ${sourceText} 的最新线要素：${String(featureId ?? '未命名线')}`;
+  return `当前线操作会读取 ${sourceText} 的最新线要素：${String(featureId ?? "未命名线")}`;
 });
 
 /**
@@ -1005,20 +1119,24 @@ const selectedLineOperationText = computed(() => {
  */
 const lineDraftStatusText = computed(() => {
   return hasLineDraftFeatures.value
-    ? '线草稿插件当前已有临时结果；如果不需要，直接点击这里的“清空线草稿”即可。'
-    : '当前没有线草稿。选中线并点击“创建线草稿”后，这里会自动刷新插件状态。';
+    ? "线草稿插件当前已有临时结果；如果不需要，直接点击这里的“清空线草稿”即可。"
+    : "当前没有线草稿。选中线并点击“创建线草稿”后，这里会自动刷新插件状态。";
 });
 
 /**
  * 根据最新的选中集变化上下文更新示例面板文案。
  * @param context 选中集变化上下文
  */
-const syncSelectionPanelFromChange = (context: MapLayerSelectionChangeContext): void => {
-  const currentSelectionMode = context.selectionMode || 'single';
+const syncSelectionPanelFromChange = (
+  context: MapLayerSelectionChangeContext,
+): void => {
+  const currentSelectionMode = context.selectionMode || "single";
   const addedIdsText = formatValueList(context.getAddedFeatureIds());
   const removedIdsText = formatValueList(context.getRemovedFeatureIds());
   const circleLayerIdsText = formatValueList(
-    context.getSelectedPropertyValues<string | number>('id', { layerId: 'circleLayer' })
+    context.getSelectedPropertyValues<string | number>("id", {
+      layerId: "circleLayer",
+    }),
   );
 
   selectionPanelState.lastChangeSummary =
@@ -1032,7 +1150,9 @@ const syncSelectionPanelFromChange = (context: MapLayerSelectionChangeContext): 
  * 当前页面只消费线草稿插件自身的状态变化。
  * @param payload 地图插件状态变更事件载荷
  */
-const handlePluginStateChange = (payload: MapPluginStateChangePayload): void => {
+const handlePluginStateChange = (
+  payload: MapPluginStateChangePayload,
+): void => {
   if (
     payload.pluginType !== LINE_DRAFT_PREVIEW_PLUGIN_TYPE ||
     payload.pluginId !== lineDraftPreviewPlugin.id
@@ -1044,8 +1164,9 @@ const handlePluginStateChange = (payload: MapPluginStateChangePayload): void => 
 
   // 同时参考 hasFeatures 与 featureCount，
   // 是为了让页面态与容器层返回的数据保持一致，避免只依赖单个字段造成误判。
-  hasLineDraftFeatures.value = previewState.hasFeatures && previewState.featureCount > 0;
-  console.log('[NGGI00 示例] 线草稿插件状态变化', previewState);
+  hasLineDraftFeatures.value =
+    previewState.hasFeatures && previewState.featureCount > 0;
+  console.log("[NGGI00 示例] 线草稿插件状态变化", previewState);
 };
 
 /**
@@ -1053,57 +1174,74 @@ const handlePluginStateChange = (payload: MapPluginStateChangePayload): void => 
  * @param lineFeature 当前线要素
  * @param segmentIndex 当前选中的线段索引
  */
-const syncLinePopupMetrics = (lineFeature: MapCommonLineFeature, segmentIndex: number): void => {
+const syncLinePopupMetrics = (
+  lineFeature: MapCommonLineFeature,
+  segmentIndex: number,
+): void => {
   const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(
-    lineFeature.geometry.coordinates
+    lineFeature.geometry.coordinates,
   );
   if (normalizedCoordinates.length < 2) {
     popupState.featureId = getFeatureBusinessId(lineFeature);
     popupState.geometryType = lineFeature.geometry.type;
-    popupState.featureProps = JSON.parse(JSON.stringify(lineFeature.properties || {}));
+    popupState.featureProps = JSON.parse(
+      JSON.stringify(lineFeature.properties || {}),
+    );
     popupState.selectedSegmentIndex = -1;
     popupState.selectedSegmentLengthMeters = 0;
     popupState.lineLengthMeters = 0;
     return;
   }
 
-  const currentSegmentIndex = Math.max(0, Math.min(segmentIndex, normalizedCoordinates.length - 2));
+  const currentSegmentIndex = Math.max(
+    0,
+    Math.min(segmentIndex, normalizedCoordinates.length - 2),
+  );
 
   popupState.featureId = getFeatureBusinessId(lineFeature);
   popupState.geometryType = lineFeature.geometry.type;
-  popupState.featureProps = JSON.parse(JSON.stringify(lineFeature.properties || {}));
-  popupState.selectedSegmentIndex = currentSegmentIndex;
-  popupState.selectedSegmentLengthMeters = MapLineMeasureTool.getDistanceInMeters(
-    normalizedCoordinates[currentSegmentIndex],
-    normalizedCoordinates[currentSegmentIndex + 1]
+  popupState.featureProps = JSON.parse(
+    JSON.stringify(lineFeature.properties || {}),
   );
-  popupState.lineLengthMeters =
-    MapLineMeasureTool.getCoordinatesLengthInMeters(normalizedCoordinates);
+  popupState.selectedSegmentIndex = currentSegmentIndex;
+  popupState.selectedSegmentLengthMeters =
+    MapLineMeasureTool.getDistanceInMeters(
+      normalizedCoordinates[currentSegmentIndex],
+      normalizedCoordinates[currentSegmentIndex + 1],
+    );
+  popupState.lineLengthMeters = MapLineMeasureTool.getCoordinatesLengthInMeters(
+    normalizedCoordinates,
+  );
 };
 
 /**
  * 在 NGGI00 示例页中演示“点击线后立即测长”的业务效果。
  * @param lineFeature 当前点击命中的线要素
  */
-const showClickedLineMeasureExample = (lineFeature: MapCommonLineFeature): void => {
-  const lineLengthMeters = MapLineMeasureTool.getFeatureLengthInMeters(lineFeature);
+const showClickedLineMeasureExample = (
+  lineFeature: MapCommonLineFeature,
+): void => {
+  const lineLengthMeters =
+    MapLineMeasureTool.getFeatureLengthInMeters(lineFeature);
   if (lineLengthMeters === null) {
     return;
   }
 
-  const featureId = getFeatureBusinessId(lineFeature) ?? '未命名线';
-  console.log('[NGGI00 示例] 点击线后测得线总长度', {
+  const featureId = getFeatureBusinessId(lineFeature) ?? "未命名线";
+  console.log("[NGGI00 示例] 点击线后测得线总长度", {
     featureId,
     lineLengthMeters,
   });
-  ElMessage.success(`示例：线 ${String(featureId)} 总长度为 ${lineLengthMeters.toFixed(2)} m`);
+  ElMessage.success(
+    `示例：线 ${String(featureId)} 总长度为 ${lineLengthMeters.toFixed(2)} m`,
+  );
 };
 
 /**
  * 地图初始化配置
  * 注意：container 属性无需手动设置，vue-maplibre-gl 会自动挂载到组件实例上
  */
-const mapOptions: Omit<MapOptions, 'container'> = {
+const mapOptions: Omit<MapOptions, "container"> = {
   // 无需 container 属性，因为 vue-maplibre-gl 组件内部会自动挂载和管理容器
 
   // === 以下为 MapOptions 核心 API 示例 (按需取消注释使用) ===
@@ -1164,7 +1302,7 @@ const mapControls: MapControlsConfig = {
   // 全屏控件：允许用户将地图放大到全屏
   MglFullscreenControl: {
     isUse: true,
-    position: 'bottom-left',
+    position: "bottom-left",
     container: null, // 指定要全屏的容器，如果为 null 则全屏整个 document.body
   },
 
@@ -1232,7 +1370,7 @@ const mapControls: MapControlsConfig = {
   // 绘图控件：提供点、线、面等绘制工具
   MaplibreTerradrawControl: {
     isUse: false,
-    position: 'top-left',
+    position: "top-left",
     // 默认是否展开工具栏
     open: false,
     // 启用绘图控件吸附。
@@ -1285,7 +1423,7 @@ const mapControls: MapControlsConfig = {
       // } as TerradrawLineDecorationStyle,
       // 如果你仍然想使用沿线重复图标的模式，可以切回下面这组配置：
       defaultStyle: {
-        mode: 'symbol-repeat',
+        mode: "symbol-repeat",
         svg: sendIcon,
         spacing: 1,
         size: 0.2,
@@ -1306,11 +1444,11 @@ const mapControls: MapControlsConfig = {
       enabled: true,
 
       // 鼠标移动到绘制要素上时光标的样式
-      cursor: 'pointer',
+      cursor: "pointer",
 
       // 交互管理器准备完成时触发，适合做初始化日志或状态检查
       onReady: () => {
-        console.log('[TerraDraw 示例] 业务交互管理器已初始化完成');
+        console.log("[TerraDraw 示例] 业务交互管理器已初始化完成");
       },
 
       // 绘图模式发生切换时触发（如从画点切换到画线），适合同步更新外部 UI 状态
@@ -1321,30 +1459,34 @@ const mapControls: MapControlsConfig = {
       // 某个要素完成绘制（或编辑结束）时触发，适合在这里执行保存到后端或计算逻辑
       onFeatureFinish: (context) => {
         console.log(
-          '[TerraDraw 示例] 要素完成绘制/编辑:',
+          "[TerraDraw 示例] 要素完成绘制/编辑:",
           context.featureId,
-          context.finishContext
+          context.finishContext,
         );
       },
 
       // 要素形状或属性发生任何变化时触发，可用于实时同步数据
       onFeatureChange: (context) => {
-        console.log('[TerraDraw 示例] 要素发生变化:', context.featureIds, context.changeType);
+        console.log(
+          "[TerraDraw 示例] 要素发生变化:",
+          context.featureIds,
+          context.changeType,
+        );
       },
 
       // 在 select 模式下，要素被选中时触发，适合联动显示右侧属性面板
       onFeatureSelect: (context) => {
-        console.log('[TerraDraw 示例] 要素被选中:', context.featureId);
+        console.log("[TerraDraw 示例] 要素被选中:", context.featureId);
       },
 
       // 要素取消选中时触发，适合清空关联的属性面板
       onFeatureDeselect: (context) => {
-        console.log('[TerraDraw 示例] 要素取消选中:', context.featureId);
+        console.log("[TerraDraw 示例] 要素取消选中:", context.featureId);
       },
 
       // 要素被删除时触发，context.deletedIds 包含所有被删要素的 ID，适合在这里向后端发送删除请求
       onFeatureDelete: (context) => {
-        console.log('[TerraDraw 示例] 要素被删除:', context.deletedIds);
+        console.log("[TerraDraw 示例] 要素被删除:", context.deletedIds);
         closeBusinessPanels();
       },
 
@@ -1365,7 +1507,7 @@ const mapControls: MapControlsConfig = {
 
       // 双击要素时触发，适合将地图视角移动并放大到该要素 (flyTo)
       onDoubleClick: (context) => {
-        console.log('[TerraDraw 示例] 双击要素:', context.featureId);
+        console.log("[TerraDraw 示例] 双击要素:", context.featureId);
       },
 
       // 右键单击要素时触发，适合打开自定义的右键菜单或属性编辑表单
@@ -1383,7 +1525,7 @@ const mapControls: MapControlsConfig = {
   // 测量控件：提供测距、测面积等功能
   MaplibreMeasureControl: {
     isUse: true,
-    position: 'top-left',
+    position: "top-left",
     // 如果不全选，就不要为false，会导致不显示
     open: false,
     // 启用测量控件吸附。
@@ -1453,7 +1595,7 @@ const mapControls: MapControlsConfig = {
     lineDecoration: {
       enabled: true,
       defaultStyle: {
-        mode: 'line-pattern',
+        mode: "line-pattern",
         svg: texturelabsWater, // 推荐使用可以无缝首尾相接的 SVG 资源
         lineWidth: 20, // 纹理线段的宽度（这决定了图片平铺时的拉伸高度）
         opacity: 0.85, // 纹理线段的透明度
@@ -1499,12 +1641,15 @@ const mapControls: MapControlsConfig = {
 
       // render 模式下鼠标命中测量要素时显示的光标。
       // 传 false 可关闭光标切换。
-      cursor: 'pointer',
+      cursor: "pointer",
 
       // 交互管理器准备完成时触发。
       // 适合在业务层做初始化日志、默认状态同步或首屏数据检查。
       onReady: (context) => {
-        console.log('[Measure 示例] 业务交互管理器已初始化:', context.controlType);
+        console.log(
+          "[Measure 示例] 业务交互管理器已初始化:",
+          context.controlType,
+        );
       },
 
       // 测量模式变化时触发。
@@ -1517,9 +1662,9 @@ const mapControls: MapControlsConfig = {
       // 最适合在这里获取最终测量结果并同步到业务表单。
       onFeatureFinish: (context) => {
         console.log(
-          '[Measure 示例] 测量完成:',
+          "[Measure 示例] 测量完成:",
           context.featureId,
-          getMeasureFeatureSummaryText(context)
+          getMeasureFeatureSummaryText(context),
         );
       },
 
@@ -1527,29 +1672,29 @@ const mapControls: MapControlsConfig = {
       // 拖拽编辑节点、移动测量要素、业务层调用 updateFeatureProperties 后都会走这里。
       onFeatureChange: (context) => {
         console.log(
-          '[Measure 示例] 测量要素发生变化:',
+          "[Measure 示例] 测量要素发生变化:",
           context.featureIds,
           context.changeType,
-          getMeasureFeatureSummaryText(context)
+          getMeasureFeatureSummaryText(context),
         );
       },
 
       // select 模式下选中某个测量要素时触发。
       // 可用于同步右侧属性面板、结果表格选中行等业务状态。
       onFeatureSelect: (context) => {
-        console.log('[Measure 示例] 选中了测量要素:', context.featureId);
+        console.log("[Measure 示例] 选中了测量要素:", context.featureId);
       },
 
       // select 模式下取消选中测量要素时触发。
       // 可用于清空详情面板或恢复默认提示。
       onFeatureDeselect: (context) => {
-        console.log('[Measure 示例] 取消选中测量要素:', context.featureId);
+        console.log("[Measure 示例] 取消选中测量要素:", context.featureId);
       },
 
       // 删除一个或多个测量要素后触发。
       // context.deletedIds 中可拿到本次删除的全部 ID。
       onFeatureDelete: (context) => {
-        console.log('[Measure 示例] 删除了测量要素:', context.deletedIds);
+        console.log("[Measure 示例] 删除了测量要素:", context.deletedIds);
         closeBusinessPanels();
       },
 
@@ -1558,7 +1703,7 @@ const mapControls: MapControlsConfig = {
       onHoverEnter: (context) => {
         console.log(
           `[Measure 示例] 鼠标移入测量要素: ${context.featureId}`,
-          getMeasureFeatureSummaryText(context)
+          getMeasureFeatureSummaryText(context),
         );
       },
 
@@ -1577,7 +1722,7 @@ const mapControls: MapControlsConfig = {
       // render 模式下双击测量要素时触发。
       // 常见用途是 flyTo、进入详情页或切换到 select 模式。
       onDoubleClick: (context) => {
-        console.log('[Measure 示例] 双击测量要素:', context.featureId);
+        console.log("[Measure 示例] 双击测量要素:", context.featureId);
       },
 
       // render 模式下右键测量要素时触发。
@@ -1613,17 +1758,17 @@ const getDrawnData = () => {
   const features = mapInitRef.value.getDrawFeatures?.();
 
   if (features === null) {
-    ElMessage.warning('绘图控件尚未初始化或未启用');
+    ElMessage.warning("绘图控件尚未初始化或未启用");
     return;
   }
 
   if (features.length === 0) {
-    ElMessage.info('当前没有绘制任何图形');
+    ElMessage.info("当前没有绘制任何图形");
     return;
   }
 
   // 将数据打印到控制台，这里的数据可以直接转成 JSON 字符串发送给后端
-  console.log('--- 绘制的 GeoJSON 数据 ---');
+  console.log("--- 绘制的 GeoJSON 数据 ---");
   console.log(JSON.stringify(features, null, 2));
   ElMessage.success(`成功获取 ${features.length} 个图形数据，请查看控制台`);
 };
@@ -1638,25 +1783,38 @@ const getMeasureData = () => {
   const features = mapInitRef.value.getMeasureFeatures?.();
 
   if (features === null) {
-    ElMessage.warning('测量控件尚未初始化或未启用');
+    ElMessage.warning("测量控件尚未初始化或未启用");
     return;
   }
 
   if (features.length === 0) {
-    ElMessage.info('当前没有测量任何图形');
+    ElMessage.info("当前没有测量任何图形");
     return;
   }
 
-  console.log('--- 测量的 GeoJSON 数据 ---');
+  console.log("--- 测量的 GeoJSON 数据 ---");
   console.log(JSON.stringify(features, null, 2));
 
   // 4. 演示如何提取其中的测量值
   features.forEach((f: any) => {
-    if (f.geometry.type === 'LineString' && f.properties?.distance !== undefined) {
-      console.log(`[线段测距] 距离: ${f.properties.distance} ${f.properties.distanceUnit}`);
-    } else if (f.geometry.type === 'Polygon' && f.properties?.area !== undefined) {
-      console.log(`[多边形测面积] 面积: ${f.properties.area} ${f.properties.unit}`);
-    } else if (f.geometry.type === 'Polygon' && f.properties?.radiusKilometers !== undefined) {
+    if (
+      f.geometry.type === "LineString" &&
+      f.properties?.distance !== undefined
+    ) {
+      console.log(
+        `[线段测距] 距离: ${f.properties.distance} ${f.properties.distanceUnit}`,
+      );
+    } else if (
+      f.geometry.type === "Polygon" &&
+      f.properties?.area !== undefined
+    ) {
+      console.log(
+        `[多边形测面积] 面积: ${f.properties.area} ${f.properties.unit}`,
+      );
+    } else if (
+      f.geometry.type === "Polygon" &&
+      f.properties?.radiusKilometers !== undefined
+    ) {
       console.log(`[圆测半径] 半径: ${f.properties.radiusKilometers} km`);
     }
   });
@@ -1690,24 +1848,24 @@ const { layout: fillLayout, paint: fillPaint } = createFillLayerStyle();
  */
 const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
   paint: {
-    'line-color': withFlashColor(
+    "line-color": withFlashColor(
       [
-        'case',
-        ['boolean', ['feature-state', 'selected'], false],
-        '#f97316',
-        ['boolean', ['feature-state', 'hover'], false],
-        '#00ff00',
-        ['==', ['get', 'id'], 'line_1'],
-        '#ff0000',
-        '#0000ff',
+        "case",
+        ["boolean", ["feature-state", "selected"], false],
+        "#f97316",
+        ["boolean", ["feature-state", "hover"], false],
+        "#00ff00",
+        ["==", ["get", "id"], "line_1"],
+        "#ff0000",
+        "#0000ff",
       ],
-      '#ffff00'
+      "#ffff00",
     ),
-    'line-width': [
-      'case',
-      ['boolean', ['feature-state', 'selected'], false],
+    "line-width": [
+      "case",
+      ["boolean", ["feature-state", "selected"], false],
       7,
-      ['boolean', ['feature-state', 'hover'], false],
+      ["boolean", ["feature-state", "hover"], false],
       6,
       3,
     ],
@@ -1731,28 +1889,38 @@ const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
  */
 const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
   paint: {
-    'circle-color': withFlashColor(
+    "circle-color": withFlashColor(
       [
-        'case',
-        ['boolean', ['feature-state', 'selected'], false],
-        '#f97316',
-        ['boolean', ['feature-state', 'hover'], false],
-        '#22c55e',
-        '#0000ff',
+        "case",
+        ["boolean", ["feature-state", "selected"], false],
+        "#f97316",
+        ["boolean", ["feature-state", "hover"], false],
+        "#22c55e",
+        "#0000ff",
       ],
-      '#ff0000'
+      "#ff0000",
     ),
-    'circle-stroke-color': withFlashColor(
+    "circle-stroke-color": withFlashColor(
       [
-        'case',
-        ['boolean', ['feature-state', 'selected'], false],
-        '#7c2d12',
-        '#ffffff',
+        "case",
+        ["boolean", ["feature-state", "selected"], false],
+        "#7c2d12",
+        "#ffffff",
       ],
-      '#ffff00'
+      "#ffff00",
     ),
-    'circle-radius': ['case', ['boolean', ['feature-state', 'selected'], false], 8, 6],
-    'circle-stroke-width': ['case', ['boolean', ['feature-state', 'selected'], false], 3, 2],
+    "circle-radius": [
+      "case",
+      ["boolean", ["feature-state", "selected"], false],
+      8,
+      6,
+    ],
+    "circle-stroke-width": [
+      "case",
+      ["boolean", ["feature-state", "selected"], false],
+      3,
+      2,
+    ],
   },
 });
 
@@ -1770,21 +1938,24 @@ const changeStyle = () => {
   // vue-maplibre-gl 的 paint 和 layout 属性不支持响应式，需通过地图原生 API 修改
 
   // 1. 修改 Circle Layer 的 Paint 属性 (改变圆点颜色为绿色)
-  map.map.setPaintProperty('circleLayer', 'circle-color', '#00ff00');
+  map.map.setPaintProperty("circleLayer", "circle-color", "#00ff00");
 
   // 2. 修改 Circle Layer 的 Paint 属性 (改变圆点半径变大)
-  map.map.setPaintProperty('circleLayer', 'circle-radius', 12);
+  map.map.setPaintProperty("circleLayer", "circle-radius", 12);
 
   // 3. 修改 Line Layer 的 Paint 属性 (改变线宽和线透明度)
-  map.map.setPaintProperty('lineLayer', 'line-width', 6);
-  map.map.setPaintProperty('lineLayer', 'line-opacity', 1);
+  map.map.setPaintProperty("lineLayer", "line-width", 6);
+  map.map.setPaintProperty("lineLayer", "line-opacity", 1);
 
   // 4. 修改 Fill Layer 的 Layout 属性 (隐藏面图层)
   // 注意：显隐控制 (visibility) 属于 layout 属性
   // 取值范围为 'visible' (可见) 或 'none' (隐藏)
-  const currentVisibility = map.map.getLayoutProperty('fillLayer', 'visibility');
-  const newVisibility = currentVisibility === 'none' ? 'visible' : 'none';
-  map.map.setLayoutProperty('fillLayer', 'visibility', newVisibility);
+  const currentVisibility = map.map.getLayoutProperty(
+    "fillLayer",
+    "visibility",
+  );
+  const newVisibility = currentVisibility === "none" ? "visible" : "none";
+  map.map.setLayoutProperty("fillLayer", "visibility", newVisibility);
 };
 
 /**
@@ -1795,11 +1966,11 @@ const changeFeatureStyle = () => {
 
   // 使用 setPaintProperty 动态更新整个 fill-color 的表达式
   // 将 id 为 fill_1 的要素颜色修改为显眼的紫色 (#ff00ff)
-  map.map.setPaintProperty('fillLayer', 'fill-color', [
-    'case',
-    ['==', ['get', 'id'], 'fill_1'],
-    '#ff00ff', // 改变特定 id 要素的颜色
-    '#888888', // 其他要素保持默认颜色
+  map.map.setPaintProperty("fillLayer", "fill-color", [
+    "case",
+    ["==", ["get", "id"], "fill_1"],
+    "#ff00ff", // 改变特定 id 要素的颜色
+    "#888888", // 其他要素保持默认颜色
   ]);
 };
 
@@ -1815,15 +1986,15 @@ const toggleFlash = () => {
   isFlashing = !isFlashing;
   // 假设需要闪烁的数据源为 test_geojson_source，要素原生 ID 为 'point_1'、'point_2' 和 'line_1'
   if (isFlashing) {
-    startFlash('test_geojson_source', 'point_1');
-    startFlash('test_geojson_source', 'point_2');
-    startFlash('test_geojson_source', 'line_1');
-    ElMessage.success('已开启 point_1, point_2 和 line_1 闪烁');
+    startFlash("test_geojson_source", "point_1");
+    startFlash("test_geojson_source", "point_2");
+    startFlash("test_geojson_source", "line_1");
+    ElMessage.success("已开启 point_1, point_2 和 line_1 闪烁");
   } else {
-    stopFlash('test_geojson_source', 'point_1');
-    stopFlash('test_geojson_source', 'point_2');
-    stopFlash('test_geojson_source', 'line_1');
-    ElMessage.warning('已停止闪烁');
+    stopFlash("test_geojson_source", "point_1");
+    stopFlash("test_geojson_source", "point_2");
+    stopFlash("test_geojson_source", "line_1");
+    ElMessage.warning("已停止闪烁");
   }
 };
 
@@ -1833,17 +2004,17 @@ const toggleFlash = () => {
 
 // 定义 Popup 类型枚举
 enum popupType {
-  point = 'point',
-  line = 'line',
-  terradraw = 'terradraw',
+  point = "point",
+  line = "line",
+  terradraw = "terradraw",
 }
 const popupState = reactive({
   visible: false,
   lngLat: [0, 0] as LngLatLike,
   featureProps: {} as any,
-  type: '' as popupType | '', // 新增字段：用于标识当前点击的是什么类型的要素
+  type: "" as popupType | "", // 新增字段：用于标识当前点击的是什么类型的要素
   featureId: null as string | number | null,
-  geometryType: '',
+  geometryType: "",
   selectedSegmentIndex: -1,
   selectedSegmentLengthMeters: 0,
   lineLengthMeters: 0,
@@ -1863,7 +2034,7 @@ const handlePopupAction = () => {
     [popupType.point]: `进入站点：${popupState.featureProps.name}`,
     [popupType.terradraw]: `查看 TerraDraw 要素：${popupState.featureId || popupState.featureProps.id}`,
   };
-  const msg = msgMap[popupState.type as popupType] || '未定义的弹窗动作';
+  const msg = msgMap[popupState.type as popupType] || "未定义的弹窗动作";
   ElMessage.success(msg);
 };
 
@@ -1872,13 +2043,13 @@ const handlePopupAction = () => {
  */
 const handleClearLineDraftFeatures = (): void => {
   if (!hasLineDraftFeatures.value) {
-    ElMessage.info('当前没有可清理的线草稿');
+    ElMessage.info("当前没有可清理的线草稿");
     return;
   }
 
   getLineDraftPreviewApi()?.clear?.();
   closeBusinessPanels();
-  ElMessage.success('已清空全部线草稿');
+  ElMessage.success("已清空全部线草稿");
 };
 
 /**
@@ -1890,15 +2061,16 @@ const handleClearLineDraftFeatures = (): void => {
  */
 const handleGenerateLineCorridor = (): void => {
   const selectedLineFeature = featureQuery.resolveSelectedLine();
-  const selectedFeatureContext = mapInitRef.value?.getSelectedMapFeatureContext?.() || null;
+  const selectedFeatureContext =
+    mapInitRef.value?.getSelectedMapFeatureContext?.() || null;
   const lineDraftPreviewApi = getLineDraftPreviewApi();
   if (!selectedLineFeature) {
-    ElMessage.warning('当前未选中可操作的线要素');
+    ElMessage.warning("当前未选中可操作的线要素");
     return;
   }
 
   if (lineActionForm.widthMeters <= 0) {
-    ElMessage.warning('请输入大于 0 的区域宽度');
+    ElMessage.warning("请输入大于 0 的区域宽度");
     return;
   }
 
@@ -1911,36 +2083,36 @@ const handleGenerateLineCorridor = (): void => {
     });
 
     if (!success) {
-      ElMessage.warning('区域生成失败，请检查线要素几何是否有效');
+      ElMessage.warning("区域生成失败，请检查线要素几何是否有效");
       return;
     }
 
     syncLinePopupMetrics(selectedLineFeature, popupState.selectedSegmentIndex);
-    ElMessage.success('已按当前宽度替换线廊草稿');
+    ElMessage.success("已按当前宽度替换线廊草稿");
     return;
   }
 
   if (!selectedFeatureContext?.sourceId) {
-    ElMessage.warning('当前正式线要素缺少来源数据源，无法生成区域');
+    ElMessage.warning("当前正式线要素缺少来源数据源，无法生成区域");
     return;
   }
 
-  const currentFeatures = (
-    getGeoJsonRefBySourceId(selectedFeatureContext.sourceId)?.value?.features || []
-  ) as MapCommonFeature[];
+  const currentFeatures = (getGeoJsonRefBySourceId(
+    selectedFeatureContext.sourceId,
+  )?.value?.features || []) as MapCommonFeature[];
   const nextFeatures = MapLineCorridorTool.replaceRegionFeatures(
     currentFeatures,
     selectedLineFeature,
-    lineActionForm.widthMeters
+    lineActionForm.widthMeters,
   );
   if (!nextFeatures) {
-    ElMessage.warning('区域生成失败，请检查线要素几何是否有效');
+    ElMessage.warning("区域生成失败，请检查线要素几何是否有效");
     return;
   }
 
   featureQuery.commitMapFeatures(selectedFeatureContext.sourceId, nextFeatures);
   syncLinePopupMetrics(selectedLineFeature, popupState.selectedSegmentIndex);
-  ElMessage.success('已按当前宽度替换生成区域');
+  ElMessage.success("已按当前宽度替换生成区域");
 };
 
 /**
@@ -1953,12 +2125,12 @@ const handleCreateLineDraft = (): void => {
   const selectedLineFeature = featureQuery.resolveSelectedLine();
   const lineDraftPreviewApi = getLineDraftPreviewApi();
   if (!selectedLineFeature) {
-    ElMessage.warning('当前未选中可操作的线要素');
+    ElMessage.warning("当前未选中可操作的线要素");
     return;
   }
 
   if (lineActionForm.extendLengthMeters <= 0) {
-    ElMessage.warning('请输入大于 0 的延长长度');
+    ElMessage.warning("请输入大于 0 的延长长度");
     return;
   }
 
@@ -1971,12 +2143,12 @@ const handleCreateLineDraft = (): void => {
   });
 
   if (!nextLineFeature) {
-    ElMessage.warning('当前线段无法继续延长');
+    ElMessage.warning("当前线段无法继续延长");
     return;
   }
 
   syncLinePopupMetrics(nextLineFeature, 0);
-  ElMessage.success('已生成线草稿，可继续编辑或清理');
+  ElMessage.success("已生成线草稿，可继续编辑或清理");
 };
 
 /**
@@ -1991,28 +2163,33 @@ const openMapFeaturePopup = (context: MapLayerInteractiveContext) => {
 
   contextMenuState.visible = false;
   contextMenuState.summaryRows = [];
-  selectionPanelState.contextMenuSummary = '当前未展示选中集摘要';
+  selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
   popupState.type =
-    context.feature.geometry?.type === 'LineString' ? popupType.line : popupType.point;
-  popupState.geometryType = context.feature.geometry?.type || '';
+    context.feature.geometry?.type === "LineString"
+      ? popupType.line
+      : popupType.point;
+  popupState.geometryType = context.feature.geometry?.type || "";
   popupState.lngLat = [context.lngLat.lng, context.lngLat.lat];
   popupState.visible = true;
 
-  if (context.feature.geometry?.type === 'LineString') {
+  if (context.feature.geometry?.type === "LineString") {
     // 注意：
     // 这里优先使用 context.lngLat，而不是直接使用原始鼠标坐标。
     // 一旦当前点击命中了吸附结果，lngLat 已经是“吸附后的有效坐标”，
     // 这样后续线段识别、弹窗摘要、线草稿生成等业务计算就都会自动跟随吸附点工作。
-    const lineInteractionSnapshot = MapLineExtensionTool.resolveLineInteractionSnapshot({
-      feature: context.feature as unknown as MapCommonFeature,
-      featureRef: featureQuery.getFeatureRef(context),
-      lngLat: context.lngLat,
-      resolveLatestFeature: featureQuery.resolveFeature,
-    });
+    const lineInteractionSnapshot =
+      MapLineExtensionTool.resolveLineInteractionSnapshot({
+        feature: context.feature as unknown as MapCommonFeature,
+        featureRef: featureQuery.getFeatureRef(context),
+        lngLat: context.lngLat,
+        resolveLatestFeature: featureQuery.resolveFeature,
+      });
 
     if (!lineInteractionSnapshot) {
       popupState.featureId = context.featureId;
-      popupState.featureProps = JSON.parse(JSON.stringify(context.feature.properties || {}));
+      popupState.featureProps = JSON.parse(
+        JSON.stringify(context.feature.properties || {}),
+      );
       popupState.selectedSegmentIndex = -1;
       popupState.selectedSegmentLengthMeters = 0;
       popupState.lineLengthMeters = 0;
@@ -2021,14 +2198,16 @@ const openMapFeaturePopup = (context: MapLayerInteractiveContext) => {
 
     syncLinePopupMetrics(
       lineInteractionSnapshot.lineFeature,
-      lineInteractionSnapshot.segmentSelection?.index ?? 0
+      lineInteractionSnapshot.segmentSelection?.index ?? 0,
     );
     showClickedLineMeasureExample(lineInteractionSnapshot.lineFeature);
     return;
   }
 
   popupState.featureId = context.featureId;
-  popupState.featureProps = JSON.parse(JSON.stringify(context.feature.properties || {}));
+  popupState.featureProps = JSON.parse(
+    JSON.stringify(context.feature.properties || {}),
+  );
   popupState.selectedSegmentIndex = -1;
   popupState.selectedSegmentLengthMeters = 0;
   popupState.lineLengthMeters = 0;
@@ -2045,23 +2224,30 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
   context.originalEvent.preventDefault();
   popupState.visible = false;
   const summaryRows =
-    context.selectionMode === 'multiple'
-      ? buildSelectionSummaryRows(context.selectedFeatures || [], context.selectionMode)
+    context.selectionMode === "multiple"
+      ? buildSelectionSummaryRows(
+          context.selectedFeatures || [],
+          context.selectionMode,
+        )
       : [];
 
   contextMenuState.position = { x: context.point.x, y: context.point.y };
-  contextMenuState.properties = JSON.parse(JSON.stringify(context.feature.properties || {}));
+  contextMenuState.properties = JSON.parse(
+    JSON.stringify(context.feature.properties || {}),
+  );
   contextMenuState.summaryRows = summaryRows;
   contextMenuState.featureId = context.featureId;
-  contextMenuState.targetType = 'map';
-  contextMenuState.sourceId = context.sourceId || '';
-  contextMenuState.layerId = context.layerId || '';
+  contextMenuState.targetType = "map";
+  contextMenuState.sourceId = context.sourceId || "";
+  contextMenuState.layerId = context.layerId || "";
   contextMenuState.isLineDraftFeature =
     getLineDraftPreviewApi()?.isFeatureById?.(context.featureId) || false;
-  contextMenuState.controlType = '';
+  contextMenuState.controlType = "";
   contextMenuState.visible = true;
   selectionPanelState.contextMenuSummary =
-    summaryRows.length > 0 ? buildSelectionSummaryText(summaryRows) : '单选右键仅展示当前要素属性';
+    summaryRows.length > 0
+      ? buildSelectionSummaryText(summaryRows)
+      : "单选右键仅展示当前要素属性";
 };
 
 /**
@@ -2069,7 +2255,10 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
  * @param label 日志标题
  * @param context 普通图层统一交互上下文
  */
-const logMapInteractiveEvent = (label: string, context: MapLayerInteractiveContext) => {
+const logMapInteractiveEvent = (
+  label: string,
+  context: MapLayerInteractiveContext,
+) => {
   console.log(`[Map 图层示例] ${label}`, {
     eventType: context.eventType, // 当前回调对应的交互事件类型
     selectionMode: context.selectionMode, // 当前交互层生效的选择模式
@@ -2128,25 +2317,28 @@ const mapInteractive: MapLayerInteractiveOptions = {
   // 普通图层交互管理器初始化完成时触发。
   // 适合做首屏联调日志、默认状态同步或图层可用性检查。
   onReady: (context: MapLayerInteractiveContext) => {
-    console.log('[Map 图层示例] 初始化完成，可直接使用普通图层交互能力', context.map);
+    console.log(
+      "[Map 图层示例] 初始化完成，可直接使用普通图层交互能力",
+      context.map,
+    );
   },
 
   // 普通图层统一 hover 入口。
   // 所有已声明图层的悬浮逻辑都可以先在这里做公共处理。
   onHoverEnter: (context: MapLayerInteractiveContext) => {
-    logMapInteractiveEvent('顶层鼠标移入要素', context);
+    logMapInteractiveEvent("顶层鼠标移入要素", context);
   },
 
   // 普通图层统一 hover leave 入口。
   // 适合统一清理 tooltip、状态栏摘要等公共 UI。
   onHoverLeave: (context: MapLayerInteractiveContext) => {
-    logMapInteractiveEvent('顶层鼠标移出要素', context);
+    logMapInteractiveEvent("顶层鼠标移出要素", context);
   },
 
   // 普通图层统一 click 入口。
   // 点击地图一定会触发；若命中已声明图层要素，则会附带 feature / layerId 等信息。
   onClick: (context: MapLayerInteractiveContext) => {
-    logMapInteractiveEvent('顶层单击地图', context);
+    logMapInteractiveEvent("顶层单击地图", context);
 
     if (!context.feature) {
       return;
@@ -2159,14 +2351,14 @@ const mapInteractive: MapLayerInteractiveOptions = {
   // 业务层可在这里统一处理多图层批量选择，而不需要分别给每个 layer 写回调。
   onSelectionChange: (context: MapLayerSelectionChangeContext) => {
     syncSelectionPanelFromChange(context);
-    console.log('[NGGI00 示例] 选中集变化示例', {
+    console.log("[NGGI00 示例] 选中集变化示例", {
       reason: context.reason,
       selectionMode: context.selectionMode,
       selectedCount: context.selectedCount,
       addedFeatureIds: context.getAddedFeatureIds(),
       removedFeatureIds: context.getRemovedFeatureIds(),
-      circleLayerIds: context.getSelectedPropertyValues<string | number>('id', {
-        layerId: 'circleLayer',
+      circleLayerIds: context.getSelectedPropertyValues<string | number>("id", {
+        layerId: "circleLayer",
       }),
       summary: selectionPanelState.lastChangeSummary,
     });
@@ -2175,17 +2367,17 @@ const mapInteractive: MapLayerInteractiveOptions = {
   // 普通图层统一 double click 入口。
   // 适合做 flyTo、进入详情页、切换侧边栏等通用行为。
   onDoubleClick: (context: MapLayerInteractiveContext) => {
-    logMapInteractiveEvent('顶层双击地图', context);
+    logMapInteractiveEvent("顶层双击地图", context);
 
-    if (context.selectionMode === 'multiple') {
-      console.log('[NGGI00 示例] 多选模式下双击事件由业务层自行分发', {
+    if (context.selectionMode === "multiple") {
+      console.log("[NGGI00 示例] 多选模式下双击事件由业务层自行分发", {
         selectedCount: context.selectedCount,
         featureId: context.featureId,
       });
       return;
     }
 
-    console.log('[NGGI00 示例] 单选模式下双击事件示例逻辑', {
+    console.log("[NGGI00 示例] 单选模式下双击事件示例逻辑", {
       featureId: context.featureId,
     });
   },
@@ -2193,14 +2385,14 @@ const mapInteractive: MapLayerInteractiveOptions = {
   // 普通图层统一右键入口。
   // 命中要素时可以直接在这里打开公共右键菜单。
   onContextMenu: (context: MapLayerInteractiveContext) => {
-    logMapInteractiveEvent('顶层右键地图', context);
+    logMapInteractiveEvent("顶层右键地图", context);
 
     if (!context.feature) {
       return;
     }
 
-    if (context.selectionMode === 'multiple') {
-      console.log('[NGGI00 示例] 多选模式右键摘要', {
+    if (context.selectionMode === "multiple") {
+      console.log("[NGGI00 示例] 多选模式右键摘要", {
         selectedCount: context.selectedCount,
         selectedFeatures: context.selectedFeatures,
       });
@@ -2212,7 +2404,7 @@ const mapInteractive: MapLayerInteractiveOptions = {
   // 单击地图空白区域时触发。
   // 常见用途：关闭 popup、右键菜单、悬浮信息卡片等业务 UI。
   onBlankClick: (context: MapLayerInteractiveContext) => {
-    console.log('[Map 图层示例] 点击了空白区域', context.point, context.lngLat);
+    console.log("[Map 图层示例] 点击了空白区域", context.point, context.lngLat);
     closeBusinessPanels();
   },
 
@@ -2225,7 +2417,7 @@ const mapInteractive: MapLayerInteractiveOptions = {
     // 实际 hover / click / contextmenu 逻辑全部交给顶层统一事件处理。
     circleLayer: {
       // 鼠标命中当前图层要素时的光标。
-      cursor: 'pointer',
+      cursor: "pointer",
 
       // 是否自动维护 feature-state.hover。
       // 设为 true 后，业务层只管写样式表达式，不需要手动 setFeatureState。
@@ -2235,7 +2427,7 @@ const mapInteractive: MapLayerInteractiveOptions = {
     // 点图层示例：圆点图层二。
     // 继续复用顶层统一事件，不再为单个 layer 重复绑定相同回调。
     circleLayerDec: {
-      cursor: 'pointer',
+      cursor: "pointer",
 
       // 当前图层如果不希望自动维护 hover 状态，也可以显式传 false。
       // 这里继续保持 true，演示最常见用法。
@@ -2246,24 +2438,30 @@ const mapInteractive: MapLayerInteractiveOptions = {
     // 这里演示“统一事件 + 局部覆盖模式”：
     // 公共 popup 与右键菜单由顶层处理，线图层仍可补充专属 click 逻辑。
     lineLayer: {
-      cursor: 'pointer',
+      cursor: "pointer",
 
       // 线图层同样可以自动维护 hover feature-state，
       // 配合 line-width / line-color 表达式即可直接实现悬浮高亮。
       enableFeatureStateHover: true,
 
       onClick: (context: MapLayerInteractiveContext) => {
-        console.log('[Map 图层示例] 正式线图层额外 onClick，可在这里补充专属业务逻辑', context);
+        console.log(
+          "[Map 图层示例] 正式线图层额外 onClick，可在这里补充专属业务逻辑",
+          context,
+        );
       },
     },
 
     // 第二正式线图层示例。
     // 这里故意复用与主线图层完全相同的交互协议，用于验证“多 source 共用一套交互协议”。
     lineLayerSecondary: {
-      cursor: 'pointer',
+      cursor: "pointer",
       enableFeatureStateHover: true,
       onClick: (context: MapLayerInteractiveContext) => {
-        console.log('[Map 图层示例] 第二正式线图层额外 onClick，可在这里补充专属业务逻辑', context);
+        console.log(
+          "[Map 图层示例] 第二正式线图层额外 onClick，可在这里补充专属业务逻辑",
+          context,
+        );
       },
     },
   },
@@ -2278,11 +2476,11 @@ const contextMenuState = reactive({
   properties: {} as Record<string, any>,
   summaryRows: [] as SelectionSummaryRow[],
   featureId: null as string | number | null,
-  targetType: '' as 'map' | 'terradraw' | '',
-  sourceId: '',
-  layerId: '',
+  targetType: "" as "map" | "terradraw" | "",
+  sourceId: "",
+  layerId: "",
   isLineDraftFeature: false,
-  controlType: '' as TerradrawControlType | '',
+  controlType: "" as TerradrawControlType | "",
 });
 
 /**
@@ -2300,11 +2498,11 @@ const resolveTerradrawControlByContext = () => {
     return null;
   }
 
-  if (contextMenuState.controlType === 'measure') {
+  if (contextMenuState.controlType === "measure") {
     return mapInitRef.value.getMeasureControl?.() || null;
   }
 
-  if (contextMenuState.controlType === 'draw') {
+  if (contextMenuState.controlType === "draw") {
     return mapInitRef.value.getDrawControl?.() || null;
   }
 
@@ -2316,9 +2514,9 @@ const resolveTerradrawControlByContext = () => {
  */
 const closeBusinessPanels = () => {
   popupState.visible = false;
-  popupState.type = '';
+  popupState.type = "";
   popupState.featureId = null;
-  popupState.geometryType = '';
+  popupState.geometryType = "";
   popupState.featureProps = {};
   popupState.selectedSegmentIndex = -1;
   popupState.selectedSegmentLengthMeters = 0;
@@ -2327,12 +2525,12 @@ const closeBusinessPanels = () => {
   contextMenuState.properties = {};
   contextMenuState.summaryRows = [];
   contextMenuState.featureId = null;
-  contextMenuState.targetType = '';
-  contextMenuState.sourceId = '';
-  contextMenuState.layerId = '';
+  contextMenuState.targetType = "";
+  contextMenuState.sourceId = "";
+  contextMenuState.layerId = "";
   contextMenuState.isLineDraftFeature = false;
-  contextMenuState.controlType = '';
-  selectionPanelState.contextMenuSummary = '当前未展示选中集摘要';
+  contextMenuState.controlType = "";
+  selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
 };
 
 /**
@@ -2344,11 +2542,11 @@ const getMeasureFeatureSummaryText = (context: TerradrawInteractiveContext) => {
   const properties = context.feature?.properties || {};
 
   if (properties.distance !== undefined) {
-    return `距离：${properties.distance} ${properties.unit || properties.distanceUnit || ''}`.trim();
+    return `距离：${properties.distance} ${properties.unit || properties.distanceUnit || ""}`.trim();
   }
 
   if (properties.area !== undefined) {
-    return `面积：${properties.area} ${properties.unit || ''}`.trim();
+    return `面积：${properties.area} ${properties.unit || ""}`.trim();
   }
 
   if (properties.radiusKilometers !== undefined) {
@@ -2356,10 +2554,10 @@ const getMeasureFeatureSummaryText = (context: TerradrawInteractiveContext) => {
   }
 
   if (properties.elevation !== undefined) {
-    return `高程：${properties.elevation} ${properties.elevationUnit || ''}`.trim();
+    return `高程：${properties.elevation} ${properties.elevationUnit || ""}`.trim();
   }
 
-  return '当前要素暂无可提取的测量摘要';
+  return "当前要素暂无可提取的测量摘要";
 };
 
 /**
@@ -2371,11 +2569,13 @@ const openTerradrawPopup = (context: TerradrawInteractiveContext) => {
 
   contextMenuState.visible = false;
   contextMenuState.summaryRows = [];
-  selectionPanelState.contextMenuSummary = '当前未展示选中集摘要';
+  selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
   popupState.type = popupType.terradraw;
   popupState.featureId = (context.feature.id as string | number | null) ?? null;
-  popupState.geometryType = context.feature.geometry?.type || '';
-  popupState.featureProps = JSON.parse(JSON.stringify(context.feature.properties || {}));
+  popupState.geometryType = context.feature.geometry?.type || "";
+  popupState.featureProps = JSON.parse(
+    JSON.stringify(context.feature.properties || {}),
+  );
   popupState.lngLat = [context.lngLat.lng, context.lngLat.lat];
   popupState.visible = true;
 };
@@ -2391,16 +2591,19 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
   popupState.visible = false;
 
   contextMenuState.position = { x: context.point.x, y: context.point.y };
-  contextMenuState.properties = JSON.parse(JSON.stringify(context.feature.properties || {}));
+  contextMenuState.properties = JSON.parse(
+    JSON.stringify(context.feature.properties || {}),
+  );
   contextMenuState.summaryRows = [];
-  contextMenuState.featureId = (context.feature.id as string | number | null) ?? null;
-  contextMenuState.targetType = 'terradraw';
-  contextMenuState.sourceId = '';
-  contextMenuState.layerId = '';
+  contextMenuState.featureId =
+    (context.feature.id as string | number | null) ?? null;
+  contextMenuState.targetType = "terradraw";
+  contextMenuState.sourceId = "";
+  contextMenuState.layerId = "";
   contextMenuState.isLineDraftFeature = false;
   contextMenuState.controlType = context.controlType;
   contextMenuState.visible = true;
-  selectionPanelState.contextMenuSummary = 'TerraDraw 右键仅展示当前要素属性';
+  selectionPanelState.contextMenuSummary = "TerraDraw 右键仅展示当前要素属性";
 };
 
 /**
@@ -2410,7 +2613,10 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
 const syncSavedPropertiesToPanels = (nextProperties: Record<string, any>) => {
   contextMenuState.properties = JSON.parse(JSON.stringify(nextProperties));
 
-  if (popupState.visible && popupState.featureId === contextMenuState.featureId) {
+  if (
+    popupState.visible &&
+    popupState.featureId === contextMenuState.featureId
+  ) {
     popupState.featureProps = JSON.parse(JSON.stringify(nextProperties));
   }
 };
@@ -2422,49 +2628,51 @@ const syncSavedPropertiesToPanels = (nextProperties: Record<string, any>) => {
  */
 const handleSaveProperty = (updatedProperties: Record<string, any>) => {
   if (contextMenuState.featureId === null) {
-    ElMessage.warning('当前没有可写回的目标要素');
+    ElMessage.warning("当前没有可写回的目标要素");
     return;
   }
 
-  if (contextMenuState.targetType === 'map') {
+  if (contextMenuState.targetType === "map") {
     if (contextMenuState.isLineDraftFeature) {
       // 对业务层来说，这里仍然是“地图要素属性写回”；
       // 只是具体落到正式业务源还是插件内部草稿源，由当前选中要素来源自动分流。
       const result = getLineDraftPreviewApi()?.saveProperties?.({
         featureId: contextMenuState.featureId,
         newProperties: updatedProperties,
-        mode: 'replace',
+        mode: "replace",
       });
 
       if (!result?.success || !result.properties) {
-        ElMessage.warning(result?.message || '线草稿要素属性写回失败');
+        ElMessage.warning(result?.message || "线草稿要素属性写回失败");
         return;
       }
 
       syncSavedPropertiesToPanels(result.properties);
-      ElMessage.success('线草稿要素属性已写回（仅前端本地）');
+      ElMessage.success("线草稿要素属性已写回（仅前端本地）");
       return;
     }
 
     if (!contextMenuState.sourceId) {
-      ElMessage.warning('当前没有可写回的地图要素');
+      ElMessage.warning("当前没有可写回的地图要素");
       return;
     }
 
     const targetGeoJsonRef = getGeoJsonRefBySourceId(contextMenuState.sourceId);
     if (!targetGeoJsonRef) {
-      ElMessage.warning(`未找到数据源 '${contextMenuState.sourceId}' 对应的本地数据引用`);
+      ElMessage.warning(
+        `未找到数据源 '${contextMenuState.sourceId}' 对应的本地数据引用`,
+      );
       return;
     }
 
     const result = saveFeatureProperties({
-      target: 'map',
+      target: "map",
       mapInstance: map,
       sourceId: contextMenuState.sourceId,
       featureId: contextMenuState.featureId,
       newProperties: updatedProperties,
       geoJsonRef: targetGeoJsonRef,
-      mode: 'replace',
+      mode: "replace",
     });
 
     if (!result.success || !result.properties) {
@@ -2473,36 +2681,36 @@ const handleSaveProperty = (updatedProperties: Record<string, any>) => {
     }
 
     syncSavedPropertiesToPanels(result.properties);
-    ElMessage.success('地图要素属性已写回（仅前端本地）');
+    ElMessage.success("地图要素属性已写回（仅前端本地）");
     return;
   }
 
-  if (contextMenuState.targetType === 'terradraw') {
+  if (contextMenuState.targetType === "terradraw") {
     if (!contextMenuState.controlType) {
-      ElMessage.warning('当前没有可写回的 TerraDraw 要素');
+      ElMessage.warning("当前没有可写回的 TerraDraw 要素");
       return;
     }
 
     const terradrawControl = resolveTerradrawControlByContext();
     if (!terradrawControl) {
-      ElMessage.warning('TerraDraw 控件尚未初始化完成');
+      ElMessage.warning("TerraDraw 控件尚未初始化完成");
       return;
     }
 
     const terradrawInstance = terradrawControl.getTerraDrawInstance?.();
     if (!terradrawInstance) {
-      ElMessage.warning('TerraDraw 实例不存在，无法写回属性');
+      ElMessage.warning("TerraDraw 实例不存在，无法写回属性");
       return;
     }
 
     const result = saveFeatureProperties({
-      target: 'terradraw',
+      target: "terradraw",
       terradraw: terradrawInstance,
       featureId: contextMenuState.featureId,
       newProperties: updatedProperties,
       currentProperties: contextMenuState.properties,
       reservedPropertyKeys: terraDrawReservedPropertyKeys,
-      mode: 'replace',
+      mode: "replace",
     });
 
     if (!result.success || !result.properties) {
@@ -2511,11 +2719,11 @@ const handleSaveProperty = (updatedProperties: Record<string, any>) => {
     }
 
     syncSavedPropertiesToPanels(result.properties);
-    ElMessage.success('TerraDraw 要素属性已写回（仅前端本地）');
+    ElMessage.success("TerraDraw 要素属性已写回（仅前端本地）");
     return;
   }
 
-  ElMessage.warning('当前没有可写回的目标要素');
+  ElMessage.warning("当前没有可写回的目标要素");
 };
 </script>
 
