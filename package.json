@@ -45,11 +45,11 @@
     "mitt": "^3.0.1"
   },
   "peerDependencies": {
-    "@watergis/maplibre-gl-terradraw": ">=1.13.0",
-    "maplibre-gl": ">=4.0.0 || >=5.0.0",
-    "terra-draw": ">=1.28.1",
-    "vue": ">=3.2.0",
-    "vue-maplibre-gl": ">=5.0.0"
+    "@watergis/maplibre-gl-terradraw": "^1.13.0",
+    "maplibre-gl": "^5.22.0",
+    "terra-draw": "^1.28.1",
+    "vue": "^3.5.32",
+    "vue-maplibre-gl": "^5.6.1"
   },
   "devDependencies": {
     "@element-plus/icons-vue": "^2.0.4",
