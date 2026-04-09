@@ -2,10 +2,20 @@ import type { GeoJSONSource } from 'maplibre-gl';
 import type { TerraDraw } from 'terra-draw';
 import type { Ref } from 'vue';
 import type { MapInstance } from 'vue-maplibre-gl';
+import {
+  cleanUndefinedProperties,
+  clonePlainData,
+  saveFeaturePropertiesInCollection,
+} from '../shared/map-feature-data';
 
-export type MapFeatureId = string | number;
-export type FeaturePropertySaveMode = 'replace' | 'merge';
-export type FeatureProperties = Record<string, any>;
+export type { MapFeatureDataId as MapFeatureId } from '../shared/map-feature-data';
+export type { MapFeatureDataProperties as FeatureProperties } from '../shared/map-feature-data';
+export type { MapFeatureDataSaveMode as FeaturePropertySaveMode } from '../shared/map-feature-data';
+import type {
+  MapFeatureDataId as MapFeatureId,
+  MapFeatureDataProperties as FeatureProperties,
+  MapFeatureDataSaveMode as FeaturePropertySaveMode,
+} from '../shared/map-feature-data';
 
 /**
  * TerraDraw 内部保留属性名集合。
@@ -112,14 +122,6 @@ export type SaveFeaturePropertiesOptions =
  */
 export type UpdateFeaturePropertyOptions = SaveMapFeaturePropertiesOptions;
 
-function clonePlainData<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
-}
-
-function cleanUndefinedProperties(properties: FeatureProperties): FeatureProperties {
-  return Object.fromEntries(Object.entries(properties).filter(([, value]) => value !== undefined));
-}
-
 function createFailureResult(
   target: 'map' | 'terradraw',
   featureId: MapFeatureId,
@@ -148,21 +150,6 @@ function createSuccessResult(
     message,
     removedReservedKeys,
   };
-}
-
-function resolveNextMapProperties(
-  currentProperties: FeatureProperties,
-  newProperties: FeatureProperties,
-  mode: FeaturePropertySaveMode
-): FeatureProperties {
-  if (mode === 'merge') {
-    return {
-      ...currentProperties,
-      ...newProperties,
-    };
-  }
-
-  return clonePlainData(newProperties);
 }
 
 /**
@@ -260,26 +247,22 @@ export function saveMapFeatureProperties(
   }
 
   try {
-    const newData = clonePlainData(geoJsonRef.value);
-    const matcher =
-      featureMatcher ||
-      ((feature: any, targetFeatureId: MapFeatureId) =>
-        feature.id === targetFeatureId || feature.properties?.id === targetFeatureId);
+    const result = saveFeaturePropertiesInCollection({
+      featureCollection: geoJsonRef.value,
+      featureId,
+      newProperties,
+      featureMatcher,
+      mode,
+    });
 
-    const featureIndex = newData.features.findIndex((feature: any) => matcher(feature, featureId));
-
-    if (featureIndex === -1) {
-      return createFailureResult('map', featureId, `未在数据源中找到 ID 为 '${featureId}' 的要素`);
+    if (!result.success || !result.data || !result.properties) {
+      return createFailureResult('map', featureId, result.message);
     }
 
-    const currentProperties = clonePlainData(newData.features[featureIndex].properties || {});
-    const nextProperties = resolveNextMapProperties(currentProperties, newProperties, mode);
+    source.setData(result.data);
+    geoJsonRef.value = result.data;
 
-    newData.features[featureIndex].properties = nextProperties;
-    source.setData(newData);
-    geoJsonRef.value = newData;
-
-    return createSuccessResult('map', featureId, nextProperties, '地图要素属性写回成功');
+    return createSuccessResult('map', featureId, result.properties, result.message);
   } catch (error) {
     console.error('[saveMapFeatureProperties] 更新属性时发生错误:', error);
     return createFailureResult('map', featureId, '地图要素属性写回异常');

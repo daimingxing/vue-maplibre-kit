@@ -72,6 +72,33 @@ export {
 } from './MapLibre/composables/mapSelection';
 export { useMapSelection, type UseMapSelectionResult } from './MapLibre/composables/useMapSelection';
 export {
+  createMapBusinessSource,
+  createMapBusinessSourceRegistry,
+  type CreateMapBusinessSourceOptions,
+  type MapBusinessSource,
+  type MapBusinessSourceOptions,
+  type MapBusinessSourceProps,
+  type MapBusinessSourceRegistry,
+} from './MapLibre/facades/createMapBusinessSource';
+export {
+  useMapFeatureQuery,
+  type UseMapFeatureQueryOptions,
+  type UseMapFeatureQueryResult,
+} from './MapLibre/facades/useMapFeatureQuery';
+export {
+  useMapFeatureActions,
+  type MapFeatureActionResult,
+  type MapFeatureActionTarget,
+  type MapFeatureLineActionResult,
+  type MapFeaturePropertyActionResult,
+  type PreviewSelectedLineOptions,
+  type ReplaceSelectedLineCorridorOptions,
+  type SaveBusinessFeaturePropertiesOptions,
+  type SaveTerradrawFeaturePropertiesActionOptions,
+  type UseMapFeatureActionsOptions,
+  type UseMapFeatureActionsResult,
+} from './MapLibre/facades/useMapFeatureActions';
+export {
   createCircleLayerStyle,
   createFillLayerStyle,
   createLineLayerStyle,
