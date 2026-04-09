@@ -6,7 +6,7 @@ import type {
   MapSelectionMode,
   MapSelectionQueryOptions,
   MapSelectionState,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 import {
   getSelectedFeatureIds as collectSelectedFeatureIds,
   getSelectedPropertyValues as collectSelectedPropertyValues,

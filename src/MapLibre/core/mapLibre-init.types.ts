@@ -6,7 +6,7 @@ import type {
 import type {
   MapLayerInteractiveContext,
   TerradrawFeature,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 import type { MapCommonFeature } from '../shared/map-common-tools';
 import type { MapPluginHostExpose, MapSelectionService } from '../plugins/types';
 

@@ -12,7 +12,7 @@ import type {
   MapSelectionFilterContext,
   MapSelectionMode,
   ResolvedMapSelectionToolOptions,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 import type { MapSnapBinding, MapSelectionService } from '../plugins/types';
 import type { MapCommonFeature } from '../shared/map-common-tools';
 import { createSelectionChangeContextMethods } from './mapSelection';

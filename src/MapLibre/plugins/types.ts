@@ -11,7 +11,7 @@ import type {
   ResolvedMapSelectionToolOptions,
   TerradrawControlType,
   TerradrawSnapSharedOptions,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 import type { MapCommonFeature } from '../shared/map-common-tools';
 
 /** 地图吸附绑定统一接口。 */

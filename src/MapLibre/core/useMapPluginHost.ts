@@ -10,7 +10,7 @@ import type {
   MapPluginServices,
   MapPluginStateChangePayload,
 } from '../plugins/types';
-import type { MapLayerInteractiveContext, MapLayerInteractiveOptions } from '../shared/mapLibre-contols-types';
+import type { MapLayerInteractiveContext, MapLayerInteractiveOptions } from '../shared/mapLibre-controls-types';
 import type { MapCommonFeature } from '../shared/map-common-tools';
 
 interface UseMapPluginHostOptions {

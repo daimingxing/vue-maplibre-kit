@@ -4,7 +4,7 @@ import { createFillLayerStyle, createLineLayerStyle } from '../../shared/map-lay
 import type {
   MapLayerInteractiveContext,
   MapLayerInteractiveOptions,
-} from '../../shared/mapLibre-contols-types';
+} from '../../shared/mapLibre-controls-types';
 import type {
   FeatureProperties,
   FeaturePropertySaveMode,

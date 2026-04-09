@@ -45,7 +45,7 @@ export type {
   TerradrawFeature,
   TerradrawFeatureId,
   TerradrawManagedControl,
-} from './MapLibre/shared/mapLibre-contols-types';
+} from './MapLibre/shared/mapLibre-controls-types';
 export {
   TERRADRAW_RESERVED_PROPERTY_KEYS,
   omitTerradrawReservedProperties,

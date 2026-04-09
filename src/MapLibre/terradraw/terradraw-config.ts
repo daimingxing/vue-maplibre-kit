@@ -1,7 +1,7 @@
 import type {
   TerradrawControlOptions,
   MeasureControlOptions,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 
 /**
  * 绘图控件基础样式配置对象 (非实例化，供合并使用)

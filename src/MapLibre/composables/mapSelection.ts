@@ -3,7 +3,7 @@ import type {
   MapLayerSelectionChangeContext,
   MapSelectionLayerGroup,
   MapSelectionQueryOptions,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 
 /**
  * 归一化选中集快捷查询配置。

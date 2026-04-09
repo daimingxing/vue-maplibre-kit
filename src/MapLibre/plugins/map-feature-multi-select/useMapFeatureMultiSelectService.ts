@@ -2,7 +2,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue
 import type {
   MapSelectionState,
   ResolvedMapSelectionToolOptions,
-} from '../../shared/mapLibre-contols-types';
+} from '../../shared/mapLibre-controls-types';
 import type { MapSelectionBindingController, MapSelectionService } from '../types';
 import type { MapFeatureMultiSelectOptions, ResolvedMapFeatureMultiSelectOptions } from './types';
 

@@ -4,7 +4,7 @@ import type {
   MapSelectionState,
   MapSelectionToolOptions,
   ResolvedMapSelectionToolOptions,
-} from '../../shared/mapLibre-contols-types';
+} from '../../shared/mapLibre-controls-types';
 
 /** 要素多选插件配置。 */
 export interface MapFeatureMultiSelectOptions extends MapSelectionToolOptions {

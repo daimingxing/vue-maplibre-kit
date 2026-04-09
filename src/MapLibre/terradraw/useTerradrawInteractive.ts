@@ -9,7 +9,7 @@ import type {
   TerradrawInteractiveContext,
   TerradrawInteractiveOptions,
   TerradrawManagedControl,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 import type { MapSnapBinding } from '../plugins/types';
 
 interface CreateTerradrawInteractiveOptions {

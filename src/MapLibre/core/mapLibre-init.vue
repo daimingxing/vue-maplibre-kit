@@ -101,7 +101,7 @@ import type {
   TerradrawSnapSharedOptions,
   TerradrawControlOptions,
   TerradrawFeature,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 import { terradrawStyleConfig, measureStyleConfig } from '../terradraw/terradraw-config';
 import {
   drawDecorationWeakLineStyleConfig,

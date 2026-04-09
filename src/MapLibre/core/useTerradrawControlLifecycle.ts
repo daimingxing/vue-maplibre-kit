@@ -8,7 +8,7 @@ import type {
   TerradrawInteractiveOptions,
   TerradrawLineDecorationOptions,
   TerradrawManagedControl,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 import {
   createTerradrawInteractive,
   type TerradrawInteractiveBinding,
