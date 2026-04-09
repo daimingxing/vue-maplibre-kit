@@ -11,25 +11,6 @@
       >
         <!-- 自定义控件插槽 -->
         <template #MglCustomControl>
-          <mgl-custom-control position="top-left" :noClasses="false">
-            <div class="selection-demo-card">
-              <div class="selection-demo-card__title">要素多选示例</div>
-              <div class="selection-demo-card__row">
-                <span>当前模式</span>
-                <strong>{{ getSelectionModeText(selectionDemoState.mode) }}</strong>
-              </div>
-              <div class="selection-demo-card__row">
-                <span>当前选中</span>
-                <strong>{{ selectionDemoState.selectedCount }} 个</strong>
-              </div>
-              <div class="selection-demo-card__summary">
-                {{ selectionDemoState.lastChangeSummary }}
-              </div>
-              <div class="selection-demo-card__hint">
-                {{ selectionDemoState.contextMenuSummary }}
-              </div>
-            </div>
-          </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
             <ElButton style="background: white; width: 120px" @click="getDrawnData"
               >获取绘制数据</ElButton
@@ -352,7 +333,7 @@ const SECONDARY_LINE_LAYER_ID = 'lineLayerSecondary';
 const SECONDARY_FILL_LAYER_ID = 'fillLayerSecondary';
 
 import sendIcon from './assets/send.svg';
-import segment_stretch_test from './assets/segment-stretch.svg';
+// import segment_stretch_test from './assets/segment-stretch.svg';
 import texturelabsWater from './assets/Texturelabs_Water.jpg';
 
 /**
@@ -486,17 +467,28 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
  * 2. 通过 `excludeLayerIds` 排除整个图层
  * 3. 通过 `canSelect` 排除同图层中的特定业务要素
  */
+// 初始化要素多选插件
 const mapFeatureMultiSelectPlugin = createMapFeatureMultiSelectPlugin({
+  // 是否启用多选插件，默认为 true
   enabled: true,
+  // 插件控件在地图上的显示位置，可选值如 'top-left', 'top-right', 'bottom-left', 'bottom-right'
   position: 'top-right',
+  // 退出多选模式时的行为策略：'clear'（清空选中集） 或 'retain'（保留选中集）
   deactivateBehavior: 'retain',
+  // 是否允许通过按下 Esc 快捷键退出多选模式，默认为 true
   closeOnEscape: true,
+  // 不允许参与多选的图层 ID 集合，这里的 'circleLayerDec' 图层中的要素将无法被多选
   excludeLayerIds: ['circleLayerDec'],
+  // 也可以通过 targetLayerIds: ['layer1', 'layer2'] 显式指定允许参与多选的图层 ID 集合
+  
+  // 自定义候选过滤函数，返回 true 表示允许选中，返回 false 表示禁止选中
   canSelect: ({ layerId, properties }) => {
+    // 如果不是 'circleLayer' 图层，则允许选中
     if (layerId !== 'circleLayer') {
       return true;
     }
 
+    // 对于 'circleLayer' 图层，拦截 id 为 'point_4' 的要素，使其无法被选中
     return properties?.id !== 'point_4';
   },
 });
@@ -2398,43 +2390,6 @@ const handleSaveProperty = (updatedProperties: Record<string, any>) => {
   // 地图容器的宽度和高度
   width: 1500px;
   height: 800px;
-}
-
-.selection-demo-card {
-  width: 240px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 8px;
-  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.14);
-}
-
-.selection-demo-card__title {
-  margin-bottom: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #1d4ed8;
-}
-
-.selection-demo-card__row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  font-size: 12px;
-  color: #334155;
-}
-
-.selection-demo-card__summary {
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #475569;
-}
-
-.selection-demo-card__hint {
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #64748b;
 }
 
 .terradraw-popup-json {
