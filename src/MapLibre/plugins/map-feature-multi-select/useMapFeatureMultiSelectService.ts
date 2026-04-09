@@ -165,7 +165,10 @@ export function useMapFeatureMultiSelectService(
   };
 
   watch(
-    resolvedOptions,
+    () => ({
+      enabled: resolvedOptions.value.enabled,
+      deactivateBehavior: resolvedOptions.value.deactivateBehavior,
+    }),
     (nextOptions) => {
       syncState({
         deactivateBehavior: nextOptions.deactivateBehavior,
@@ -175,7 +178,7 @@ export function useMapFeatureMultiSelectService(
         bindingRef.value.deactivate();
       }
     },
-    { immediate: true, deep: true }
+    { immediate: true }
   );
 
   onBeforeUnmount(() => {

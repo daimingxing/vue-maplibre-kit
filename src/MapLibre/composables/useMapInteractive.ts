@@ -31,7 +31,6 @@ export interface UseMapInteractiveOptions {
 interface HoveredLayerTarget {
   feature: MapGeoJSONFeature;
   layerId: string;
-  layerConfig: MapLayerInteractiveLayerOptions;
 }
 
 interface EventTargetResolution {
@@ -82,6 +81,14 @@ type TopLevelInteractiveCallback =
   | MapLayerInteractiveOptions['onDoubleClick']
   | MapLayerInteractiveOptions['onContextMenu']
   | MapLayerInteractiveOptions['onBlankClick'];
+
+type LayerInteractiveCallbackResolver = (
+  layerConfig: MapLayerInteractiveLayerOptions
+) => LayerInteractiveCallback | undefined;
+
+type TopLevelInteractiveCallbackResolver = (
+  interactive: MapLayerInteractiveOptions
+) => TopLevelInteractiveCallback | undefined;
 
 type PointerEventType = Extract<MapLayerInteractiveEventType, 'click' | 'dblclick' | 'contextmenu'>;
 
@@ -159,6 +166,16 @@ export function useMapInteractive(options: UseMapInteractiveOptions) {
   let binding: MapInteractiveBinding | null = null;
 
   /**
+   * 判断当前是否满足创建普通图层交互绑定的最小条件。
+   * 这里只跟踪启停条件，具体回调与图层配置在运行时按需读取最新值。
+   * @returns 当前是否应保持交互绑定激活
+   */
+  const isBindingEnabled = (): boolean => {
+    const interactive = getInteractive();
+    return Boolean(interactive && interactive.enabled !== false && hasInteractiveHandlers(interactive));
+  };
+
+  /**
    * 销毁当前已经挂载的交互绑定实例。
    */
   const destroyBinding = () => {
@@ -176,28 +193,23 @@ export function useMapInteractive(options: UseMapInteractiveOptions) {
       return;
     }
 
-    const interactive = getInteractive();
-    if (!interactive || interactive.enabled === false || !hasInteractiveHandlers(interactive)) {
+    if (!isBindingEnabled()) {
       return;
     }
 
-    binding = createMapInteractiveBinding(
-      mapInstance.map,
-      interactive,
-      getSnapBinding,
-      getSelectionService
-    );
+    binding = createMapInteractiveBinding(mapInstance.map, getInteractive, getSnapBinding, getSelectionService);
   };
 
   const stopInteractiveWatch = watch(
     () => ({
       isLoaded: mapInstance.isLoaded,
-      interactive: getInteractive(),
+      hasMap: Boolean(mapInstance.map),
+      isBindingEnabled: isBindingEnabled(),
     }),
     () => {
       syncBinding();
     },
-    { immediate: true, deep: true }
+    { immediate: true }
   );
   const stopSelectionServiceWatch = watch(
     () => getSelectionService?.() || null,
@@ -224,17 +236,15 @@ export function useMapInteractive(options: UseMapInteractiveOptions) {
 /**
  * 创建普通图层统一交互绑定实例。
  * @param map 当前 MapLibre 地图实例
- * @param interactive 普通图层交互配置
+ * @param getInteractive 读取最新普通图层交互配置的方法
  * @returns 绑定实例
  */
 function createMapInteractiveBinding(
   map: MaplibreMap,
-  interactive: MapLayerInteractiveOptions,
+  getInteractive: () => MapLayerInteractiveOptions | null | undefined,
   getSnapBinding?: (() => MapSnapBinding | null | undefined) | undefined,
   getSelectionService?: (() => MapSelectionService | null | undefined) | undefined
 ): MapInteractiveBinding {
-  const layerEntries = Object.entries(interactive.layers || {});
-  const layerConfigMap = new Map<string, MapLayerInteractiveLayerOptions>(layerEntries);
   const selectionService = getSelectionService?.() || null;
   let hoveredTarget: HoveredLayerTarget | null = null;
   let selectedTargetMap = new Map<string, HoveredLayerTarget>();
@@ -252,11 +262,49 @@ function createMapInteractiveBinding(
   let keydownListenerBound = false;
 
   /**
+   * 读取当前仍然启用的普通图层交互配置。
+   * 若业务层已关闭交互，则返回 null，供事件分发路径直接短路。
+   * @returns 当前生效的交互配置；未启用时返回 null
+   */
+  const getCurrentInteractive = (): MapLayerInteractiveOptions | null => {
+    const interactive = getInteractive();
+    if (!interactive || interactive.enabled === false || !hasInteractiveHandlers(interactive)) {
+      return null;
+    }
+
+    return interactive;
+  };
+
+  /**
+   * 读取当前交互配置中的图层声明列表。
+   * 命中优先级始终以业务层最新声明顺序为准。
+   * @returns 图层与配置的成对列表
+   */
+  const getLayerEntries = (): Array<[string, MapLayerInteractiveLayerOptions]> => {
+    return Object.entries(getCurrentInteractive()?.layers || {});
+  };
+
+  /**
+   * 根据图层 ID 读取当前最新的图层交互配置。
+   * @param layerId 当前图层 ID
+   * @returns 当前图层配置；未声明时返回 null
+   */
+  const getLayerConfig = (
+    layerId: string | null | undefined
+  ): MapLayerInteractiveLayerOptions | null => {
+    if (!layerId) {
+      return null;
+    }
+
+    return getCurrentInteractive()?.layers?.[layerId] || null;
+  };
+
+  /**
    * 获取当前仍然存在于地图中的交互图层 ID，并保持业务声明的优先级顺序。
    * @returns 当前可参与 hit-test 的图层 ID 列表
    */
   const getLayerIdsInPriorityOrder = (): string[] => {
-    return layerEntries
+    return getLayerEntries()
       .map(([layerId]) => layerId)
       .filter((layerId) => Boolean(map.getLayer(layerId)));
   };
@@ -370,12 +418,13 @@ function createMapInteractiveBinding(
    * @param target 当前 hover 命中目标
    */
   const setCanvasCursor = (target: HoveredLayerTarget | null): void => {
-    if (!target) {
+    const layerConfig = getLayerConfig(target?.layerId);
+    if (!target || !layerConfig) {
       map.getCanvas().style.cursor = '';
       return;
     }
 
-    const cursor = target.layerConfig.cursor;
+    const cursor = layerConfig.cursor;
     map.getCanvas().style.cursor = cursor === false ? '' : cursor || 'pointer';
   };
 
@@ -421,11 +470,13 @@ function createMapInteractiveBinding(
    * @param extraContext 额外上下文
    */
   const emitTopLevelCallback = (
-    callback: TopLevelInteractiveCallback | undefined,
     target: HoveredLayerTarget | null,
     eventType: MapLayerInteractiveEventType,
+    callbackResolver: TopLevelInteractiveCallbackResolver,
     extraContext: Partial<MapLayerInteractiveContext> = {}
   ): void => {
+    const interactive = getCurrentInteractive();
+    const callback = interactive ? callbackResolver(interactive) : undefined;
     if (!callback) {
       return;
     }
@@ -448,11 +499,13 @@ function createMapInteractiveBinding(
    * @param extraContext 额外上下文
    */
   const emitLayerCallback = (
-    callback: LayerInteractiveCallback | undefined,
     target: HoveredLayerTarget | null,
     eventType: MapLayerInteractiveEventType,
+    callbackResolver: LayerInteractiveCallbackResolver,
     extraContext: Partial<MapLayerInteractiveContext> = {}
   ): void => {
+    const layerConfig = getLayerConfig(target?.layerId);
+    const callback = layerConfig ? callbackResolver(layerConfig) : undefined;
     if (!callback || !target) {
       return;
     }
@@ -501,8 +554,9 @@ function createMapInteractiveBinding(
   const setFeatureHoverState = (target: HoveredLayerTarget | null, hover: boolean): void => {
     if (!target) return;
 
-    const { feature, layerConfig } = target;
-    if (layerConfig.enableFeatureStateHover === false) return;
+    const { feature } = target;
+    const layerConfig = getLayerConfig(target.layerId);
+    if (hover && layerConfig?.enableFeatureStateHover === false) return;
 
     const featureStateTarget = getFeatureStateTarget(feature);
     if (!featureStateTarget) return;
@@ -518,8 +572,9 @@ function createMapInteractiveBinding(
   const setFeatureSelectedState = (target: HoveredLayerTarget | null, selected: boolean): void => {
     if (!target) return;
 
-    const { feature, layerConfig } = target;
-    if (layerConfig.enableFeatureStateSelected === false) return;
+    const { feature } = target;
+    const layerConfig = getLayerConfig(target.layerId);
+    if (selected && layerConfig?.enableFeatureStateSelected === false) return;
 
     const featureStateTarget = getFeatureStateTarget(feature);
     if (!featureStateTarget) return;
@@ -618,11 +673,13 @@ function createMapInteractiveBinding(
    */
   const getSelectableLayerIds = (): string[] => {
     const selectionOptions = getSelectionOptions();
+    const layerEntries = getLayerEntries();
     const baseLayerIds = selectionOptions.targetLayerIds || layerEntries.map(([layerId]) => layerId);
     const excludeLayerIdSet = new Set(selectionOptions.excludeLayerIds);
+    const layerIdSet = new Set(layerEntries.map(([layerId]) => layerId));
 
     return baseLayerIds
-      .filter((layerId) => layerConfigMap.has(layerId))
+      .filter((layerId) => layerIdSet.has(layerId))
       .filter((layerId) => !excludeLayerIdSet.has(layerId))
       .filter((layerId) => Boolean(map.getLayer(layerId)));
   };
@@ -685,7 +742,8 @@ function createMapInteractiveBinding(
     reason: MapSelectionChangeReason,
     extraContext: Partial<MapLayerInteractiveContext> = {}
   ): void => {
-    if (!interactive.onSelectionChange) {
+    const interactive = getCurrentInteractive();
+    if (!interactive?.onSelectionChange) {
       return;
     }
 
@@ -742,11 +800,16 @@ function createMapInteractiveBinding(
       return;
     }
 
-    emitTopLevelCallback(interactive.onHoverLeave, previousTarget, 'hoverleave', extraContext);
-    emitLayerCallback(
-      previousTarget.layerConfig.onHoverLeave,
+    emitTopLevelCallback(
       previousTarget,
       'hoverleave',
+      (interactive) => interactive.onHoverLeave,
+      extraContext
+    );
+    emitLayerCallback(
+      previousTarget,
+      'hoverleave',
+      (layerConfig) => layerConfig.onHoverLeave,
       extraContext
     );
   };
@@ -781,7 +844,12 @@ function createMapInteractiveBinding(
 
     if (shouldNotifyDeselect) {
       previousTargets.forEach((target) => {
-        emitLayerCallback(target.layerConfig.onFeatureDeselect, target, 'featuredeselect', extraContext);
+        emitLayerCallback(
+          target,
+          'featuredeselect',
+          (layerConfig) => layerConfig.onFeatureDeselect,
+          extraContext
+        );
       });
     }
 
@@ -886,7 +954,7 @@ function createMapInteractiveBinding(
         return;
       }
 
-      emitTopLevelCallback(interactive.onBlankClick, null, 'blankclick', pointerContext);
+      emitTopLevelCallback(null, 'blankclick', (interactive) => interactive.onBlankClick, pointerContext);
     };
 
     if (typeof globalThis.queueMicrotask === 'function') {
@@ -937,7 +1005,7 @@ function createMapInteractiveBinding(
       return null;
     }
 
-    for (const [layerId, layerConfig] of layerEntries) {
+    for (const [layerId] of getLayerEntries()) {
       if (!availableLayerIdSet.has(layerId)) {
         continue;
       }
@@ -947,7 +1015,6 @@ function createMapInteractiveBinding(
         return {
           feature: targetFeature,
           layerId,
-          layerConfig,
         };
       }
     }
@@ -965,19 +1032,17 @@ function createMapInteractiveBinding(
     const rawTarget = getEventTarget(event);
     const snapResult = getSnapBinding?.()?.resolveMapEvent(event) || null;
     let effectiveTarget = rawTarget;
+    const snapLayerConfig = getLayerConfig(snapResult?.targetLayerId || null);
 
     if (
       snapResult?.matched &&
       snapResult.targetFeature &&
       snapResult.targetLayerId &&
-      layerConfigMap.has(snapResult.targetLayerId)
+      snapLayerConfig
     ) {
       effectiveTarget = {
         feature: snapResult.targetFeature,
         layerId: snapResult.targetLayerId,
-        layerConfig: layerConfigMap.get(
-          snapResult.targetLayerId
-        ) as MapLayerInteractiveLayerOptions,
       };
     }
 
@@ -996,15 +1061,15 @@ function createMapInteractiveBinding(
    * 触发交互管理器初始化完成回调。
    */
   const notifyReady = (): void => {
-    emitTopLevelCallback(interactive.onReady, null, 'ready');
+    emitTopLevelCallback(null, 'ready', (interactive) => interactive.onReady);
   };
 
-  /**
-   * 将 hover 命中目标同步到内部状态，并分发顶层与图层级回调。
-   * @param target 当前 hover 命中目标
-   * @param event 当前地图鼠标事件
-   */
-  const applyHoverTarget = (
+/**
+ * 将 hover 命中目标同步到内部状态，并分发顶层与图层级回调。
+ * @param target 当前 hover 命中目标
+ * @param pointerContext 当前 hover 事件的标准化指针上下文
+ */
+const applyHoverTarget = (
     target: HoveredLayerTarget | null,
     pointerContext: Partial<MapLayerInteractiveContext>
   ): void => {
@@ -1026,8 +1091,8 @@ function createMapInteractiveBinding(
     hoveredTarget = target;
     setCanvasCursor(target);
     setFeatureHoverState(target, true);
-    emitTopLevelCallback(interactive.onHoverEnter, target, 'hoverenter', pointerContext);
-    emitLayerCallback(target.layerConfig.onHoverEnter, target, 'hoverenter', pointerContext);
+    emitTopLevelCallback(target, 'hoverenter', (interactive) => interactive.onHoverEnter, pointerContext);
+    emitLayerCallback(target, 'hoverenter', (layerConfig) => layerConfig.onHoverEnter, pointerContext);
   };
 
   /**
@@ -1055,9 +1120,9 @@ function createMapInteractiveBinding(
 
     syncSelectionState();
     emitLayerCallback(
-      removedTarget.layerConfig.onFeatureDeselect,
       removedTarget,
       'featuredeselect',
+      (layerConfig) => layerConfig.onFeatureDeselect,
       pointerContext
     );
 
@@ -1117,16 +1182,21 @@ function createMapInteractiveBinding(
     previousTargets.forEach((previousTarget) => {
       if (!isSameTarget(previousTarget, target)) {
         emitLayerCallback(
-          previousTarget.layerConfig.onFeatureDeselect,
           previousTarget,
           'featuredeselect',
+          (layerConfig) => layerConfig.onFeatureDeselect,
           pointerContext
         );
       }
     });
 
     if (!hasSameStableTarget) {
-      emitLayerCallback(target.layerConfig.onFeatureSelect, target, 'featureselect', pointerContext);
+      emitLayerCallback(
+        target,
+        'featureselect',
+        (layerConfig) => layerConfig.onFeatureSelect,
+        pointerContext
+      );
     }
 
     const removedTargets = Array.from(previousSelectedMap.values()).filter((previousTarget) => {
@@ -1169,7 +1239,12 @@ function createMapInteractiveBinding(
     primarySelectedKey = selectionKey;
     setFeatureSelectedState(target, true);
     syncSelectionState();
-    emitLayerCallback(target.layerConfig.onFeatureSelect, target, 'featureselect', pointerContext);
+    emitLayerCallback(
+      target,
+      'featureselect',
+      (layerConfig) => layerConfig.onFeatureSelect,
+      pointerContext
+    );
     emitSelectionChange([target], [], 'click', pointerContext);
     return true;
   };
@@ -1211,7 +1286,12 @@ function createMapInteractiveBinding(
 
     syncSelectionState();
     addedTargets.forEach((target) => {
-      emitLayerCallback(target.layerConfig.onFeatureSelect, target, 'featureselect', pointerContext);
+      emitLayerCallback(
+        target,
+        'featureselect',
+        (layerConfig) => layerConfig.onFeatureSelect,
+        pointerContext
+      );
     });
     emitSelectionChange(addedTargets, [], 'box', pointerContext);
   };
@@ -1255,7 +1335,7 @@ function createMapInteractiveBinding(
     const nextTargetMap = new Map<string, HoveredLayerTarget>();
     const selectableLayerIdSet = new Set(selectableLayerIds);
 
-    layerEntries.forEach(([layerId, layerConfig]) => {
+    getLayerEntries().forEach(([layerId]) => {
       if (!selectableLayerIdSet.has(layerId)) {
         return;
       }
@@ -1268,7 +1348,6 @@ function createMapInteractiveBinding(
         const nextTarget: HoveredLayerTarget = {
           feature,
           layerId,
-          layerConfig,
         };
         const selectionKey = createSelectionKey(feature);
         if (!selectionKey || nextTargetMap.has(selectionKey) || !canSelectTarget(nextTarget)) {
@@ -1607,10 +1686,8 @@ function createMapInteractiveBinding(
   const handlePointerAction = (
     event: MapMouseEvent,
     eventType: PointerEventType,
-    topLevelCallback: TopLevelInteractiveCallback | undefined,
-    getLayerCallback: (
-      layerConfig: MapLayerInteractiveLayerOptions
-    ) => LayerInteractiveCallback | undefined
+    topLevelCallbackResolver: TopLevelInteractiveCallbackResolver,
+    getLayerCallback: LayerInteractiveCallbackResolver
   ): void => {
     const { effectiveTarget: target, pointerContext } = resolveEventTarget(event);
 
@@ -1646,7 +1723,7 @@ function createMapInteractiveBinding(
       }
     }
 
-    emitTopLevelCallback(topLevelCallback, target, eventType, pointerContext);
+    emitTopLevelCallback(target, eventType, topLevelCallbackResolver, pointerContext);
 
     if (!target) {
       if (eventType === 'click') {
@@ -1656,7 +1733,7 @@ function createMapInteractiveBinding(
     }
 
     markEventHandled(event);
-    emitLayerCallback(getLayerCallback(target.layerConfig), target, eventType, pointerContext);
+    emitLayerCallback(target, eventType, getLayerCallback, pointerContext);
   };
 
   /**
@@ -1681,7 +1758,12 @@ function createMapInteractiveBinding(
    * @param event 当前地图鼠标事件
    */
   const handleMapClick = (event: MapMouseEvent) => {
-    handlePointerAction(event, 'click', interactive.onClick, (layerConfig) => layerConfig.onClick);
+    handlePointerAction(
+      event,
+      'click',
+      (interactive) => interactive.onClick,
+      (layerConfig) => layerConfig.onClick
+    );
   };
 
   /**
@@ -1689,9 +1771,12 @@ function createMapInteractiveBinding(
    * @param event 当前地图鼠标事件
    */
   const handleMapDoubleClick = (event: MapMouseEvent) => {
-    handlePointerAction(event, 'dblclick', interactive.onDoubleClick, (layerConfig) => {
-      return layerConfig.onDoubleClick;
-    });
+    handlePointerAction(
+      event,
+      'dblclick',
+      (interactive) => interactive.onDoubleClick,
+      (layerConfig) => layerConfig.onDoubleClick
+    );
   };
 
   /**
@@ -1699,9 +1784,12 @@ function createMapInteractiveBinding(
    * @param event 当前地图鼠标事件
    */
   const handleMapContextMenu = (event: MapMouseEvent) => {
-    handlePointerAction(event, 'contextmenu', interactive.onContextMenu, (layerConfig) => {
-      return layerConfig.onContextMenu;
-    });
+    handlePointerAction(
+      event,
+      'contextmenu',
+      (interactive) => interactive.onContextMenu,
+      (layerConfig) => layerConfig.onContextMenu
+    );
   };
 
   map.on('mousemove', handleMouseMove);

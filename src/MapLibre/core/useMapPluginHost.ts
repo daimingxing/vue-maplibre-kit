@@ -104,7 +104,40 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     onPluginStateChange,
   } = options;
   const pluginRecordMapRef = shallowRef<Map<string, MapPluginRecord>>(new Map());
-  let hasWarnedDuplicateMapSelectionService = false;
+
+  /**
+   * 校验候选插件集合中的单例服务是否重复注册。
+   * 当前 mapSnap / mapSelection 都要求在同一时刻最多只存在一个提供者。
+   * @param pluginRecordMap 待校验的候选插件记录集合
+   */
+  function validateSingletonServices(pluginRecordMap: Map<string, MapPluginRecord>): void {
+    const serviceProviderMap = {
+      mapSnap: [] as string[],
+      mapSelection: [] as string[],
+    };
+
+    pluginRecordMap.forEach((pluginRecord, pluginId) => {
+      if (pluginRecord.instance.services?.mapSnap) {
+        serviceProviderMap.mapSnap.push(pluginId);
+      }
+
+      if (pluginRecord.instance.services?.mapSelection) {
+        serviceProviderMap.mapSelection.push(pluginId);
+      }
+    });
+
+    (Object.entries(serviceProviderMap) as Array<[keyof typeof serviceProviderMap, string[]]>).forEach(
+      ([serviceName, providerIds]) => {
+        if (providerIds.length <= 1) {
+          return;
+        }
+
+        throw new Error(
+          `[MapPluginHost] 当前仅允许注册一个 ${serviceName} 服务插件，检测到重复插件：${providerIds.join(', ')}`
+        );
+      }
+    );
+  }
 
   /**
    * 销毁单个插件记录。
@@ -215,38 +248,54 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     const currentPluginRecordMap = pluginRecordMapRef.value;
     const nextPluginRecordMap = new Map<string, MapPluginRecord>();
     const usedPluginIdSet = new Set<string>();
+    const createdPluginRecordList: MapPluginRecord[] = [];
+    const descriptorUpdateList: Array<{
+      pluginRecord: MapPluginRecord;
+      descriptor: AnyMapPluginDescriptor;
+    }> = [];
 
-    descriptorList.forEach((descriptor) => {
-      if (usedPluginIdSet.has(descriptor.id)) {
-        throw new Error(`[MapPluginHost] 检测到重复的插件 ID：${descriptor.id}`);
-      }
+    try {
+      descriptorList.forEach((descriptor) => {
+        if (usedPluginIdSet.has(descriptor.id)) {
+          throw new Error(`[MapPluginHost] 检测到重复的插件 ID：${descriptor.id}`);
+        }
 
-      usedPluginIdSet.add(descriptor.id);
-      const currentPluginRecord = currentPluginRecordMap.get(descriptor.id);
+        usedPluginIdSet.add(descriptor.id);
+        const currentPluginRecord = currentPluginRecordMap.get(descriptor.id);
 
-      if (canReusePluginRecord(descriptor, currentPluginRecord)) {
-        currentPluginRecord!.descriptorRef.value = descriptor;
-        nextPluginRecordMap.set(descriptor.id, currentPluginRecord!);
-        return;
-      }
+        if (canReusePluginRecord(descriptor, currentPluginRecord)) {
+          descriptorUpdateList.push({
+            pluginRecord: currentPluginRecord as MapPluginRecord,
+            descriptor,
+          });
+          nextPluginRecordMap.set(descriptor.id, currentPluginRecord as MapPluginRecord);
+          return;
+        }
 
-      try {
         const nextPluginRecord = createPluginRecord(descriptor);
-        currentPluginRecord && destroyPluginRecord(currentPluginRecord);
+        createdPluginRecordList.push(nextPluginRecord);
         nextPluginRecordMap.set(descriptor.id, nextPluginRecord);
-      } catch {
-        currentPluginRecord && destroyPluginRecord(currentPluginRecord);
-      }
-    });
+      });
 
-    currentPluginRecordMap.forEach((pluginRecord, pluginId) => {
-      if (!nextPluginRecordMap.has(pluginId)) {
+      validateSingletonServices(nextPluginRecordMap);
+
+      descriptorUpdateList.forEach(({ pluginRecord, descriptor }) => {
+        pluginRecord.descriptorRef.value = descriptor;
+      });
+
+      currentPluginRecordMap.forEach((pluginRecord, pluginId) => {
+        if (nextPluginRecordMap.get(pluginId) !== pluginRecord) {
+          destroyPluginRecord(pluginRecord);
+        }
+      });
+
+      pluginRecordMapRef.value = nextPluginRecordMap;
+    } catch (error) {
+      createdPluginRecordList.forEach((pluginRecord) => {
         destroyPluginRecord(pluginRecord);
-      }
-    });
-
-    pluginRecordMapRef.value = nextPluginRecordMap;
-    hasWarnedDuplicateMapSelectionService = false;
+      });
+      throw error;
+    }
   }
 
   watch(
@@ -322,27 +371,15 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    */
   function getMapSelectionService(): MapPluginServices['mapSelection'] | null {
     let resolvedService: MapPluginServices['mapSelection'] | null = null;
-    const duplicatedPluginIds: string[] = [];
 
-    for (const [pluginId, pluginRecord] of pluginRecordMapRef.value.entries()) {
+    for (const pluginRecord of pluginRecordMapRef.value.values()) {
       const currentService = pluginRecord.instance.services?.mapSelection || null;
       if (!currentService) {
         continue;
       }
 
-      if (resolvedService) {
-        duplicatedPluginIds.push(pluginId);
-        continue;
-      }
-
       resolvedService = currentService;
-    }
-
-    if (resolvedService && duplicatedPluginIds.length > 0 && !hasWarnedDuplicateMapSelectionService) {
-      hasWarnedDuplicateMapSelectionService = true;
-      console.warn(
-        `[MapPluginHost] 检测到多个 mapSelection 服务插件，当前将仅使用第一个服务。重复插件：${duplicatedPluginIds.join(', ')}`
-      );
+      break;
     }
 
     return resolvedService;

@@ -133,6 +133,48 @@ export function useTerradrawControlLifecycle<
   const lineDecorationLayerProps = createLineDecorationLayerProps(lineDecorationRef);
 
   /**
+   * 提取控件实例启停所需的最小依赖。
+   * 控件创建后不会根据其余配置做热更新，因此这里只跟踪地图就绪态与 isUse 开关。
+   * @returns 控件实例启停依赖快照
+   */
+  const getControlMountWatchSource = () => ({
+    isLoaded: getMapInstance().isLoaded,
+    hasMap: Boolean(getMapInstance().map),
+    isUse: getConfig()?.isUse === true,
+  });
+
+  /**
+   * 提取 TerraDraw 业务交互绑定的启停依赖。
+   * 具体回调函数在运行时由交互管理器自行读取，不在这里做深度监听。
+   * @returns 业务交互绑定依赖快照
+   */
+  const getInteractiveWatchSource = () => {
+    const interactive = getConfig()?.interactive;
+    return {
+      ...getControlMountWatchSource(),
+      hasControl: Boolean(controlRef.value),
+      hasInteractive: Boolean(interactive),
+      interactiveEnabled: interactive?.enabled !== false,
+    };
+  };
+
+  /**
+   * 提取线装饰绑定的重建依赖。
+   * 仅跟踪启停开关与顶层样式/回调引用，避免递归监听整份装饰配置对象。
+   * @returns 线装饰绑定依赖快照
+   */
+  const getLineDecorationWatchSource = () => {
+    const lineDecoration = getConfig()?.lineDecoration;
+    return {
+      ...getControlMountWatchSource(),
+      hasControl: Boolean(controlRef.value),
+      lineDecorationEnabled: lineDecoration?.enabled === true,
+      defaultStyle: lineDecoration?.defaultStyle || null,
+      resolveStyle: lineDecoration?.resolveStyle || null,
+    };
+  };
+
+  /**
    * 销毁当前控件挂接的业务交互管理器。
    */
   const destroyInteractive = () => {
@@ -182,13 +224,8 @@ export function useTerradrawControlLifecycle<
   };
 
   watch(
-    () => ({
-      isLoaded: getMapInstance().isLoaded,
-      hasMap: Boolean(getMapInstance().map),
-      isUse: getConfig()?.isUse,
-      config: getConfig(),
-    }),
-    ({ isLoaded, hasMap, isUse, config }) => {
+    () => getControlMountWatchSource(),
+    ({ isLoaded, hasMap, isUse }) => {
       if (!isLoaded || !hasMap) {
         return;
       }
@@ -198,7 +235,7 @@ export function useTerradrawControlLifecycle<
           return;
         }
 
-        const preparedOptions = prepareOptions(config);
+        const preparedOptions = prepareOptions(getConfig());
         const position = preparedOptions.position || defaultPosition;
 
         // 控件只在首次启用时创建一次，后续行为更新由独立 watcher 接管。
@@ -210,21 +247,15 @@ export function useTerradrawControlLifecycle<
 
       destroy();
     },
-    { immediate: true, deep: true }
+    { immediate: true }
   );
 
   watch(
-    () => ({
-      isLoaded: getMapInstance().isLoaded,
-      hasMap: Boolean(getMapInstance().map),
-      isUse: getConfig()?.isUse,
-      hasControl: Boolean(controlRef.value),
-      interactive: getConfig()?.interactive,
-    }),
-    ({ isLoaded, hasMap, isUse, hasControl, interactive }) => {
+    () => getInteractiveWatchSource(),
+    ({ isLoaded, hasMap, isUse, hasControl, hasInteractive, interactiveEnabled }) => {
       destroyInteractive();
 
-      if (!isLoaded || !hasMap || !isUse || !hasControl || !interactive || interactive.enabled === false) {
+      if (!isLoaded || !hasMap || !isUse || !hasControl || !hasInteractive || !interactiveEnabled) {
         return;
       }
 
@@ -238,38 +269,30 @@ export function useTerradrawControlLifecycle<
         map,
         control,
         controlType,
-        interactive,
+        getInteractive: () => getConfig()?.interactive || null,
         getSnapBinding,
       });
     },
-    { immediate: true, deep: true }
+    { immediate: true }
   );
 
   watch(
-    () => ({
-      isLoaded: getMapInstance().isLoaded,
-      hasMap: Boolean(getMapInstance().map),
-      isUse: getConfig()?.isUse,
-      hasControl: Boolean(controlRef.value),
-      lineDecoration: getConfig()?.lineDecoration,
-    }),
-    ({ isLoaded, hasMap, isUse, hasControl, lineDecoration }) => {
+    () => getLineDecorationWatchSource(),
+    ({ isLoaded, hasMap, isUse, hasControl, lineDecorationEnabled }) => {
       destroyLineDecoration();
 
-      if (
-        !isLoaded ||
-        !hasMap ||
-        !isUse ||
-        !hasControl ||
-        !lineDecoration ||
-        lineDecoration.enabled !== true
-      ) {
+      if (!isLoaded || !hasMap || !isUse || !hasControl || !lineDecorationEnabled) {
         return;
       }
 
       const map = getMapInstance().map;
       const control = controlRef.value;
       if (!map || !control) {
+        return;
+      }
+
+      const lineDecoration = getConfig()?.lineDecoration;
+      if (!lineDecoration || lineDecoration.enabled !== true) {
         return;
       }
 
@@ -280,13 +303,13 @@ export function useTerradrawControlLifecycle<
         options: lineDecoration,
       });
     },
-    { immediate: true, deep: true }
+    { immediate: true }
   );
 
   watch(
     () => ({
       isLoaded: getMapInstance().isLoaded,
-      isUse: getConfig()?.isUse,
+      isUse: getConfig()?.isUse === true,
       hasControl: Boolean(controlRef.value),
       snapping: getSnappingWatchSource ? getSnappingWatchSource() : getConfig(),
     }),
@@ -297,7 +320,7 @@ export function useTerradrawControlLifecycle<
 
       syncSnapping(controlRef.value, getConfig());
     },
-    { immediate: true, deep: true }
+    { immediate: true }
   );
 
   return {

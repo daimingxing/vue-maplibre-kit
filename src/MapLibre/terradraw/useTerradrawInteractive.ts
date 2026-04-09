@@ -19,8 +19,8 @@ interface CreateTerradrawInteractiveOptions {
   control: TerradrawManagedControl;
   /** 当前控件来源类型 */
   controlType: TerradrawControlType;
-  /** 业务层传入的交互配置 */
-  interactive: TerradrawInteractiveOptions;
+  /** 读取最新的业务层交互配置 */
+  getInteractive: () => TerradrawInteractiveOptions | null | undefined;
   /** 读取当前普通图层吸附绑定 */
   getSnapBinding?: () => MapSnapBinding | null | undefined;
 }
@@ -116,7 +116,7 @@ function isTerradrawFeatureId(featureId: unknown): featureId is TerradrawFeature
 export function createTerradrawInteractive(
   options: CreateTerradrawInteractiveOptions
 ): TerradrawInteractiveBinding {
-  const { map, control, controlType, interactive, getSnapBinding } = options;
+  const { map, control, controlType, getInteractive, getSnapBinding } = options;
   const drawInstance = control.getTerraDrawInstance();
 
   if (!drawInstance) {
@@ -131,6 +131,20 @@ export function createTerradrawInteractive(
   let hoveredFeatureSnapshot: TerradrawFeature | null = null;
   let hasDisposed = false;
   let hasNotifiedReady = false;
+
+  /**
+   * 读取当前仍然启用的业务交互配置。
+   * 若业务层已关闭交互，则返回 null，供事件分发路径直接短路。
+   * @returns 当前生效的交互配置；未启用时返回 null
+   */
+  const getCurrentInteractive = (): TerradrawInteractiveOptions | null => {
+    const interactive = getInteractive();
+    if (!interactive || interactive.enabled === false) {
+      return null;
+    }
+
+    return interactive;
+  };
 
   /**
    * 同步 TerraDraw 全量快照到本地缓存，便于 delete 事件在要素已移除后仍能拿到旧数据。
@@ -226,6 +240,28 @@ export function createTerradrawInteractive(
   };
 
   /**
+   * 读取最新交互配置中的回调并统一触发。
+   * 通过回调选择器避免在绑定创建时捕获旧的函数引用。
+   * @param callbackGetter 从最新配置中读取目标回调
+   * @param feature 当前主目标要素
+   * @param extraContext 额外上下文
+   */
+  const emitCurrentInteractiveCallback = (
+    callbackGetter: (
+      interactive: TerradrawInteractiveOptions
+    ) => ((context: TerradrawInteractiveContext) => void) | undefined,
+    feature: TerradrawFeature | null,
+    extraContext: Partial<TerradrawInteractiveContext> = {}
+  ): void => {
+    const interactive = getCurrentInteractive();
+    if (!interactive) {
+      return;
+    }
+
+    emitInteractiveCallback(callbackGetter(interactive), feature, extraContext);
+  };
+
+  /**
    * 根据要素 ID 从当前快照或缓存中取回要素。
    * @param featureId 要素 ID
    * @returns 匹配到的要素快照
@@ -271,7 +307,12 @@ export function createTerradrawInteractive(
    * @param isHit 是否命中 TerraDraw 要素
    */
   const syncCursor = (isHit: boolean): void => {
-    if (!interactive.cursor) return;
+    const interactive = getCurrentInteractive();
+    if (!interactive?.cursor || interactive.cursor === false) {
+      map.getCanvas().style.cursor = '';
+      return;
+    }
+
     map.getCanvas().style.cursor = isHit ? interactive.cursor : '';
   };
 
@@ -286,7 +327,10 @@ export function createTerradrawInteractive(
     syncCursor(false);
 
     if (previousHoveredFeature && shouldNotifyLeave) {
-      emitInteractiveCallback(interactive.onHoverLeave, previousHoveredFeature);
+      emitCurrentInteractiveCallback(
+        (interactive) => interactive.onHoverLeave,
+        previousHoveredFeature
+      );
     }
   };
 
@@ -368,10 +412,14 @@ export function createTerradrawInteractive(
 
   const scheduleBlankClick = (
     event: MapMouseEvent,
-    blankCallback?: (context: TerradrawInteractiveContext) => void
+    blankCallbackGetter?: (
+      interactive: TerradrawInteractiveOptions
+    ) => ((context: TerradrawInteractiveContext) => void) | undefined
   ): void => {
     const emitBlankClick = () => {
       if (isEventHandled(event)) return;
+      const interactive = getCurrentInteractive();
+      const blankCallback = interactive && blankCallbackGetter ? blankCallbackGetter(interactive) : null;
       blankCallback?.(createInteractiveContext(null, resolvePointerContext(event).pointerContext));
     };
 
@@ -413,7 +461,7 @@ export function createTerradrawInteractive(
 
     hoveredFeatureId = nextHoveredFeatureId;
     hoveredFeatureSnapshot = feature;
-    emitInteractiveCallback(interactive.onHoverEnter, feature, pointerContext);
+    emitCurrentInteractiveCallback((interactive) => interactive.onHoverEnter, feature, pointerContext);
   };
 
   /**
@@ -423,7 +471,7 @@ export function createTerradrawInteractive(
     if (hasNotifiedReady) return;
     hasNotifiedReady = true;
     syncFeatureSnapshotCache();
-    emitInteractiveCallback(interactive.onReady, null);
+    emitCurrentInteractiveCallback((interactive) => interactive.onReady, null);
   };
 
   /**
@@ -455,8 +503,12 @@ export function createTerradrawInteractive(
    */
   const handlePointerAction = (
     event: MapMouseEvent,
-    featureCallback?: (context: TerradrawInteractiveContext) => void,
-    blankCallback?: (context: TerradrawInteractiveContext) => void
+    featureCallbackGetter?: (
+      interactive: TerradrawInteractiveOptions
+    ) => ((context: TerradrawInteractiveContext) => void) | undefined,
+    blankCallbackGetter?: (
+      interactive: TerradrawInteractiveOptions
+    ) => ((context: TerradrawInteractiveContext) => void) | undefined
   ): void => {
     if (!isBusinessInteractiveMode()) {
       clearHoverState(false);
@@ -468,12 +520,14 @@ export function createTerradrawInteractive(
 
     if (feature) {
       markEventHandled(event);
-      emitInteractiveCallback(featureCallback, feature, pointerContext);
+      if (featureCallbackGetter) {
+        emitCurrentInteractiveCallback(featureCallbackGetter, feature, pointerContext);
+      }
       return;
     }
 
-    if (blankCallback) {
-      scheduleBlankClick(event, blankCallback);
+    if (blankCallbackGetter) {
+      scheduleBlankClick(event, blankCallbackGetter);
     }
   };
 
@@ -489,7 +543,7 @@ export function createTerradrawInteractive(
     syncFeatureSnapshotCache();
     syncHoveredFeatureSnapshot();
     const selectedFeatures = getFeatureSnapshots((event.feature as TerradrawFeature[]) || []);
-    emitInteractiveCallback(interactive.onModeChange, selectedFeatures[0] || null, {
+    emitCurrentInteractiveCallback((interactive) => interactive.onModeChange, selectedFeatures[0] || null, {
       features: selectedFeatures,
       featureIds: selectedFeatures
         .map((feature) => feature.id)
@@ -509,7 +563,7 @@ export function createTerradrawInteractive(
     syncFeatureSnapshotCache();
     syncHoveredFeatureSnapshot();
     const feature = getFeatureById(featureId);
-    emitInteractiveCallback(interactive.onFeatureFinish, feature, {
+    emitCurrentInteractiveCallback((interactive) => interactive.onFeatureFinish, feature, {
       featureId,
       finishContext,
     });
@@ -540,7 +594,7 @@ export function createTerradrawInteractive(
 
     syncHoveredFeatureSnapshot();
 
-    emitInteractiveCallback(interactive.onFeatureChange, changedFeatures[0] || null, {
+    emitCurrentInteractiveCallback((interactive) => interactive.onFeatureChange, changedFeatures[0] || null, {
       features: changedFeatures,
       featureIds: [...featureIds],
       changeType,
@@ -556,7 +610,7 @@ export function createTerradrawInteractive(
     syncFeatureSnapshotCache();
     syncHoveredFeatureSnapshot();
     const feature = getFeatureById(featureId);
-    emitInteractiveCallback(interactive.onFeatureSelect, feature, {
+    emitCurrentInteractiveCallback((interactive) => interactive.onFeatureSelect, feature, {
       featureId,
     });
   };
@@ -569,7 +623,7 @@ export function createTerradrawInteractive(
     syncFeatureSnapshotCache();
     syncHoveredFeatureSnapshot();
     const feature = getFeatureById(featureId);
-    emitInteractiveCallback(interactive.onFeatureDeselect, feature, {
+    emitCurrentInteractiveCallback((interactive) => interactive.onFeatureDeselect, feature, {
       featureId,
     });
   };
@@ -589,7 +643,7 @@ export function createTerradrawInteractive(
       .map((featureId) => getFeatureById(featureId))
       .filter((feature): feature is TerradrawFeature => Boolean(feature));
 
-    emitInteractiveCallback(interactive.onFeatureDelete, deletedFeatures[0] || null, {
+    emitCurrentInteractiveCallback((interactive) => interactive.onFeatureDelete, deletedFeatures[0] || null, {
       features: deletedFeatures,
       featureIds: deletedIds,
       deletedIds,
@@ -603,11 +657,15 @@ export function createTerradrawInteractive(
   };
 
   const handleMapClick = (event: MapMouseEvent) =>
-    handlePointerAction(event, interactive.onClick, interactive.onBlankClick);
+    handlePointerAction(
+      event,
+      (interactive) => interactive.onClick,
+      (interactive) => interactive.onBlankClick
+    );
   const handleMapDoubleClick = (event: MapMouseEvent) =>
-    handlePointerAction(event, interactive.onDoubleClick);
+    handlePointerAction(event, (interactive) => interactive.onDoubleClick);
   const handleMapContextMenu = (event: MapMouseEvent) =>
-    handlePointerAction(event, interactive.onContextMenu);
+    handlePointerAction(event, (interactive) => interactive.onContextMenu);
 
   drawInstance.on('ready', notifyReady);
   drawInstance.on('finish', handleFeatureFinish);

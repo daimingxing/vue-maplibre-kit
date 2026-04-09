@@ -151,31 +151,6 @@ type TerradrawModeOptionsInput = NonNullable<TerradrawControlOptions['modeOption
 type MeasureModeOptionsInput = NonNullable<MeasureControlOptions['modeOptions']>;
 type DrawControlConstructorOptions = ConstructorParameters<typeof MaplibreTerradrawControl>[0];
 type MeasureControlConstructorOptions = ConstructorParameters<typeof MaplibreMeasureControl>[0];
-type SelectSnapModeName = 'polygon' | 'linestring';
-
-interface SelectCoordinateFlags {
-  /** 是否允许显示中点。 */
-  midpoints: boolean;
-  /** 是否允许拖拽坐标点。 */
-  draggable: boolean;
-  /** 是否允许删除坐标点。 */
-  deletable: boolean;
-  /** TerraDraw select 模式下的坐标吸附配置。 */
-  snappable?: false | Record<string, unknown>;
-}
-
-interface SelectFeatureFlags {
-  /** 是否允许拖拽整个要素。 */
-  draggable: boolean;
-  /** 是否允许旋转整个要素。 */
-  rotateable: boolean;
-  /** 是否允许缩放整个要素。 */
-  scaleable: boolean;
-  /** 坐标级交互配置。 */
-  coordinates: SelectCoordinateFlags;
-}
-
-type SelectSnapFlagsMap = Record<SelectSnapModeName, { feature: SelectFeatureFlags }>;
 
 /**
  * 判断当前模式配置值是否已经是 TerraDraw 模式实例。
@@ -282,31 +257,6 @@ function instantiateTerradrawModeOptions(
 
   return instantiatedModeOptions;
 }
-
-/**
- * 提取 select 模式的原始配置快照，供吸附补丁合并默认 flags。
- * @param modeOption 当前 select 模式配置
- * @returns 仅包含可安全读取字段的普通对象；无法提取时返回 null
- */
-function extractSelectModeOptionsSnapshot(
-  modeOption: TerradrawModeOptionsInput['select'] | MeasureModeOptionsInput['select'] | null | undefined
-): Record<string, unknown> | null {
-  if (!modeOption) {
-    return null;
-  }
-
-  if (isTerradrawModeInstance(modeOption)) {
-    const runtimeFlags = Reflect.get(modeOption as object, 'flags');
-    return runtimeFlags && typeof runtimeFlags === 'object'
-      ? {
-          flags: cloneDeep(runtimeFlags as Record<string, unknown>),
-        }
-      : null;
-  }
-
-  return cloneDeep(modeOption as Record<string, unknown>);
-}
-
 const props = defineProps({
   // 用于区分多个地图实例的唯一名字。如果你一个页面有两个地图，就靠它来区分。
   mapKey: {
@@ -514,37 +464,6 @@ function getMapSelectionService(): MapSelectionService | null {
 }
 
 /**
- * Select 模式下线要素与面要素的默认可编辑 flags。
- * 当业务层没有显式声明对应 flags 时，吸附模块会回退到这组默认值，确保线/面节点编辑仍然可用。
- */
-const defaultSelectSnapFlags: SelectSnapFlagsMap = {
-  polygon: {
-    feature: {
-      draggable: true,
-      rotateable: true,
-      scaleable: true,
-      coordinates: {
-        midpoints: true,
-        draggable: true,
-        deletable: true,
-      },
-    },
-  },
-  linestring: {
-    feature: {
-      draggable: true,
-      rotateable: true,
-      scaleable: true,
-      coordinates: {
-        midpoints: true,
-        draggable: true,
-        deletable: true,
-      },
-    },
-  },
-};
-
-/**
  * 读取当前控件最终生效的吸附配置。
  * 若当前未注册吸附服务插件，则返回一份“关闭普通层吸附”的兜底配置。
  * @param controlType 当前控件类型
@@ -742,46 +661,6 @@ function buildTerradrawModeSnappingPatch(
 }
 
 /**
- * 构建 Select 模式下线/面节点编辑最终使用的吸附配置。
- * 由于 TerraDraw 对 select.flags 采用浅合并，这里必须显式构造完整的 linestring / polygon flags，
- * 以避免仅传 snappable 时覆盖掉业务层原有 draggable / deletable / midpoints 等配置。
- * @param baseSelectModeOptions 当前业务层原始 select 模式配置
- * @param resolvedSnapOptions 当前控件最终生效的吸附配置
- * @returns 可直接传给 TerraDraw SelectMode 的局部配置
- */
-function buildSelectModeSnappingPatch(
-  baseSelectModeOptions: Record<string, unknown> | null | undefined,
-  resolvedSnapOptions: ResolvedTerradrawSnapOptions
-): TerradrawModePatch {
-  const baseFlags = merge(
-    cloneDeep(defaultSelectSnapFlags),
-    cloneDeep(baseSelectModeOptions?.flags || {})
-  ) as SelectSnapFlagsMap;
-  const snappableConfig =
-    resolvedSnapOptions.enabled &&
-    (resolvedSnapOptions.useNative || resolvedSnapOptions.useMapTargets)
-      ? buildTerradrawModeSnappingPatch(resolvedSnapOptions).snapping
-      : false;
-
-  const nextFlags = cloneDeep(baseFlags) as SelectSnapFlagsMap;
-
-  (['polygon', 'linestring'] as const).forEach((modeName) => {
-    nextFlags[modeName] = merge(
-      {},
-      defaultSelectSnapFlags[modeName as 'polygon' | 'linestring'],
-      nextFlags[modeName] || {}
-    ) as SelectSnapFlagsMap[typeof modeName];
-
-    nextFlags[modeName].feature.coordinates.snappable = snappableConfig;
-  });
-
-  return {
-    pointerDistance: resolvedSnapOptions.tolerancePx,
-    flags: nextFlags,
-  };
-}
-
-/**
  * 预处理绘图控件配置，生成底层控件构造参数与附属绑定配置。
  * @param config 当前业务层绘图控件配置
  * @returns 绘图控件创建所需的标准化结果
@@ -854,19 +733,12 @@ function prepareMeasureControlOptions(config: MeasureControlOptions | null | und
 /**
  * 根据最终吸附配置同步绘图控件的吸附能力。
  * @param localSnapConfig 业务层传入的局部吸附配置
- * @param baseSelectModeOptions 当前业务层原始 select 模式配置
  */
-function syncDrawSnapping(
-  localSnapConfig: TerradrawSnapSharedOptions | boolean | null | undefined,
-  baseSelectModeOptions: Record<string, unknown> | null | undefined
-): void {
+function syncDrawSnapping(localSnapConfig: TerradrawSnapSharedOptions | boolean | null | undefined): void {
   const drawInstance = drawControlRef.value?.getTerraDrawInstance?.();
   if (
     !ensureTerradrawReadyForModeSync(drawInstance, 'draw-snapping', () => {
-      syncDrawSnapping(
-        props.controls.MaplibreTerradrawControl?.snapping,
-        extractSelectModeOptionsSnapshot(props.controls.MaplibreTerradrawControl?.modeOptions?.select)
-      );
+      syncDrawSnapping(props.controls.MaplibreTerradrawControl?.snapping);
     })
   ) {
     return;
@@ -875,13 +747,9 @@ function syncDrawSnapping(
   const resolvedSnapOptions = resolveTerradrawSnapOptions('draw', localSnapConfig);
   const lineAndPolygonPatch = buildTerradrawModeSnappingPatch(resolvedSnapOptions);
 
+  // select 模式不再由容器层注入吸附补丁，相关编辑行为完全交由业务侧 modeOptions.select 自行决定。
   safeUpdateTerradrawModeOptions(drawInstance, 'linestring', lineAndPolygonPatch);
   safeUpdateTerradrawModeOptions(drawInstance, 'polygon', lineAndPolygonPatch);
-  safeUpdateTerradrawModeOptions(
-    drawInstance,
-    'select',
-    buildSelectModeSnappingPatch(baseSelectModeOptions, resolvedSnapOptions)
-  );
 }
 
 /**
@@ -918,19 +786,20 @@ const drawControlLifecycle = useTerradrawControlLifecycle({
   Control: MaplibreTerradrawControl,
   defaultPosition: 'top-left',
   prepareOptions: prepareDrawControlOptions,
-  getSnappingWatchSource: () => ({
-    snapping: props.controls.MaplibreTerradrawControl?.snapping,
-    selectModeOption: props.controls.MaplibreTerradrawControl?.modeOptions?.select,
-    resolvedSnapOptions: resolveTerradrawSnapOptions(
+  getSnappingWatchSource: () => {
+    const resolvedSnapOptions = resolveTerradrawSnapOptions(
       'draw',
       props.controls.MaplibreTerradrawControl?.snapping
-    ),
-  }),
-  syncSnapping: () => {
-    syncDrawSnapping(
-      props.controls.MaplibreTerradrawControl?.snapping,
-      extractSelectModeOptionsSnapshot(props.controls.MaplibreTerradrawControl?.modeOptions?.select)
     );
+    return {
+      enabled: resolvedSnapOptions.enabled,
+      tolerancePx: resolvedSnapOptions.tolerancePx,
+      useNative: resolvedSnapOptions.useNative,
+      useMapTargets: resolvedSnapOptions.useMapTargets,
+    };
+  },
+  syncSnapping: () => {
+    syncDrawSnapping(props.controls.MaplibreTerradrawControl?.snapping);
   },
   clearReadySync: clearTerradrawReadySync,
 });
@@ -948,13 +817,18 @@ const measureControlLifecycle = useTerradrawControlLifecycle({
   Control: MaplibreMeasureControl,
   defaultPosition: 'top-right',
   prepareOptions: prepareMeasureControlOptions,
-  getSnappingWatchSource: () => ({
-    snapping: props.controls.MaplibreMeasureControl?.snapping,
-    resolvedSnapOptions: resolveTerradrawSnapOptions(
+  getSnappingWatchSource: () => {
+    const resolvedSnapOptions = resolveTerradrawSnapOptions(
       'measure',
       props.controls.MaplibreMeasureControl?.snapping
-    ),
-  }),
+    );
+    return {
+      enabled: resolvedSnapOptions.enabled,
+      tolerancePx: resolvedSnapOptions.tolerancePx,
+      useNative: resolvedSnapOptions.useNative,
+      useMapTargets: resolvedSnapOptions.useMapTargets,
+    };
+  },
   syncSnapping: () => {
     syncMeasureSnapping(props.controls.MaplibreMeasureControl?.snapping);
   },
