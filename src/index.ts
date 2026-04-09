@@ -27,8 +27,10 @@ export type {
   MapLayerSelectionChangeContext,
   MapSelectionChangeReason,
   MapSelectionDeactivateBehavior,
+  MapSelectionLayerGroup,
   MapSelectionFilterContext,
   MapSelectionMode,
+  MapSelectionQueryOptions,
   MapSelectionState,
   MapSelectionToolOptions,
   TerradrawControlOptions,
@@ -63,6 +65,12 @@ export type {
   UpdateFeaturePropertyOptions,
 } from './MapLibre/composables/useMapDataUpdate';
 export { useMapEffect, withFlashColor } from './MapLibre/composables/useMapEffect';
+export {
+  getSelectedFeatureIds,
+  getSelectedPropertyValues,
+  groupSelectedFeaturesByLayer,
+} from './MapLibre/composables/mapSelection';
+export { useMapSelection, type UseMapSelectionResult } from './MapLibre/composables/useMapSelection';
 export {
   createCircleLayerStyle,
   createFillLayerStyle,

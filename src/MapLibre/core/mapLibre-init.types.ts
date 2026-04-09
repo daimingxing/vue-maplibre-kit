@@ -8,7 +8,7 @@ import type {
   TerradrawFeature,
 } from '../shared/mapLibre-contols-types';
 import type { MapCommonFeature } from '../shared/map-common-tools';
-import type { MapPluginHostExpose } from '../plugins/types';
+import type { MapPluginHostExpose, MapSelectionService } from '../plugins/types';
 
 /** map-libre-init 组件对外暴露的公共 API。 */
 export interface MapLibreInitExpose {
@@ -26,6 +26,8 @@ export interface MapLibreInitExpose {
   getSelectedMapFeatureContext: () => MapLayerInteractiveContext | null;
   /** 获取当前普通图层交互选中的标准化要素快照。 */
   getSelectedMapFeatureSnapshot: () => MapCommonFeature | null;
+  /** 获取当前地图注册的普通图层选择服务。 */
+  getMapSelectionService: () => MapSelectionService | null;
   /** 清空当前普通图层的整个选中集。 */
   clearSelectedMapFeature: () => void;
   /** 地图插件宿主查询接口。 */

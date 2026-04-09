@@ -15,6 +15,7 @@ import type {
 } from '../shared/mapLibre-contols-types';
 import type { MapSnapBinding, MapSelectionService } from '../plugins/types';
 import type { MapCommonFeature } from '../shared/map-common-tools';
+import { createSelectionChangeContextMethods } from './mapSelection';
 
 export interface UseMapInteractiveOptions {
   /** 地图实例引用，通常是通过 useMap() 获取的 */
@@ -689,17 +690,19 @@ function createMapInteractiveBinding(
     }
 
     const primaryTarget = getPrimarySelectedTarget();
+    const addedFeatures = addedTargets
+      .map((target) => createSelectedFeatureRecord(target))
+      .filter(Boolean) as MapLayerSelectedFeature[];
+    const removedFeatures = removedTargets
+      .map((target) => createSelectedFeatureRecord(target))
+      .filter(Boolean) as MapLayerSelectedFeature[];
     const selectionExtraContext: Partial<MapLayerInteractiveContext> &
       Pick<MapLayerSelectionChangeContext, 'addedFeatures' | 'removedFeatures' | 'reason'> = {
       ...extraContext,
       selectedFeatures: [...selectedFeatures],
       selectedCount: selectedFeatures.length,
-      addedFeatures: addedTargets
-        .map((target) => createSelectedFeatureRecord(target))
-        .filter(Boolean) as MapLayerSelectedFeature[],
-      removedFeatures: removedTargets
-        .map((target) => createSelectedFeatureRecord(target))
-        .filter(Boolean) as MapLayerSelectedFeature[],
+      addedFeatures,
+      removedFeatures,
       reason,
     };
     const selectionContext = createInteractiveContext(
@@ -708,6 +711,15 @@ function createMapInteractiveBinding(
       'selectionchange',
       selectionExtraContext
     ) as MapLayerSelectionChangeContext;
+
+    Object.assign(
+      selectionContext,
+      createSelectionChangeContextMethods(
+        selectionContext.selectedFeatures,
+        addedFeatures,
+        removedFeatures
+      )
+    );
 
     interactive.onSelectionChange(selectionContext);
   };

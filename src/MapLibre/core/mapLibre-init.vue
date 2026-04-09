@@ -143,6 +143,7 @@ import { useMapPluginHost } from './useMapPluginHost';
 import { type MapCommonFeature } from '../shared/map-common-tools';
 import type {
   AnyMapPluginDescriptor,
+  MapSelectionService,
   ResolvedTerradrawSnapOptions,
   MapPluginStateChangePayload,
 } from '../plugins/types';
@@ -536,6 +537,14 @@ function getSelectedMapFeatureSnapshot(): MapCommonFeature | null {
   }
 
   return toMapFeatureSnapshot(mapInteractiveBinding?.getSelectedFeature() || null);
+}
+
+/**
+ * 获取当前地图宿主解析出的普通图层选择服务。
+ * @returns 当前选择服务；未注册时返回 null
+ */
+function getMapSelectionService(): MapSelectionService | null {
+  return pluginHost.getMapSelectionService() || null;
 }
 
 /**
@@ -1188,6 +1197,8 @@ defineExpose({
   getSelectedMapFeatureContext,
   /** 获取当前普通图层交互选中的标准化要素快照 */
   getSelectedMapFeatureSnapshot,
+  /** 获取当前地图注册的普通图层选择服务 */
+  getMapSelectionService,
   /** 清空当前普通图层的选中状态 */
   clearSelectedMapFeature,
   /** 地图插件宿主查询接口 */

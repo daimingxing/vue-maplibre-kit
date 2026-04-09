@@ -261,6 +261,14 @@ export type MapSelectionDeactivateBehavior = 'clear' | 'retain';
 /** 选中集变化原因。 */
 export type MapSelectionChangeReason = 'click' | 'box' | 'clear' | 'deactivate' | 'api';
 
+/** 选中集快捷查询配置。 */
+export interface MapSelectionQueryOptions {
+  /** 仅返回指定图层的结果。 */
+  layerId?: string;
+  /** 是否对结果去重；默认 true。 */
+  dedupe?: boolean;
+}
+
 /** 普通图层选中要素快照。 */
 export interface MapLayerSelectedFeature {
   /** 当前选中项唯一键。 */
@@ -277,6 +285,14 @@ export interface MapLayerSelectedFeature {
   properties: Record<string, any> | null;
   /** 当前选中项标准化 GeoJSON 快照。 */
   snapshot: MapCommonFeature | null;
+}
+
+/** 按图层分组后的选中集结果。 */
+export interface MapSelectionLayerGroup {
+  /** 当前分组对应的图层 ID。 */
+  layerId: string | null;
+  /** 当前图层下的选中要素列表。 */
+  features: MapLayerSelectedFeature[];
 }
 
 /** 多选候选过滤上下文。 */
@@ -397,6 +413,27 @@ export interface MapLayerSelectionChangeContext extends MapLayerInteractiveConte
   removedFeatures: MapLayerSelectedFeature[];
   /** 本次变化原因。 */
   reason: MapSelectionChangeReason;
+  /** 快速提取当前完整选中集中的要素 ID 列表。 */
+  getSelectedFeatureIds: (options?: MapSelectionQueryOptions) => Array<string | number>;
+  /** 快速提取本次新增选中项中的要素 ID 列表。 */
+  getAddedFeatureIds: (options?: MapSelectionQueryOptions) => Array<string | number>;
+  /** 快速提取本次移除选中项中的要素 ID 列表。 */
+  getRemovedFeatureIds: (options?: MapSelectionQueryOptions) => Array<string | number>;
+  /** 快速提取当前完整选中集中的属性值列表。 */
+  getSelectedPropertyValues: <T = unknown>(
+    propertyKey: string,
+    options?: MapSelectionQueryOptions
+  ) => T[];
+  /** 快速提取本次新增选中项中的属性值列表。 */
+  getAddedPropertyValues: <T = unknown>(
+    propertyKey: string,
+    options?: MapSelectionQueryOptions
+  ) => T[];
+  /** 快速提取本次移除选中项中的属性值列表。 */
+  getRemovedPropertyValues: <T = unknown>(
+    propertyKey: string,
+    options?: MapSelectionQueryOptions
+  ) => T[];
 }
 
 /** 单个普通图层的业务交互配置 */
