@@ -22,9 +22,9 @@
             >
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="toggleFlash"
-              >切换要素闪烁</ElButton
-            >
+            <ElButton style="background: white; width: 120px" @click="toggleFlash">
+              {{ flashButtonText }}
+            </ElButton>
           </mgl-custom-control>
         </template>
         <template #dataSource>
@@ -302,6 +302,7 @@ import {
   MapLibreInit,
   MglPopup,
   TERRADRAW_RESERVED_PROPERTY_KEYS,
+  createFeatureStateExpression,
   createCircleBusinessLayer,
   createMapBusinessSource,
   createMapBusinessSourceRegistry,
@@ -319,8 +320,8 @@ import {
   useMapFeatureActions,
   useMapFeatureQuery,
   useMapSelection,
-  withFlashColor,
   type MapControlsConfig,
+  type MapFeatureStateTarget,
   type MapLayerInteractiveContext,
   type MapLayerInteractiveOptions,
   type MapLayerSelectedFeature,
@@ -334,7 +335,7 @@ import {
 } from "vue-maplibre-kit";
 import FeaturePropertyEditor from "./components/FeaturePropertyEditor.vue";
 import type { LngLatLike, MapOptions } from "maplibre-gl";
-import { useMap, MglCustomControl } from "vue-maplibre-gl";
+import { MglCustomControl } from "vue-maplibre-gl";
 import { computed, ref, reactive } from "vue";
 import mapGeojson from "./mock/map.geojson";
 import mapGeojson2 from "./mock/map2.geojson";
@@ -362,6 +363,16 @@ const SOURCE_IDS = {
   primary: "test_geojson_source",
   secondary: "test_geojson_source_secondary",
 } as const;
+
+/**
+ * 闪烁示例统一使用的目标要素集合。
+ * 业务层只维护这一份目标声明，避免 sourceId 和 featureId 在动作逻辑里散落。
+ */
+const FLASH_TARGETS = [
+  { source: SOURCE_IDS.primary, id: "point_1" },
+  { source: SOURCE_IDS.primary, id: "point_2" },
+  { source: SOURCE_IDS.primary, id: "line_1" },
+] as const satisfies readonly MapFeatureStateTarget[];
 
 /**
  * 当前页面统一使用的业务图层 ID。
@@ -1192,39 +1203,34 @@ const { layout: fillLayout, paint: fillPaint } = createFillLayerStyle();
  * 2. 线图层 (Line Layer) 样式配置
  * 用于渲染 LineString / MultiLineString 数据
  *
- * 这里演示“业务层局部覆写公共样式”的典型写法：
- * 1. line-color 使用 MapLibre 表达式，根据 hover 状态、业务属性等动态返回颜色。
- * 2. 外层再包一层 withFlashColor，用于接入 useMapEffect 的闪烁能力。
+ * 这里演示“业务层局部覆写公共样式”的推荐写法：
+ * 1. 先用 createFeatureStateExpression 收敛 selected / hover / isFlashing 这类常见状态分支。
+ * 2. default 仍然允许继续传入原生 MapLibre 表达式，用来承载更细的业务条件。
  *
  * line-color 当前规则说明：
- * 1. 如果 feature-state.hover === true，则当前线要素显示为绿色 `#00ff00`
- * 2. 否则如果当前要素 properties.id === 'line_1'，则显示为红色 `#ff0000`
- * 3. 否则显示为默认蓝色 `#0000ff`
- * 4. 如果当前要素被 startFlash('sourceId', featureId) 标记为闪烁，则最终颜色会被切换为黄色 `#ffff00`
+ * 1. 如果 feature-state.isFlashing === true，则当前线要素显示为黄色 `#ffff00`
+ * 2. 否则如果 feature-state.selected === true，则显示为橙色 `#f97316`
+ * 3. 否则如果 feature-state.hover === true，则显示为绿色 `#00ff00`
+ * 4. 否则继续走 default 中的原生表达式：line_1 为红色，其余线为蓝色
  */
 const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
   paint: {
-    "line-color": withFlashColor(
-      [
+    "line-color": createFeatureStateExpression({
+      isFlashing: "#ffff00",
+      selected: "#f97316",
+      hover: "#00ff00",
+      default: [
         "case",
-        ["boolean", ["feature-state", "selected"], false],
-        "#f97316",
-        ["boolean", ["feature-state", "hover"], false],
-        "#00ff00",
         ["==", ["get", "id"], "line_1"],
         "#ff0000",
         "#0000ff",
       ],
-      "#ffff00",
-    ),
-    "line-width": [
-      "case",
-      ["boolean", ["feature-state", "selected"], false],
-      7,
-      ["boolean", ["feature-state", "hover"], false],
-      6,
-      3,
-    ],
+    }),
+    "line-width": createFeatureStateExpression({
+      selected: 7,
+      hover: 6,
+      default: 3,
+    }),
   },
 });
 
@@ -1232,36 +1238,31 @@ const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
  * 3. 点图层 (Circle Layer) 样式配置
  * 用于渲染 Point / MultiPoint 数据
  *
- * 这里演示点图层最常见的两类业务效果：
- * 1. circle-color: 点本体颜色支持闪烁
- * 2. circle-stroke-color: 点边框颜色支持闪烁
- *
- * withFlashColor(正常颜色, 闪烁颜色) 的含义：
- * 1. 平时显示第一个参数指定的颜色
- * 2. 当业务层调用 startFlash('sourceId', featureId) 后，颜色会在运行时切换为第二个参数
- *
- * 如果后续需要 hover 效果，也可以参考线图层写法，把第一个参数改成 MapLibre 表达式，例如：
- * ['case', ['boolean', ['feature-state', 'hover'], false], '#00ff00', '#0000ff']
+ * 这里演示 createFeatureStateExpression 的另一种常见写法：
+ * 1. 简单场景直接把 default 写成字面量
+ * 2. 后续如果业务规则变复杂，再把 default 升级为原生表达式即可
  */
 const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
   paint: {
-    "circle-color": withFlashColor(
-      [
-        "case",
-        ["boolean", ["feature-state", "selected"], false],
-        "#f97316",
-        ["boolean", ["feature-state", "hover"], false],
-        "#22c55e",
-        "#0000ff",
-      ],
-      "#ff0000",
-    ),
-    "circle-stroke-color": withFlashColor(
-      ["case", ["boolean", ["feature-state", "selected"], false], "#7c2d12", "#ffffff"],
-      "#ffff00",
-    ),
-    "circle-radius": ["case", ["boolean", ["feature-state", "selected"], false], 8, 6],
-    "circle-stroke-width": ["case", ["boolean", ["feature-state", "selected"], false], 3, 2],
+    "circle-color": createFeatureStateExpression({
+      isFlashing: "#ff0000",
+      selected: "#f97316",
+      hover: "#22c55e",
+      default: "#0000ff",
+    }),
+    "circle-stroke-color": createFeatureStateExpression({
+      isFlashing: "#ffff00",
+      selected: "#7c2d12",
+      default: "#ffffff",
+    }),
+    "circle-radius": createFeatureStateExpression({
+      selected: 8,
+      default: 6,
+    }),
+    "circle-stroke-width": createFeatureStateExpression({
+      selected: 3,
+      default: 2,
+    }),
   },
 });
 
@@ -1369,34 +1370,47 @@ const secondaryBusinessLayers = [
   }),
 ];
 
-/**
- * 当前页面底层地图实例引用。
- * 当前仅保留给 `useMapEffect` 的闪烁能力使用，不再参与业务 source / action 的主流程。
- */
-const map = useMap();
-
 // ==========================================
 // 闪烁特效逻辑示例
 // ==========================================
-// startFlash 和 stopFlash 方法，用于控制地图要素的闪烁特效
-// 闪烁频率默认500ms，可以通过第二个参数 intervalMs 来调整闪烁速度 例：useMapEffect(map, 1000)
-const { startFlash, stopFlash } = useMapEffect(map);
-let isFlashing = false;
+// useMapEffect 现在直接接收 mapInitRef。
+// 业务层无需再额外持有 useMap() 的底层实例。
+const { isFeatureFlashing, startFlash, stopFlash } = useMapEffect(mapInitRef);
 
-const toggleFlash = () => {
-  isFlashing = !isFlashing;
-  // 假设需要闪烁的数据源为 test_geojson_source，要素原生 ID 为 'point_1'、'point_2' 和 'line_1'
-  if (isFlashing) {
-    startFlash("test_geojson_source", "point_1");
-    startFlash("test_geojson_source", "point_2");
-    startFlash("test_geojson_source", "line_1");
-    ElMessage.success("已开启 point_1, point_2 和 line_1 闪烁");
-  } else {
-    stopFlash("test_geojson_source", "point_1");
-    stopFlash("test_geojson_source", "point_2");
-    stopFlash("test_geojson_source", "line_1");
-    ElMessage.warning("已停止闪烁");
+/**
+ * 当前示例目标集合是否全部处于闪烁状态。
+ * 用它来驱动按钮文案和切换逻辑，避免维护额外的本地布尔变量。
+ */
+const isDemoFlashing = computed(() => {
+  return FLASH_TARGETS.every((target) => isFeatureFlashing(target));
+});
+
+/** 当前闪烁按钮文案。 */
+const flashButtonText = computed(() => {
+  return isDemoFlashing.value ? "停止要素闪烁" : "开始要素闪烁";
+});
+
+/**
+ * 切换当前示例要素的闪烁状态。
+ */
+const toggleFlash = (): void => {
+  const nextFlashing = !isDemoFlashing.value;
+
+  FLASH_TARGETS.forEach((target) => {
+    if (nextFlashing) {
+      startFlash(target);
+      return;
+    }
+
+    stopFlash(target);
+  });
+
+  if (nextFlashing) {
+    ElMessage.success("已开启 point_1、point_2 和 line_1 闪烁");
+    return;
   }
+
+  ElMessage.warning("已停止闪烁");
 };
 
 // ==========================================

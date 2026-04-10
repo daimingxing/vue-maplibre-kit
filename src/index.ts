@@ -1,6 +1,10 @@
 export { default as MapLibreInit } from './MapLibre/core/mapLibre-init.vue';
 export { default as MglPopup } from './MapLibre/core/mgl-popup.vue';
-export type { MapLibreInitExpose } from './MapLibre/core/mapLibre-init.types';
+export type {
+  MapFeatureStatePatch,
+  MapFeatureStateTarget,
+  MapLibreInitExpose,
+} from './MapLibre/core/mapLibre-init.types';
 export {
   defineMapPlugin,
   type AnyMapPluginDescriptor,
@@ -64,7 +68,16 @@ export type {
   SaveTerradrawFeaturePropertiesOptions,
   UpdateFeaturePropertyOptions,
 } from './MapLibre/composables/useMapDataUpdate';
-export { useMapEffect, withFlashColor } from './MapLibre/composables/useMapEffect';
+export {
+  createFeatureStateExpression,
+  useMapEffect,
+  withFeatureState,
+} from './MapLibre/composables/useMapEffect';
+export type {
+  FeatureStateExpressionOptions,
+  MapEffectTargetInput,
+  UseMapEffectResult,
+} from './MapLibre/composables/useMapEffect';
 export {
   getSelectedFeatureIds,
   getSelectedPropertyValues,

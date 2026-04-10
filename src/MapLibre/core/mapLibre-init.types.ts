@@ -10,6 +10,19 @@ import type {
 import type { MapCommonFeature } from '../shared/map-common-tools';
 import type { MapPluginHostExpose, MapSelectionService } from '../plugins/types';
 
+/** MapLibre feature-state 的目标描述。 */
+export interface MapFeatureStateTarget {
+  /** 目标要素所在的数据源 ID。 */
+  source: string;
+  /** 目标要素的原生顶层 ID。 */
+  id: string | number;
+  /** 可选的 source-layer 名称。 */
+  sourceLayer?: string;
+}
+
+/** MapLibre feature-state 的局部状态补丁。 */
+export type MapFeatureStatePatch = Record<string, unknown>;
+
 /** map-libre-init 组件对外暴露的公共 API。 */
 export interface MapLibreInitExpose {
   /** 获取底层绘图控件实例。 */
@@ -30,6 +43,8 @@ export interface MapLibreInitExpose {
   getMapSelectionService: () => MapSelectionService | null;
   /** 清空当前普通图层的整个选中集。 */
   clearSelectedMapFeature: () => void;
+  /** 为指定要素写入 feature-state。 */
+  setMapFeatureState: (target: MapFeatureStateTarget, state: MapFeatureStatePatch) => boolean;
   /** 地图插件宿主查询接口。 */
   plugins: MapPluginHostExpose;
 }

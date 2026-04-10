@@ -73,7 +73,8 @@
  * 4. 统一托管 TerraDraw / Measure 线装饰能力
  * 5. 承载各种地图插件（如延长线扩展）
  *
- * 推荐外部页面使用 `import { useMap } from 'vue-maplibre-gl'` 配合 `mapKey` 获取原始地图实例。
+ * 业务层优先通过组件公开实例 `mapInitRef` 消费能力；
+ * 仅在非常底层的扩展场景下，才建议再回退到原始地图实例。
  */
 import { type PropType, computed, onBeforeUnmount } from 'vue';
 import {
@@ -138,6 +139,7 @@ import type {
   ResolvedTerradrawSnapOptions,
   MapPluginStateChangePayload,
 } from '../plugins/types';
+import type { MapFeatureStatePatch, MapFeatureStateTarget } from './mapLibre-init.types';
 
 type MapLibreComponentOptions = Partial<MapOptions & { mapStyle: string | object }>;
 type TerradrawModePatch = Record<string, unknown>;
@@ -461,6 +463,23 @@ function getSelectedMapFeatureSnapshot(): MapCommonFeature | null {
  */
 function getMapSelectionService(): MapSelectionService | null {
   return pluginHost.getMapSelectionService() || null;
+}
+
+/**
+ * 为指定要素写入 feature-state。
+ * 业务层应优先通过该门面间接操作底层地图，而不是直接持有原始 map 实例。
+ * @param target 目标要素描述
+ * @param state 需要写入的状态补丁
+ * @returns 是否写入成功
+ */
+function setMapFeatureState(target: MapFeatureStateTarget, state: MapFeatureStatePatch): boolean {
+  const rawMap = map.map;
+  if (!rawMap?.setFeatureState) {
+    return false;
+  }
+
+  rawMap.setFeatureState(target, state);
+  return true;
 }
 
 /**
@@ -857,6 +876,8 @@ defineExpose({
   getMapSelectionService,
   /** 清空当前普通图层的选中状态 */
   clearSelectedMapFeature,
+  /** 为指定要素写入 feature-state */
+  setMapFeatureState,
   /** 地图插件宿主查询接口 */
   plugins: pluginHost.hostExpose,
 });

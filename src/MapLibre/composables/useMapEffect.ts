@@ -1,97 +1,417 @@
-import { onBeforeUnmount } from 'vue';
+import {
+  computed,
+  onBeforeUnmount,
+  shallowRef,
+  toValue,
+  type ComputedRef,
+  type MaybeRefOrGetter,
+} from 'vue';
+import type {
+  MapFeatureStatePatch,
+  MapFeatureStateTarget,
+  MapLibreInitExpose,
+} from '../core/mapLibre-init.types';
+
+/** 简化后的 MapLibre 表达式值。 */
+type MapExpressionValue = any;
+
+/** 可直接写入 feature-state 的底层地图对象。 */
+interface RawMapFeatureStateHost {
+  /** MapLibre 原生的 setFeatureState 方法。 */
+  setFeatureState?: (target: MapFeatureStateTarget, state: MapFeatureStatePatch) => void;
+  /** vue-maplibre-gl 常见的 map 包装字段。 */
+  map?: unknown;
+  /** 兼容 Ref / 包装对象。 */
+  value?: unknown;
+}
+
+/** useMapEffect 可接收的目标输入。 */
+export type MapEffectTargetInput =
+  | MapLibreInitExpose
+  | RawMapFeatureStateHost
+  | null
+  | undefined;
+
+/** 单个 feature-state 分支配置。 */
+export interface FeatureStateExpressionOptions {
+  /** 默认值；既可以是字面量，也可以是原生 MapLibre 表达式。 */
+  default: MapExpressionValue;
+  /** feature-state.selected 为 true 时返回的值。 */
+  selected?: MapExpressionValue;
+  /** feature-state.hover 为 true 时返回的值。 */
+  hover?: MapExpressionValue;
+  /** feature-state.isFlashing 为 true 时返回的值。 */
+  isFlashing?: MapExpressionValue;
+  /** 额外自定义的 feature-state 分支。 */
+  states?: Record<string, MapExpressionValue>;
+  /** 状态优先级，越靠前优先级越高。 */
+  order?: string[];
+}
+
+/** useMapEffect 返回结果。 */
+export interface UseMapEffectResult {
+  /** 当前所有正在闪烁的要素目标。 */
+  flashingTargets: ComputedRef<MapFeatureStateTarget[]>;
+  /** 当前是否至少存在一个闪烁目标。 */
+  hasFlashing: ComputedRef<boolean>;
+  /** 判断指定要素当前是否处于闪烁状态。 */
+  isFeatureFlashing: (
+    targetOrSource: MapFeatureStateTarget | string,
+    id?: MapFeatureStateTarget['id']
+  ) => boolean;
+  /** 开启指定要素闪烁。 */
+  startFlash: (
+    targetOrSource: MapFeatureStateTarget | string,
+    id?: MapFeatureStateTarget['id']
+  ) => boolean;
+  /** 停止指定要素闪烁。 */
+  stopFlash: (
+    targetOrSource: MapFeatureStateTarget | string,
+    id?: MapFeatureStateTarget['id']
+  ) => boolean;
+  /** 清空当前全部闪烁目标。 */
+  clearFlash: () => void;
+}
 
 /**
- * 样式表达式生成器：隐藏底层 Feature State 语法
- * 可以在图层的 paint 配置中直接使用
- * @param normalValue 正常状态下的值（如颜色、大小）
- * @param flashValue 闪烁状态下的值（如颜色、大小）
- * @returns MapLibre 表达式数组
+ * 构建 feature-state 判断表达式。
+ * @param stateKey feature-state 键名
+ * @param activeValue 状态为 true 时使用的值
+ * @param defaultValue 状态为 false 时回退的值
+ * @returns 标准的 MapLibre case 表达式
  */
-export const withFlashColor = (normalValue: any, flashValue: any): any => {
-  return ['case', ['boolean', ['feature-state', 'isFlashing'], false], flashValue, normalValue];
-};
+export function withFeatureState(
+  stateKey: string,
+  activeValue: MapExpressionValue,
+  defaultValue: MapExpressionValue
+): any {
+  return ['case', ['boolean', ['feature-state', stateKey], false], activeValue, defaultValue];
+}
 
 /**
- * 地图动效调度器 Hook
- * 提供高性能的要素闪烁控制，全局共用单一的心跳定时器
- * @param mapInstance 通过 useMap() 获取的地图实例对象
+ * 构建多状态优先级表达式。
+ * 适合业务层用简洁对象描述 selected / hover / isFlashing 等常见样式分支，
+ * 同时仍允许 default 或各状态值继续传入原生表达式。
+ * @param options 状态表达式配置
+ * @returns 最终可直接写入 paint/layout 的表达式或字面量
+ */
+export function createFeatureStateExpression(
+  options: FeatureStateExpressionOptions
+): MapExpressionValue {
+  const { default: defaultValue, selected, hover, isFlashing, states, order } = options;
+  const orderedKeys = [...new Set([...(order || ['isFlashing', 'selected', 'hover'])])];
+  const stateValueMap = new Map<string, MapExpressionValue>();
+
+  if (typeof isFlashing !== 'undefined') {
+    stateValueMap.set('isFlashing', isFlashing);
+  }
+  if (typeof selected !== 'undefined') {
+    stateValueMap.set('selected', selected);
+  }
+  if (typeof hover !== 'undefined') {
+    stateValueMap.set('hover', hover);
+  }
+
+  Object.entries(states || {}).forEach(([stateKey, stateValue]) => {
+    if (typeof stateValue !== 'undefined') {
+      stateValueMap.set(stateKey, stateValue);
+    }
+  });
+
+  const mergedOrder = [...new Set([...orderedKeys, ...stateValueMap.keys()])];
+  let expression: MapExpressionValue = defaultValue;
+
+  for (let index = mergedOrder.length - 1; index >= 0; index -= 1) {
+    const stateKey = mergedOrder[index];
+    if (!stateValueMap.has(stateKey)) {
+      continue;
+    }
+
+    expression = withFeatureState(stateKey, stateValueMap.get(stateKey), expression);
+  }
+
+  return expression;
+}
+
+/**
+ * 规范化 feature-state 目标。
+ * @param targetOrSource 目标对象或 sourceId
+ * @param id 要素原生 ID
+ * @returns 标准化后的目标；参数不足时返回 null
+ */
+function normalizeFeatureStateTarget(
+  targetOrSource: MapFeatureStateTarget | string,
+  id?: MapFeatureStateTarget['id']
+): MapFeatureStateTarget | null {
+  if (typeof targetOrSource === 'string') {
+    if (typeof id === 'undefined' || id === null) {
+      return null;
+    }
+
+    return {
+      source: targetOrSource,
+      id,
+    };
+  }
+
+  return targetOrSource;
+}
+
+/**
+ * 生成内部注册表使用的稳定 key。
+ * @param target 标准化后的目标
+ * @returns 唯一 key
+ */
+function buildFeatureStateKey(target: MapFeatureStateTarget): string {
+  return `${target.source}::${target.sourceLayer || ''}::${target.id}`;
+}
+
+/**
+ * 从任意输入中解析底层原生 map。
+ * 兼容原生 map、vue-maplibre-gl 返回对象以及 Ref 包装对象。
+ * @param target 当前目标输入
+ * @returns 具备 setFeatureState 的底层 map；不存在时返回 null
+ */
+function resolveRawMapFeatureStateHost(target: unknown): RawMapFeatureStateHost | null {
+  if (!target || typeof target !== 'object') {
+    return null;
+  }
+
+  const rawTarget = target as RawMapFeatureStateHost;
+
+  if (typeof rawTarget.setFeatureState === 'function') {
+    return rawTarget;
+  }
+
+  if (rawTarget.value) {
+    const valueHost = resolveRawMapFeatureStateHost(rawTarget.value);
+    if (valueHost) {
+      return valueHost;
+    }
+  }
+
+  if (rawTarget.map) {
+    const mapHost = resolveRawMapFeatureStateHost(rawTarget.map);
+    if (mapHost) {
+      return mapHost;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 解析当前输入对应的 feature-state 写入器。
+ * 优先复用 MapLibreInitExpose 提供的门面方法，避免业务层直连底层 map。
+ * @param targetInput 当前传入的地图目标
+ * @returns 可用的 feature-state 写入器；不可用时返回 null
+ */
+function resolveFeatureStateWriter(
+  targetInput: MaybeRefOrGetter<MapEffectTargetInput>
+): ((target: MapFeatureStateTarget, state: MapFeatureStatePatch) => boolean) | null {
+  const resolvedTarget = toValue(targetInput);
+
+  if (!resolvedTarget) {
+    return null;
+  }
+
+  if (
+    typeof (resolvedTarget as MapLibreInitExpose).setMapFeatureState === 'function'
+  ) {
+    return (target, state) => {
+      return (resolvedTarget as MapLibreInitExpose).setMapFeatureState(target, state);
+    };
+  }
+
+  const rawMapHost = resolveRawMapFeatureStateHost(resolvedTarget);
+  if (!rawMapHost?.setFeatureState) {
+    return null;
+  }
+
+  return (target, state) => {
+    rawMapHost.setFeatureState?.(target, state);
+    return true;
+  };
+}
+
+/**
+ * 地图动效调度器 Hook。
+ * 现在既支持直接传入 `mapInitRef`，也兼容历史上的底层 map 输入，
+ * 推荐业务层优先传入 `MapLibreInit` 的公开实例引用。
+ * @param targetInput 地图目标输入
  * @param intervalMs 闪烁频率（毫秒），默认 500ms
+ * @returns 闪烁控制方法与响应式状态
  */
-export function useMapEffect(mapInstance: any, intervalMs = 500) {
-  // 记录当前正在闪烁的所有要素集合
-  // key: "sourceId-featureId"
-  const flashingRegistry = new Map<string, { source: string; id: string | number }>();
+export function useMapEffect(
+  targetInput: MaybeRefOrGetter<MapEffectTargetInput>,
+  intervalMs = 500
+): UseMapEffectResult {
+  const flashingRegistry = new Map<string, MapFeatureStateTarget>();
+  const flashingTargetsRef = shallowRef<MapFeatureStateTarget[]>([]);
+  const flashingKeySet = computed(() => {
+    return new Set(flashingTargetsRef.value.map((target) => buildFeatureStateKey(target)));
+  });
+  const flashingTargets = computed(() => {
+    return [...flashingTargetsRef.value];
+  });
+  const hasFlashing = computed(() => flashingTargetsRef.value.length > 0);
   let timer: number | null = null;
   let flashToggle = false;
 
-  // 内部统一的心跳引擎
-  const startEngine = () => {
-    if (timer) return;
+  /**
+   * 同步对外暴露的闪烁目标快照，保证业务层读取结果具备响应式。
+   */
+  function syncFlashingTargets(): void {
+    flashingTargetsRef.value = [...flashingRegistry.values()];
+  }
+
+  /**
+   * 将最新状态写入底层地图。
+   * @param target 目标要素
+   * @param state 需要写入的状态补丁
+   * @returns 是否写入成功
+   */
+  function applyFeatureState(target: MapFeatureStateTarget, state: MapFeatureStatePatch): boolean {
+    const writer = resolveFeatureStateWriter(targetInput);
+    if (!writer) {
+      return false;
+    }
+
+    return writer(target, state);
+  }
+
+  /**
+   * 启动统一心跳引擎。
+   * 所有闪烁目标共用同一个定时器，避免业务层各自维护多个 interval。
+   */
+  function startEngine(): void {
+    if (timer) {
+      return;
+    }
+
     timer = window.setInterval(() => {
       flashToggle = !flashToggle;
-      // 兼容直接传入的原生 map 或 vue-maplibre-gl 的 map 引用
-      const map = mapInstance?.value?.map || mapInstance?.map || mapInstance;
-      if (!map || !map.setFeatureState) return;
 
-      // 遍历所有注册的闪烁要素，统一切换状态
-      flashingRegistry.forEach((feature) => {
-        map.setFeatureState(
-          { source: feature.source, id: feature.id },
-          { isFlashing: flashToggle }
-        );
+      flashingRegistry.forEach((target) => {
+        applyFeatureState(target, { isFlashing: flashToggle });
       });
     }, intervalMs);
-  };
+  }
 
-  const stopEngine = () => {
+  /**
+   * 停止统一心跳引擎，并重置内部节拍。
+   */
+  function stopEngine(): void {
     if (timer) {
       clearInterval(timer);
       timer = null;
     }
-  };
+
+    flashToggle = false;
+  }
 
   /**
-   * 开启指定要素的闪烁
-   * @param source 数据源 ID
-   * @param id 要素的顶层原生 ID
+   * 判断指定要素当前是否处于闪烁状态。
+   * @param targetOrSource 目标对象或 sourceId
+   * @param id 要素原生 ID
+   * @returns 当前是否正在闪烁
    */
-  const startFlash = (source: string, id: string | number) => {
-    const key = `${source}-${id}`;
-    if (!flashingRegistry.has(key)) {
-      flashingRegistry.set(key, { source, id });
-      startEngine();
+  function isFeatureFlashing(
+    targetOrSource: MapFeatureStateTarget | string,
+    id?: MapFeatureStateTarget['id']
+  ): boolean {
+    const target = normalizeFeatureStateTarget(targetOrSource, id);
+    if (!target) {
+      return false;
     }
-  };
+
+    return flashingKeySet.value.has(buildFeatureStateKey(target));
+  }
 
   /**
-   * 停止指定要素的闪烁
-   * @param source 数据源 ID
-   * @param id 要素的顶层原生 ID
+   * 开启指定要素闪烁。
+   * @param targetOrSource 目标对象或 sourceId
+   * @param id 要素原生 ID
+   * @returns 是否成功加入闪烁注册表
    */
-  const stopFlash = (source: string, id: string | number) => {
-    const key = `${source}-${id}`;
-    if (flashingRegistry.has(key)) {
-      flashingRegistry.delete(key);
-
-      // 恢复该要素的默认状态 (isFlashing: false)
-      const map = mapInstance?.value?.map || mapInstance?.map || mapInstance;
-      if (map && map.setFeatureState) {
-        map.setFeatureState({ source, id }, { isFlashing: false });
-      }
+  function startFlash(
+    targetOrSource: MapFeatureStateTarget | string,
+    id?: MapFeatureStateTarget['id']
+  ): boolean {
+    const target = normalizeFeatureStateTarget(targetOrSource, id);
+    if (!target) {
+      return false;
     }
-    // 如果没有要素需要闪烁了，关闭引擎以节省性能
+
+    const targetKey = buildFeatureStateKey(target);
+    if (flashingRegistry.has(targetKey)) {
+      return false;
+    }
+
+    flashingRegistry.set(targetKey, target);
+    syncFlashingTargets();
+    startEngine();
+    return true;
+  }
+
+  /**
+   * 停止指定要素闪烁，并将其 isFlashing 状态恢复为 false。
+   * @param targetOrSource 目标对象或 sourceId
+   * @param id 要素原生 ID
+   * @returns 目标是否原本处于闪烁状态
+   */
+  function stopFlash(
+    targetOrSource: MapFeatureStateTarget | string,
+    id?: MapFeatureStateTarget['id']
+  ): boolean {
+    const target = normalizeFeatureStateTarget(targetOrSource, id);
+    if (!target) {
+      return false;
+    }
+
+    const targetKey = buildFeatureStateKey(target);
+    const existed = flashingRegistry.delete(targetKey);
+    if (existed) {
+      syncFlashingTargets();
+    }
+
+    applyFeatureState(target, { isFlashing: false });
+
     if (flashingRegistry.size === 0) {
       stopEngine();
     }
-  };
 
-  // 组件卸载时自动清理定时器
-  onBeforeUnmount(() => {
+    return existed;
+  }
+
+  /**
+   * 清空当前全部闪烁目标，并统一恢复样式状态。
+   */
+  function clearFlash(): void {
+    if (flashingRegistry.size === 0) {
+      stopEngine();
+      return;
+    }
+
+    [...flashingRegistry.values()].forEach((target) => {
+      applyFeatureState(target, { isFlashing: false });
+    });
+
+    flashingRegistry.clear();
+    syncFlashingTargets();
     stopEngine();
+  }
+
+  onBeforeUnmount(() => {
+    clearFlash();
   });
 
   return {
+    flashingTargets,
+    hasFlashing,
+    isFeatureFlashing,
     startFlash,
     stopFlash,
+    clearFlash,
   };
 }
