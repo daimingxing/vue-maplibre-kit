@@ -7,7 +7,6 @@ import {
 } from '../composables/useMapDataUpdate';
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
 import {
-  LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
   type LineDraftPreviewPluginApi,
 } from '../plugins/line-draft-preview';
@@ -20,6 +19,7 @@ import {
 } from '../shared/map-common-tools';
 import type { TerradrawControlType } from '../shared/mapLibre-controls-types';
 import type { MapBusinessSourceRegistry } from './createMapBusinessSource';
+import { resolveLineDraftPreviewApi } from './mapPluginResolver';
 import { useMapFeatureQuery } from './useMapFeatureQuery';
 
 /**
@@ -140,35 +140,6 @@ export interface UseMapFeatureActionsResult {
   ) => MapFeatureActionResult;
   /** 清空全部线草稿。 */
   clearLineDraft: () => MapFeatureActionResult;
-}
-
-/**
- * 读取当前 mapRef 对应的线草稿插件 API。
- * @param mapExpose 地图公开实例
- * @param lineDraftPreviewPluginId 可选的插件 ID
- * @returns 命中的线草稿插件 API
- */
-function resolveLineDraftPreviewApi(
-  mapExpose: MapLibreInitExpose | null | undefined,
-  lineDraftPreviewPluginId?: string
-): LineDraftPreviewPluginApi | null {
-  if (!mapExpose?.plugins) {
-    return null;
-  }
-
-  if (lineDraftPreviewPluginId) {
-    return mapExpose.plugins.getApi<LineDraftPreviewPluginApi>(lineDraftPreviewPluginId) || null;
-  }
-
-  const targetPlugin = mapExpose.plugins.list().find((plugin) => {
-    return plugin.type === LINE_DRAFT_PREVIEW_PLUGIN_TYPE;
-  });
-
-  if (!targetPlugin) {
-    return null;
-  }
-
-  return mapExpose.plugins.getApi<LineDraftPreviewPluginApi>(targetPlugin.id) || null;
 }
 
 /**

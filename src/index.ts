@@ -80,6 +80,17 @@ export {
   type MapBusinessSourceProps,
   type MapBusinessSourceRegistry,
 } from './MapLibre/facades/createMapBusinessSource';
+export { default as MapBusinessSourceLayers } from './MapLibre/facades/MapBusinessSourceLayers.vue';
+export {
+  createCircleBusinessLayer,
+  createFillBusinessLayer,
+  createLineBusinessLayer,
+  createSymbolBusinessLayer,
+  type MapBusinessLayerDescriptor,
+  type MapBusinessLayerGeometryType,
+  type MapBusinessLayerWhere,
+  type MapBusinessLayerWhereValue,
+} from './MapLibre/facades/mapBusinessLayer';
 export {
   useMapFeatureQuery,
   type UseMapFeatureQueryOptions,
@@ -98,6 +109,11 @@ export {
   type UseMapFeatureActionsOptions,
   type UseMapFeatureActionsResult,
 } from './MapLibre/facades/useMapFeatureActions';
+export {
+  useLineDraftPreview,
+  type UseLineDraftPreviewOptions,
+  type UseLineDraftPreviewResult,
+} from './MapLibre/facades/useLineDraftPreview';
 export {
   createCircleLayerStyle,
   createFillLayerStyle,
