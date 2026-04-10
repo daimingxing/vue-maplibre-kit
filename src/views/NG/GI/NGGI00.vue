@@ -22,6 +22,11 @@
             >
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
+            <ElButton style="background: white; width: 120px" @click="changeStyle">
+              切换样式
+            </ElButton>
+          </mgl-custom-control>
+          <mgl-custom-control position="top-right" :noClasses="false">
             <ElButton style="background: white; width: 120px" @click="toggleFlash">
               {{ flashButtonText }}
             </ElButton>
@@ -387,6 +392,19 @@ const LAYER_IDS = {
   secondaryLine: "lineLayerSecondary",
   secondaryFill: "fillLayerSecondary",
 } as const;
+
+/**
+ * 修改样式示例统一使用的 feature-state 键名。
+ * 这里故意使用 feature-state，而不是直接改 GeoJSON 数据，
+ * 用最轻量的方式演示“业务层按钮驱动要素样式变化”。
+ */
+const DEMO_STYLE_STATE_KEY = "demoStyled";
+
+/**
+ * 示例样式的状态优先级。
+ * 闪烁仍然最高，其次才是按钮切换的示例样式，最后才是选中和悬浮。
+ */
+const DEMO_STYLE_STATE_ORDER = ["isFlashing", DEMO_STYLE_STATE_KEY, "selected", "hover"];
 
 import sendIcon from "./assets/send.svg";
 // import segment_stretch_test from './assets/segment-stretch.svg';
@@ -1209,26 +1227,32 @@ const { layout: fillLayout, paint: fillPaint } = createFillLayerStyle();
  *
  * line-color 当前规则说明：
  * 1. 如果 feature-state.isFlashing === true，则当前线要素显示为黄色 `#ffff00`
- * 2. 否则如果 feature-state.selected === true，则显示为橙色 `#f97316`
- * 3. 否则如果 feature-state.hover === true，则显示为绿色 `#00ff00`
- * 4. 否则继续走 default 中的原生表达式：line_1 为红色，其余线为蓝色
+ * 2. 否则如果 feature-state.demoStyled === true，则显示为洋红色 `#ec4899`
+ * 3. 否则如果 feature-state.selected === true，则显示为橙色 `#f97316`
+ * 4. 否则如果 feature-state.hover === true，则显示为绿色 `#00ff00`
+ * 5. 否则继续走 default 中的原生表达式：line_1 为红色，其余线为蓝色
  */
 const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
   paint: {
     "line-color": createFeatureStateExpression({
       isFlashing: "#ffff00",
+      states: {
+        // 点击按钮后，将当前选中线要素切换为更醒目的洋红色。
+        [DEMO_STYLE_STATE_KEY]: "#ec4899",
+      },
       selected: "#f97316",
       hover: "#00ff00",
-      default: [
-        "case",
-        ["==", ["get", "id"], "line_1"],
-        "#ff0000",
-        "#0000ff",
-      ],
+      order: DEMO_STYLE_STATE_ORDER,
+      default: ["case", ["==", ["get", "id"], "line_1"], "#ff0000", "#0000ff"],
     }),
     "line-width": createFeatureStateExpression({
+      states: {
+        // 示例样式顺便把线宽加粗，方便肉眼观察变化。
+        [DEMO_STYLE_STATE_KEY]: 8,
+      },
       selected: 7,
       hover: 6,
+      order: DEMO_STYLE_STATE_ORDER,
       default: 3,
     }),
   },
@@ -1246,21 +1270,38 @@ const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
   paint: {
     "circle-color": createFeatureStateExpression({
       isFlashing: "#ff0000",
+      states: {
+        // 点击按钮后，将当前选中点要素切换为更醒目的洋红色。
+        [DEMO_STYLE_STATE_KEY]: "#ec4899",
+      },
       selected: "#f97316",
       hover: "#22c55e",
+      order: DEMO_STYLE_STATE_ORDER,
       default: "#0000ff",
     }),
     "circle-stroke-color": createFeatureStateExpression({
       isFlashing: "#ffff00",
+      states: {
+        [DEMO_STYLE_STATE_KEY]: "#831843",
+      },
       selected: "#7c2d12",
+      order: DEMO_STYLE_STATE_ORDER,
       default: "#ffffff",
     }),
     "circle-radius": createFeatureStateExpression({
+      states: {
+        [DEMO_STYLE_STATE_KEY]: 9,
+      },
       selected: 8,
+      order: DEMO_STYLE_STATE_ORDER,
       default: 6,
     }),
     "circle-stroke-width": createFeatureStateExpression({
+      states: {
+        [DEMO_STYLE_STATE_KEY]: 4,
+      },
       selected: 3,
+      order: DEMO_STYLE_STATE_ORDER,
       default: 2,
     }),
   },
@@ -1436,6 +1477,7 @@ const {
   isActive: isSelectionActive,
   selectionMode,
   selectedCount,
+  selectedFeatures,
   selectedFeatureIds,
   hasSelection,
   activate: activateSelection,
@@ -1444,6 +1486,143 @@ const {
   getSelectedPropertyValues: getSelectionPropertyValues,
   groupSelectedFeaturesByLayer: getSelectionGroups,
 } = useMapSelection(mapInitRef);
+
+/**
+ * 当前已切换到示例样式的要素键集合。
+ * 这里只做页面级演示，因此直接用内存集合记录当前状态即可。
+ */
+const demoStyledFeatureKeys = new Set<string>();
+
+/**
+ * 生成示例样式状态的唯一键。
+ * @param target 要素状态目标
+ * @returns 稳定唯一键；参数不足时返回空字符串
+ */
+const getDemoStyleTargetKey = (target: {
+  sourceId: string | null;
+  sourceLayer?: string | null;
+  featureId: string | number | null;
+}): string => {
+  if (!target.sourceId || target.featureId === null) {
+    return "";
+  }
+
+  return `${target.sourceId}::${target.sourceLayer || ""}::${String(target.featureId)}`;
+};
+
+/**
+ * 将选中要素快照转换为可写入 feature-state 的目标描述。
+ * @param selectedFeature 当前选中要素快照
+ * @returns 标准化后的 feature-state 目标；不可写时返回 null
+ */
+const getDemoStyleStateTarget = (
+  selectedFeature: MapLayerSelectedFeature,
+): MapFeatureStateTarget | null => {
+  if (!selectedFeature.sourceId || selectedFeature.featureId === null) {
+    return null;
+  }
+
+  return {
+    source: selectedFeature.sourceId,
+    id: selectedFeature.featureId,
+    // 这里顺手兼容 source-layer，保证后续切换矢量源时也能直接复用。
+    sourceLayer: selectedFeature.sourceLayer || undefined,
+  };
+};
+
+/**
+ * 判断当前选中要素是否已经启用了示例样式。
+ * @param selectedFeature 当前选中要素快照
+ * @returns 是否已处于示例样式态
+ */
+const isDemoStyleEnabled = (selectedFeature: MapLayerSelectedFeature): boolean => {
+  const targetKey = getDemoStyleTargetKey({
+    sourceId: selectedFeature.sourceId,
+    sourceLayer: selectedFeature.sourceLayer,
+    featureId: selectedFeature.featureId,
+  });
+
+  return targetKey ? demoStyledFeatureKeys.has(targetKey) : false;
+};
+
+/**
+ * 将当前选中要素切换为示例样式或恢复默认样式。
+ * 这是一个最小可运行示例：只演示“按钮 + 当前选中集 + feature-state 样式覆写”。
+ */
+const changeStyle = (): void => {
+  if (!mapInitRef.value) {
+    ElMessage.warning("地图组件尚未初始化完成");
+    return;
+  }
+
+  const styleTargetMap = new Map<
+    string,
+    {
+      target: MapFeatureStateTarget;
+      selectedFeature: MapLayerSelectedFeature;
+    }
+  >();
+
+  selectedFeatures.value.forEach((selectedFeature) => {
+    const target = getDemoStyleStateTarget(selectedFeature);
+    if (!target) {
+      return;
+    }
+
+    const targetKey = getDemoStyleTargetKey({
+      sourceId: target.source,
+      sourceLayer: target.sourceLayer || null,
+      featureId: target.id,
+    });
+    if (!targetKey) {
+      return;
+    }
+
+    // 这里做一次去重，避免同一个要素因多图层命中被重复写入。
+    styleTargetMap.set(targetKey, {
+      target,
+      selectedFeature,
+    });
+  });
+
+  if (styleTargetMap.size === 0) {
+    ElMessage.info("请先选中至少一个点或线要素，再点击切换样式");
+    return;
+  }
+
+  const shouldEnableDemoStyle = [...styleTargetMap.values()].some(({ selectedFeature }) => {
+    return !isDemoStyleEnabled(selectedFeature);
+  });
+
+  let changedCount = 0;
+  styleTargetMap.forEach(({ target }, targetKey) => {
+    const success = mapInitRef.value?.setMapFeatureState(target, {
+      [DEMO_STYLE_STATE_KEY]: shouldEnableDemoStyle,
+    });
+    if (!success) {
+      return;
+    }
+
+    // 写入成功后，再同步页面本地状态集合。
+    if (shouldEnableDemoStyle) {
+      demoStyledFeatureKeys.add(targetKey);
+    } else {
+      demoStyledFeatureKeys.delete(targetKey);
+    }
+    changedCount += 1;
+  });
+
+  if (changedCount === 0) {
+    ElMessage.warning("当前选中要素样式切换失败");
+    return;
+  }
+
+  ElMessage.success(
+    shouldEnableDemoStyle
+      ? `已为 ${changedCount} 个选中要素切换示例样式`
+      : `已为 ${changedCount} 个选中要素恢复默认样式`,
+  );
+};
 
 /**
  * 获取 GeoJSON 要素的业务 ID。
