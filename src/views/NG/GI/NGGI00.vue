@@ -480,29 +480,12 @@ import sendIcon from "./assets/send.svg";
 import texturelabsWater from "./assets/Texturelabs_Water.jpg";
 
 /**
- * 这里需要搞清楚两个概念：
- *
- * 1. 正式数据 (Business Data)
- *    就是你自己在这个 Vue 页面里定义的 GeoJSON 数据。
- *    例如我们在 template 里写的：
- *    - SOURCE_IDS.primary
- *    - SOURCE_IDS.secondary
- *    这些数据是要保存到数据库里的，代表真实的业务结果。
- *
- * 2. 临时预览数据 (Preview Data)
- *    就是 mapLibre-init 组件内部帮你代管的临时图形数据。
- *    比如你点击了"创建线草稿"，地图上出现的那条虚线就是临时预览数据。
- *    你不需要在 template 里去写这些临时图层，插件会自动帮你渲染。
- *
- * 为什么要在代码里区分它们？
- * 因为有些操作会产生不同的结果：
- * - 如果你点击的是一条"正式线"，点"生成区域"，生成的面应该存到你的正式数据里。
- * - 如果你点击的是一条"临时虚线"，点"生成区域"，生成的面只是个预览，应该存到临时预览池里。
- * 只有区分清楚了，点击"取消临时操作"时，才能准确地把那些虚线和预览面一起清空，而不影响你的正式数据。
+ * ==========================
+ * 业务数据源与图层常量定义
+ * ==========================
  */
 
-// 正式业务数据源。
-// 业务页面通常直接 import 各自的 GeoJSON / 接口返回数据，这里不再在页面内临时构造第二数据源。
+// 业务数据响应式引用 (通常来自接口请求或本地 mock)
 const test_geojson = ref<MapCommonFeatureCollection>(
   mapGeojson as MapCommonFeatureCollection,
 );
@@ -510,38 +493,29 @@ const test_geojson_secondary = ref<MapCommonFeatureCollection>(
   mapGeojson2 as MapCommonFeatureCollection,
 );
 
-/**
- * 主业务 source 门面。
- * 只收口 source 协议，不干涉业务层如何拆分和声明子图层。
- */
+// 1. 注册业务数据源 (Source)
+// 通过 createMapBusinessSource 将普通 GeoJSON 包装为带 ID 的规范化数据源
 const primaryBusinessSource = createMapBusinessSource({
   sourceId: SOURCE_IDS.primary,
   data: test_geojson,
-  promoteId: "id",
+  promoteId: "id", // 指定用作要素唯一标识的属性名
 });
 
-/**
- * 第二业务 source 门面。
- * 当前示例继续沿用 `properties.id` 作为稳定业务 ID。
- */
 const secondaryBusinessSource = createMapBusinessSource({
   sourceId: SOURCE_IDS.secondary,
   data: test_geojson_secondary,
   promoteId: "id",
 });
 
-/**
- * 页面统一使用的业务 source 注册表。
- * 业务动作和要素查询都从这里读取正式业务数据，而不是再手写 sourceId -> ref 映射表。
- */
+// 将所有业务源注册到管理中心，供查询与写入时使用
 const businessSourceRegistry = createMapBusinessSourceRegistry([
   primaryBusinessSource,
   secondaryBusinessSource,
 ]);
 
 /**
- * 当前页面持有的地图组件公开实例。
- * 业务层所有地图能力都优先通过这个公开实例读取，不直接依赖容器内部实现。
+ * 当前页面持有的地图组件公开实例引用。
+ * 业务层所有地图操作都通过它与底层进行通信。
  */
 const mapInitRef = ref<MapLibreInitExpose | null>(null);
 
@@ -550,17 +524,13 @@ const mapInitRef = ref<MapLibreInitExpose | null>(null);
  * 插件注册区
  * ==========================
  */
+
+// 1. 线草稿预览插件：提供线段临时延长和预览能力
 const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
-  // 是否启用线草稿预览。
-  // 设为 true 后，地图容器会通过插件自动挂载内部草稿 source / layer。
   enabled: true,
-
-  // 草稿线要“照着谁的交互行为来”。
-  // 当前配置表示：草稿线和主业务线图层一样，都会按同一套 hover / click / 右键规则处理。
+  // 草稿线要继承哪个正式图层的交互行为（保持交互一致性）
   inheritInteractiveFromLayerId: LAYER_IDS.primaryLine,
-
-  // 业务层可选的临时图层样式局部覆写示例。
-  // 这里只覆写当前页面关心的几项，其余样式继续使用 map-libre-init 的默认定义。
+  // 覆盖默认草稿样式
   styleOverrides: {
     // 线草稿图层样式覆写。
     line: {
@@ -591,7 +561,6 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
         ],
 
         // 线草稿虚线样式。
-        // [实线段长度, 空白段长度]，用于强调“草稿态”而非正式业务线。
         "line-dasharray": [2, 1.2],
       },
     },
@@ -620,14 +589,7 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
   },
 });
 
-/**
- * 要素多选插件配置示例。
- * 当前示例同时演示：
- * 1. `retain` 退出策略
- * 2. 通过 `excludeLayerIds` 排除整个图层
- * 3. 通过 `canSelect` 排除同图层中的特定业务要素
- */
-// 初始化要素多选插件
+// 2. 要素多选插件：提供框选和点击多选能力
 const mapFeatureMultiSelectPlugin = createMapFeatureMultiSelectPlugin({
   // 是否启用多选插件，默认为 true
   enabled: true,
@@ -653,15 +615,7 @@ const mapFeatureMultiSelectPlugin = createMapFeatureMultiSelectPlugin({
   },
 });
 
-/**
- * 统一吸附扩展配置示例。
- * 业务层在这里仅声明：
- * 1. 哪些普通图层允许参与吸附
- * 2. 希望采用的吸附方式（顶点 / 线段）
- * 3. 局部吸附范围与优先级
- *
- * 吸附算法、预览图层、TerraDraw / Measure 对接全部由容器层统一封装处理。
- */
+// 3. 要素吸附插件：配置哪些图层允许作为测绘的吸附目标
 const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
   // 启用统一吸附扩展。
   enabled: true,
@@ -711,7 +665,7 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
         id: "point-hole-snap",
         layerIds: [LAYER_IDS.circle, LAYER_IDS.circleDec],
         priority: 10,
-        snapTo: ["vertex"],
+        snapTo: ["vertex"], // 点图层只能吸附到顶点
       },
       {
         // 特定条件要素示例：只允许吸附 mark === 'hole' 的点。
@@ -742,8 +696,7 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
 });
 
 /**
- * 当前页面注册到地图容器中的插件集合。
- * 业务层通过显式 import + 注册插件的方式启用能力，而不是继续给 map-libre-init 传专属 prop。
+ * 集中注册当前页面需要启用的地图能力扩展。
  */
 const mapPlugins = [
   mapFeatureSnapPlugin,
@@ -1114,8 +1067,13 @@ const showClickedLineMeasureExample = (
 };
 
 /**
- * 地图初始化配置
- * 注意：container 属性无需手动设置，vue-maplibre-gl 会自动挂载到组件实例上
+ * 核心：初始化地图基础配置。
+ * @description
+ * 业务层无需关注 `container`，只需配置底图视角、操作限制即可。
+ * 例如：
+ * - center: 初始中心点 [lng, lat]
+ * - zoom: 初始缩放级别
+ * - style: 底图样式地址
  */
 const mapOptions: Omit<MapOptions, "container"> = {
   // 无需 container 属性，因为 vue-maplibre-gl 组件内部会自动挂载和管理容器
@@ -1159,11 +1117,10 @@ const mapOptions: Omit<MapOptions, "container"> = {
 };
 
 /**
- * 控件配置对象，以控件组件名为 key
- * isUse 属性控制是否渲染该控件 (默认为 false)，其他属性作为组件的 props 传入
- *
- * 这是一个完整的控件配置示例，展示了所有可用控件及其常用参数的配置方法。
- * 开发者可根据实际需求将不需要的控件的 isUse 设为 false，或删除该控件的配置块。
+ * 核心：注册并配置地图控件。
+ * @description
+ * 以组件名为 key，控制各种原生控件与测绘控件的显隐及初始化参数。
+ * 未在此处显式声明的控件默认不渲染。
  */
 const mapControls: MapControlsConfig = {
   // 导航控件：提供缩放按钮和罗盘(指南针)
@@ -1309,12 +1266,7 @@ const mapControls: MapControlsConfig = {
       } as TerradrawLineDecorationStyle,
     },
 
-    // ==========================================
-    // TerraDraw 业务交互封装示例
-    // 说明：
-    // 1. 下面这些回调全部由 mapLibre-init 内部统一接管并触发，屏蔽了原生事件的复杂性。
-    // 2. 业务层只需要在这里声明需要响应的动作，即可获取规范化的 context 数据。
-    // ==========================================
+    // 统一封装的业务交互入口
     interactive: {
       // 是否启用交互事件监听，设为 false 则完全不响应下面配置的回调
       enabled: true,
@@ -1398,7 +1350,7 @@ const mapControls: MapControlsConfig = {
     },
   },
 
-  // 测量控件：提供测距、测面积等功能
+  // 测量控件：提供测距、测面积等高级绘制能力
   MaplibreMeasureControl: {
     isUse: true,
     position: "top-left",
@@ -1617,9 +1569,12 @@ const mapControls: MapControlsConfig = {
 };
 
 /**
- * 获取绘图控件当前快照。
- * 现已改为优先走 mapLibre-init 暴露的业务化方法，业务页无需再感知 TerraDraw 实例。
+ * ==========================
+ * 业务操作：获取测绘数据
+ * ==========================
  */
+
+/** 获取当前所有已绘制要素的数据快照 */
 const getDrawnData = () => {
   if (!mapInitRef.value) return;
 
@@ -1628,69 +1583,34 @@ const getDrawnData = () => {
   // 2. [] 代表绘图控件可用，但当前没有已绘制要素
   // 3. 非空数组即 TerraDraw 当前快照
   const features = mapInitRef.value.getDrawFeatures?.();
-
   if (features === null) {
     ElMessage.warning("绘图控件尚未初始化或未启用");
     return;
   }
-
   if (features.length === 0) {
     ElMessage.info("当前没有绘制任何图形");
     return;
   }
 
-  // 将数据打印到控制台，这里的数据可以直接转成 JSON 字符串发送给后端
-  console.log("--- 绘制的 GeoJSON 数据 ---");
-  console.log(JSON.stringify(features, null, 2));
+  console.log("--- 绘制的 GeoJSON 数据 ---", JSON.stringify(features, null, 2));
   ElMessage.success(`成功获取 ${features.length} 个图形数据，请查看控制台`);
 };
 
-/**
- * 获取测量控件当前快照。
- * 与绘图控件保持同一套使用方式，业务页不再需要自己访问 TerraDraw 实例。
- */
+/** 获取当前所有测量要素的数据快照 */
 const getMeasureData = () => {
   if (!mapInitRef.value) return;
 
   const features = mapInitRef.value.getMeasureFeatures?.();
-
   if (features === null) {
     ElMessage.warning("测量控件尚未初始化或未启用");
     return;
   }
-
   if (features.length === 0) {
     ElMessage.info("当前没有测量任何图形");
     return;
   }
 
-  console.log("--- 测量的 GeoJSON 数据 ---");
-  console.log(JSON.stringify(features, null, 2));
-
-  // 4. 演示如何提取其中的测量值
-  features.forEach((f: any) => {
-    if (
-      f.geometry.type === "LineString" &&
-      f.properties?.distance !== undefined
-    ) {
-      console.log(
-        `[线段测距] 距离: ${f.properties.distance} ${f.properties.distanceUnit}`,
-      );
-    } else if (
-      f.geometry.type === "Polygon" &&
-      f.properties?.area !== undefined
-    ) {
-      console.log(
-        `[多边形测面积] 面积: ${f.properties.area} ${f.properties.unit}`,
-      );
-    } else if (
-      f.geometry.type === "Polygon" &&
-      f.properties?.radiusKilometers !== undefined
-    ) {
-      console.log(`[圆测半径] 半径: ${f.properties.radiusKilometers} km`);
-    }
-  });
-
+  console.log("--- 测量的 GeoJSON 数据 ---", JSON.stringify(features, null, 2));
   ElMessage.success(`成功获取 ${features.length} 个测量图形数据，请查看控制台`);
 };
 
@@ -2072,37 +1992,10 @@ const logMapInteractiveEvent = (
 };
 
 /**
- * 普通图层业务交互配置。
- * 由 map-libre-init 内部托管 useMapInteractive 的实例化和销毁。
- *
- * 可用顶层属性：
- * 1. enabled: 是否启用普通图层交互封装，默认 true。
- * 2. onReady: 交互管理器初始化完成时触发，适合做首屏日志、默认状态检查。
- * 3. onHoverEnter / onHoverLeave: 鼠标进入或离开任意已声明图层要素时触发。
- * 4. onClick / onDoubleClick / onContextMenu: 地图统一事件入口；命中要素时会附带命中上下文。
- * 5. onBlankClick: 单击地图空白区域时触发，适合统一关闭 popup / 面板 / 摘要浮层。
- * 6. layers: 参与交互的图层配置集合，可选；key 必须是业务图层的 layer-id。
- *
- * 单图层可用属性：
- * 1. cursor: 鼠标命中该图层要素时的光标样式，默认 'pointer'，传 false 则不处理光标。
- * 2. enableFeatureStateHover: 是否自动维护 feature-state.hover，默认 true。
- * 3. onHoverEnter: 鼠标首次移入要素时触发。
- * 4. onHoverLeave: 鼠标移出当前要素时触发。
- * 5. onClick: 单击命中要素时触发。
- * 6. onDoubleClick: 双击命中要素时触发。
- * 7. onContextMenu: 右键命中要素时触发。
- *
- * 所有回调拿到的 context 都包含以下常用字段：
- * 1. feature: 当前命中的完整 MapLibre 要素。
- * 2. featureId: 当前要素顶层原生 ID；如果 source 配了 promoteId，一般就是业务 id。
- * 3. eventType: 当前交互事件类型，如 click / blankclick / hoverenter 等。
- * 4. layerId: 当前命中的业务图层 ID。
- * 5. sourceId: 当前命中的数据源 ID。
- * 6. sourceLayer: 当前命中的矢量 source-layer；GeoJSON 数据源通常为 null。
- * 7. map: 当前 MapLibre 地图实例。
- * 8. point: 鼠标事件对应的屏幕像素坐标。
- * 9. lngLat: 鼠标事件对应的经纬度坐标。
- * 10. originalEvent: 原始 DOM 鼠标事件，可用于 preventDefault() 等操作。
+ * 核心：统一注册并分发地图图层交互事件。
+ * @description
+ * 将所有业务图层的 hover、click、选中等事件收口，避免在模板中散落事件绑定。
+ * `layers` 配置块中的键必须与图层 `layer-id` 完全一致。
  */
 const mapInteractive: MapLayerInteractiveOptions = {
   // 是否启用普通图层交互封装。
@@ -2203,13 +2096,10 @@ const mapInteractive: MapLayerInteractiveOptions = {
     closeBusinessPanels();
   },
 
-  // 参与交互的图层集合。
-  // key 必须与模板里实际声明的 layer-id 完全一致。
+  // 声明需要响应交互的业务图层及其专属配置
   // 多个图层同时命中时，会按这里的声明顺序决定优先级。
   layers: {
-    // 点图层示例：圆点图层一。
-    // 这里演示“纯统一事件模式”：仅声明图层参与交互与 hover 样式，
-    // 实际 hover / click / contextmenu 逻辑全部交给顶层统一事件处理。
+    // 主点图层：只需声明 cursor 和 hover 即可，点击事件会走上面的统一 onClick
     [LAYER_IDS.circle]: {
       // 鼠标命中当前图层要素时的光标。
       cursor: "pointer",
@@ -2218,14 +2108,11 @@ const mapInteractive: MapLayerInteractiveOptions = {
       // 设为 true 后，业务层只管写样式表达式，不需要手动 setFeatureState。
       enableFeatureStateHover: true,
     },
-
-    // 点图层示例：圆点图层二。
-    // 继续复用顶层统一事件，不再为单个 layer 重复绑定相同回调。
+    // 次点图层
     [LAYER_IDS.circleDec]: {
       cursor: "pointer",
 
       // 当前图层如果不希望自动维护 hover 状态，也可以显式传 false。
-      // 这里继续保持 true，演示最常见用法。
       enableFeatureStateHover: true,
     },
 
