@@ -308,12 +308,15 @@ export function createTerradrawInteractive(
    */
   const syncCursor = (isHit: boolean): void => {
     const interactive = getCurrentInteractive();
-    if (!interactive?.cursor || interactive.cursor === false) {
+    const cursor = interactive?.cursor;
+
+    // 这里统一把 `undefined` 与 `false` 都视为“不处理光标”。
+    if (!cursor) {
       map.getCanvas().style.cursor = '';
       return;
     }
 
-    map.getCanvas().style.cursor = isHit ? interactive.cursor : '';
+    map.getCanvas().style.cursor = isHit ? cursor : '';
   };
 
   /**

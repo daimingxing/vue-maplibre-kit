@@ -7,15 +7,13 @@ import {
   clonePlainData,
   saveFeaturePropertiesInCollection,
 } from '../shared/map-feature-data';
-
-export type { MapFeatureDataId as MapFeatureId } from '../shared/map-feature-data';
-export type { MapFeatureDataProperties as FeatureProperties } from '../shared/map-feature-data';
-export type { MapFeatureDataSaveMode as FeaturePropertySaveMode } from '../shared/map-feature-data';
 import type {
   MapFeatureDataId as MapFeatureId,
   MapFeatureDataProperties as FeatureProperties,
   MapFeatureDataSaveMode as FeaturePropertySaveMode,
 } from '../shared/map-feature-data';
+
+export type { MapFeatureId, FeatureProperties, FeaturePropertySaveMode };
 
 /**
  * TerraDraw 内部保留属性名集合。

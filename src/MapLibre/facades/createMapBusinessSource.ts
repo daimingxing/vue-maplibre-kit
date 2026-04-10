@@ -104,7 +104,7 @@ interface MapBusinessSourceGetterStrategy {
 /**
  * 业务 source 创建配置。
  */
-export type CreateMapBusinessSourceOptions = {
+type MapBusinessSourceBaseOptions = {
   /** 数据源唯一标识。 */
   sourceId: string;
   /** 业务页面持有的原始 GeoJSON 数据引用。 */
@@ -113,11 +113,33 @@ export type CreateMapBusinessSourceOptions = {
   sourceOptions?: MapBusinessSourceOptions;
   /** 是否同步补齐顶层 `feature.id`。 */
   syncFeatureIdToTopLevel?: boolean;
-} & (
-  | MapBusinessSourcePromoteIdStrategy
-  | MapBusinessSourceFeatureIdKeyStrategy
-  | MapBusinessSourceGetterStrategy
-);
+};
+
+/**
+ * `promoteId` 路径的创建配置。
+ */
+type CreateMapBusinessSourcePromoteIdOptions = MapBusinessSourceBaseOptions &
+  MapBusinessSourcePromoteIdStrategy;
+
+/**
+ * `featureIdKey` 路径的创建配置。
+ */
+type CreateMapBusinessSourceFeatureIdKeyOptions = MapBusinessSourceBaseOptions &
+  MapBusinessSourceFeatureIdKeyStrategy;
+
+/**
+ * `getFeatureId` 路径的创建配置。
+ */
+type CreateMapBusinessSourceGetterOptions = MapBusinessSourceBaseOptions &
+  MapBusinessSourceGetterStrategy;
+
+/**
+ * 业务 source 创建配置。
+ */
+export type CreateMapBusinessSourceOptions =
+  | CreateMapBusinessSourcePromoteIdOptions
+  | CreateMapBusinessSourceFeatureIdKeyOptions
+  | CreateMapBusinessSourceGetterOptions;
 
 /**
  * 业务 source 对外门面。
@@ -197,6 +219,39 @@ function resolveBusinessSourceIdStrategy(
 }
 
 /**
+ * 判断当前配置是否命中了 `promoteId` 策略。
+ * @param options 业务 source 配置
+ * @returns 是否为 `promoteId` 路径
+ */
+function hasPromoteIdStrategy(
+  options: CreateMapBusinessSourceOptions
+): options is CreateMapBusinessSourcePromoteIdOptions {
+  return resolveBusinessSourceIdStrategy(options) === 'promoteId';
+}
+
+/**
+ * 判断当前配置是否命中了 `featureIdKey` 策略。
+ * @param options 业务 source 配置
+ * @returns 是否为 `featureIdKey` 路径
+ */
+function hasFeatureIdKeyStrategy(
+  options: CreateMapBusinessSourceOptions
+): options is CreateMapBusinessSourceFeatureIdKeyOptions {
+  return resolveBusinessSourceIdStrategy(options) === 'featureIdKey';
+}
+
+/**
+ * 判断当前配置是否命中了 `getFeatureId` 策略。
+ * @param options 业务 source 配置
+ * @returns 是否为 `getFeatureId` 路径
+ */
+function hasGetFeatureIdStrategy(
+  options: CreateMapBusinessSourceOptions
+): options is CreateMapBusinessSourceGetterOptions {
+  return resolveBusinessSourceIdStrategy(options) === 'getFeatureId';
+}
+
+/**
  * 构建业务 source 配置错误提示。
  * @param sourceId 当前 source ID
  * @returns 中文错误提示
@@ -215,8 +270,7 @@ function shouldSyncTopLevelFeatureId(options: CreateMapBusinessSourceOptions): b
     return options.syncFeatureIdToTopLevel;
   }
 
-  const strategy = resolveBusinessSourceIdStrategy(options);
-  return strategy !== 'promoteId' && strategy !== 'invalid';
+  return !hasPromoteIdStrategy(options) && resolveBusinessSourceIdStrategy(options) !== 'invalid';
 }
 
 /**
@@ -233,22 +287,21 @@ function resolveBusinessFeatureId(
     return null;
   }
 
-  const strategy = resolveBusinessSourceIdStrategy(options);
-  if (strategy === 'invalid') {
-    return null;
-  }
-
-  if (strategy === 'promoteId') {
+  if (hasPromoteIdStrategy(options)) {
     const propertyId = feature.properties?.[options.promoteId];
     return propertyId === undefined || propertyId === null ? null : (propertyId as MapFeatureId);
   }
 
-  if (strategy === 'featureIdKey') {
+  if (hasFeatureIdKeyStrategy(options)) {
     const propertyId = feature.properties?.[options.featureIdKey];
     return propertyId === undefined || propertyId === null ? null : (propertyId as MapFeatureId);
   }
 
-  return options.getFeatureId(feature);
+  if (hasGetFeatureIdStrategy(options)) {
+    return options.getFeatureId(feature);
+  }
+
+  return null;
 }
 
 /**
@@ -347,23 +400,47 @@ function normalizeBusinessSourceData(
 }
 
 /**
+ * 将标准化结果同步到可供模板直接消费的 `sourceProps`。
+ * 这里保持对象引用稳定，避免业务层在模板里频繁拿到新对象。
+ * @param sourceProps 已创建的响应式 source props
+ * @param snapshot 最新标准化快照
+ * @param sourceId 当前 source ID
+ * @param sourceOptions 透传的 source 配置
+ * @param options 原始业务 source 配置
+ */
+function syncBusinessSourceProps(
+  sourceProps: MapBusinessSourceProps,
+  snapshot: NormalizedBusinessSourceSnapshot,
+  sourceId: string,
+  sourceOptions: MapBusinessSourceOptions,
+  options: CreateMapBusinessSourceOptions
+): void {
+  // 统一保留 source 级配置透传能力，保证 lineMetrics、cluster 等原生能力不丢失。
+  Object.assign(sourceProps, sourceOptions);
+
+  // 门面约定的核心字段始终由库负责输出，不允许被透传配置覆盖。
+  sourceProps.sourceId = sourceId;
+  sourceProps.data = snapshot.featureCollection;
+
+  // 只有 `promoteId` 策略才需要向 `MglGeoJsonSource` 透传 `promoteId`。
+  sourceProps.promoteId = hasPromoteIdStrategy(options) ? options.promoteId : undefined;
+}
+
+/**
  * 创建单个业务 source 门面。
  * @param options 业务 source 配置
  * @returns 标准化后的业务 source 门面
  */
 export function createMapBusinessSource(options: CreateMapBusinessSourceOptions): MapBusinessSource {
   const { sourceId, data, sourceOptions = {} } = options;
-  const strategy = resolveBusinessSourceIdStrategy(options);
   const normalizedSnapshot = computed(() => {
     return normalizeBusinessSourceData(data.value, options);
   });
-  const sourceProps = reactive<MapBusinessSourceProps>({
-    sourceId,
-    data: normalizedSnapshot.value.featureCollection,
-    ...sourceOptions,
-    promoteId: strategy === 'promoteId' ? options.promoteId : undefined,
-  });
+  const sourceProps = reactive({}) as MapBusinessSourceProps;
   let lastValidationMessage = '';
+
+  // 初始化一次，保证首次渲染时模板已拿到完整 source props。
+  syncBusinessSourceProps(sourceProps, normalizedSnapshot.value, sourceId, sourceOptions, options);
 
   /**
    * 只在校验结果发生变化时输出一次错误日志，避免控制台被重复刷屏。
@@ -385,8 +462,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
   watch(
     normalizedSnapshot,
     (snapshot) => {
-      sourceProps.data = snapshot.featureCollection;
-      sourceProps.promoteId = strategy === 'promoteId' ? options.promoteId : undefined;
+      syncBusinessSourceProps(sourceProps, snapshot, sourceId, sourceOptions, options);
       syncValidationLog();
     },
     { immediate: true }
@@ -508,7 +584,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
     return createMapSourceFeatureRef(sourceId, featureId);
   };
 
-  return {
+  const businessSource: MapBusinessSource = {
     sourceId,
     sourceProps,
     resolveFeature,
@@ -517,6 +593,8 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
     toFeatureRef,
     matchesFeature,
   };
+
+  return businessSource;
 }
 
 /**

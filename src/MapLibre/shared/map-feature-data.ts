@@ -127,6 +127,60 @@ export function replaceFeatureCollectionFeatures<
 }
 
 /**
+ * 判断当前值是否为可接受的对象类型。
+ * 这里显式排除数组，避免把数组误判为 GeoJSON Feature / geometry / properties。
+ * @param value 待判断的值
+ * @returns 是否为普通对象或 null
+ */
+function isObjectLike(value: unknown): value is Record<string, any> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * 判断单条数据是否符合最基础的 GeoJSON Feature 结构。
+ * 当前采用“轻校验”策略：
+ * 1. 必须是对象
+ * 2. 必须显式包含 geometry 与 properties 字段
+ * 3. geometry 允许为对象或 null
+ * 4. properties 允许为对象或 null
+ * @param feature 待判断的单条要素数据
+ * @returns 是否满足最基础的 GeoJSON Feature 结构
+ */
+function isValidGeoJsonFeature(feature: unknown): boolean {
+  if (!isObjectLike(feature)) {
+    return false;
+  }
+
+  if (!('geometry' in feature) || !('properties' in feature)) {
+    return false;
+  }
+
+  const geometry = feature.geometry;
+  const properties = feature.properties;
+  const isGeometryValid = geometry === null || isObjectLike(geometry);
+  const isPropertiesValid = properties === null || isObjectLike(properties);
+
+  return isGeometryValid && isPropertiesValid;
+}
+
+/**
+ * 收集当前 features 数组中不合法的要素下标。
+ * @param features 当前待校验的要素数组
+ * @returns 不合法要素的下标列表
+ */
+function collectInvalidGeoJsonFeatureIndexes(features: unknown[]): number[] {
+  const invalidIndexes: number[] = [];
+
+  features.forEach((feature, index) => {
+    if (!isValidGeoJsonFeature(feature)) {
+      invalidIndexes.push(index);
+    }
+  });
+
+  return invalidIndexes;
+}
+
+/**
  * 在完整要素集合中按稳定 ID 写回属性。
  * @param options 写回配置
  * @returns 结构化写回结果
@@ -151,9 +205,22 @@ export function saveFeaturePropertiesInCollection<
     };
   }
 
+  const invalidFeatureIndexes = collectInvalidGeoJsonFeatureIndexes(
+    featureCollection.features
+  );
+  if (invalidFeatureIndexes.length > 0) {
+    return {
+      success: false,
+      message:
+        '绑定的 GeoJSON 数据格式不正确：features 中存在非 GeoJSON Feature 项（序号：' +
+        invalidFeatureIndexes.map((index) => index + 1).join('、') +
+        '）',
+    };
+  }
+
   const matcher = featureMatcher || createDefaultFeatureMatcher();
-  const nextCollection = clonePlainData(featureCollection);
-  const featureIndex = nextCollection.features.findIndex((feature: any) => {
+  const nextFeatures = clonePlainData(featureCollection.features);
+  const featureIndex = nextFeatures.findIndex((feature: any) => {
     return matcher(feature, featureId);
   });
 
@@ -165,14 +232,14 @@ export function saveFeaturePropertiesInCollection<
   }
 
   // 先取出当前属性，再根据 replace / merge 语义生成最新属性快照。
-  const currentProperties = clonePlainData(nextCollection.features[featureIndex].properties || {});
+  const currentProperties = clonePlainData(nextFeatures[featureIndex].properties || {});
   const nextProperties = resolveNextFeatureProperties(currentProperties, newProperties, mode);
 
-  nextCollection.features[featureIndex].properties = nextProperties;
+  nextFeatures[featureIndex].properties = nextProperties;
 
   return {
     success: true,
-    data: nextCollection,
+    data: replaceFeatureCollectionFeatures(featureCollection, nextFeatures),
     properties: nextProperties,
     message: '地图要素属性写回成功',
   };
