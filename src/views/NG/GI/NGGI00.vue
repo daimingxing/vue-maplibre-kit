@@ -735,8 +735,11 @@ const getFeatureBusinessId = (
  * 正式业务源与线草稿源的解析都收口到这里，页面不再自己拼 featureRef 与来源分流。
  */
 const featureQuery = useMapFeatureQuery({
+  /** 地图核心实例引用，用于获取当前地图的选中状态和交互上下文等 */
   mapRef: mapInitRef,
+  /** 正式业务数据源注册表，用于解析和查询已存在的正式业务要素数据 */
   sourceRegistry: businessSourceRegistry,
+  /** 可选参数：临时草稿线插件 ID，若传入则支持查询用户正在绘制的临时草稿要素 */
   lineDraftPreviewPluginId: lineDraftPreviewPlugin.id,
 });
 
