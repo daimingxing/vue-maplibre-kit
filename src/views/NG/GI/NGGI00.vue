@@ -731,8 +731,12 @@ const getFeatureBusinessId = (
 };
 
 /**
- * 当前页面统一使用的要素查询门面。
- * 正式业务源与线草稿源的解析都收口到这里，页面不再自己拼 featureRef 与来源分流。
+ * 统一的地图要素查询工具（Facade 门面）。
+ * 
+ * 作用：屏蔽底层多数据源的复杂性。
+ * 业务代码只需要调用 featureQuery 的方法（如 resolveSelectedLine），
+ * 它就会自动判断并从“正式数据源”或“临时草稿线数据源”中捞取最新的完整 GeoJSON 数据，
+ * 而不需要在页面里到处写 if/else 判断要素来源。
  */
 const featureQuery = useMapFeatureQuery({
   /** 地图核心实例引用，用于获取当前地图的选中状态和交互上下文等 */
@@ -744,12 +748,18 @@ const featureQuery = useMapFeatureQuery({
 });
 
 /**
- * 当前页面统一使用的业务动作门面。
- * 正式业务源、线草稿源和 TerraDraw 属性写回都从这里分发。
+ * 统一的地图要素操作工具（Facade 门面）。
+ * 
+ * 作用：处理针对地图要素的各类修改动作（如更新属性、删除等）。
+ * 它会在底层自动识别要素是存在于正式业务源、还是临时草稿源，亦或是 TerraDraw 的绘制层中，
+ * 然后把修改动作精准地分发给对应的管理器，业务页面无需关心底层具体是哪个源在响应。
  */
 const featureActions = useMapFeatureActions({
+  /** 地图核心实例引用，用于获取底层绘制工具（如 TerraDraw）的状态和实例 */
   mapRef: mapInitRef,
+  /** 正式业务数据源注册表，当需要修改正式数据（如更新业务属性）时会操作它 */
   sourceRegistry: businessSourceRegistry,
+  /** 可选参数：临时草稿线插件 ID，当需要修改草稿线数据时会操作对应插件 */
   lineDraftPreviewPluginId: lineDraftPreviewPlugin.id,
 });
 
