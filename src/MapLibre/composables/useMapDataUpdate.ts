@@ -85,8 +85,9 @@ interface BaseSaveFeaturePropertiesOptions {
   newProperties: FeatureProperties;
   /**
    * 属性写回模式：
-   * 1. replace: 以新属性集覆盖允许编辑的业务字段
-   * 2. merge: 仅合并传入属性，不主动清理旧业务属性
+   * 1. replace: 仅覆盖本次传入且允许编辑的业务字段，不会因为缺少某个键就自动删掉旧字段
+   * 2. merge: 显式表达局部合并语义，当前阶段同样只覆盖本次传入且允许编辑的字段
+   * 3. 如果需要删除字段，必须显式调用 removeProperties 对应链路
    * @default 'replace'
    */
   mode?: FeaturePropertySaveMode;
