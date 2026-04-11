@@ -4,18 +4,6 @@
 export type MapFeatureDataId = string | number;
 
 /**
- * 通用属性写回模式。
- *
- * 当前版本为了兼容既有公开 API，会同时保留 `replace` 与 `merge` 两个模式名，
- * 但带治理的业务写回链路已经收紧为“显式增改”和“显式删键”分离：
- * 1. `replace`：只覆盖本次传入且允许编辑的字段，不会因为缺少某个键而隐式删掉旧字段
- * 2. `merge`：显式表达局部合并语义，当前阶段同样只覆盖本次传入且允许编辑的字段
- *
- * 如果业务层需要删除字段，必须显式调用 `removeProperties` 对应链路。
- */
-export type MapFeatureDataSaveMode = 'replace' | 'merge';
-
-/**
  * 通用属性对象类型。
  */
 export type MapFeatureDataProperties = Record<string, any>;
@@ -97,8 +85,6 @@ export interface SaveFeaturePropertiesInCollectionOptions<
   featureId: MapFeatureDataId;
   /** 最新属性对象。 */
   newProperties: MapFeatureDataProperties;
-  /** 属性写回模式。 */
-  mode?: MapFeatureDataSaveMode;
   /** 自定义要素匹配器。 */
   featureMatcher?: MapFeatureDataMatcher;
   /** 已知的要素下标，可跳过查找。 */
@@ -183,12 +169,6 @@ interface MutateFeaturePropertiesBaseOptions extends ResolveFeaturePropertyAcces
 interface MutateFeaturePropertiesOptions extends MutateFeaturePropertiesBaseOptions {
   /** 最新属性对象。 */
   newProperties: MapFeatureDataProperties;
-  /**
-   * 属性写回模式。
-   * 这里只负责“允许字段的局部覆盖”，不会隐式删掉旧字段；
-   * 如需删键，必须走显式删除链路。
-   */
-  mode?: MapFeatureDataSaveMode;
 }
 
 interface RemoveFeaturePropertiesOptions extends MutateFeaturePropertiesBaseOptions {
@@ -238,35 +218,6 @@ export function createDefaultFeatureMatcher(): MapFeatureDataMatcher {
   return (feature: any, featureId: MapFeatureDataId) => {
     return feature?.id === featureId || feature?.properties?.id === featureId;
   };
-}
-
-/**
- * 计算地图要素属性写回后的新属性集合。
- * 这里保留旧实现，供兼容路径复用。
- *
- * 注意：
- * 1. 这是旧式的“纯属性对象” helper，不带属性治理能力
- * 2. 当 mode 为 `replace` 时，它会直接返回 `newProperties` 的克隆结果
- * 3. 当前正式业务写回链路已经不再直接依赖这个 helper，删键统一走 `removeProperties`
- *
- * @param currentProperties 当前属性对象
- * @param newProperties 最新属性对象
- * @param mode 写回模式
- * @returns 计算后的属性对象
- */
-export function resolveNextFeatureProperties(
-  currentProperties: MapFeatureDataProperties,
-  newProperties: MapFeatureDataProperties,
-  mode: MapFeatureDataSaveMode
-): MapFeatureDataProperties {
-  if (mode === 'merge') {
-    return {
-      ...currentProperties,
-      ...newProperties,
-    };
-  }
-
-  return clonePlainData(newProperties);
 }
 
 /**
@@ -500,10 +451,10 @@ function resolveFeaturePropertyAccess(
 
 /**
  * 按治理规则执行属性写回。
- * 当前首阶段会把 `replace` 与 `merge` 都收敛为“允许字段的局部覆盖”：
+ * 这里只负责显式增改：
  * 1. 只处理本次传入的字段
  * 2. 只写入允许编辑的字段
- * 3. 不会因为 `replace` 缺少某个键就隐式删掉旧字段
+ * 3. 不会隐式删掉旧字段
  * 4. 删除字段必须显式走 `removeFeatureProperties`
  *
  * @param options 写回配置
@@ -515,7 +466,6 @@ function mutateFeatureProperties(
   const {
     currentProperties,
     newProperties,
-    mode = 'replace',
     propertyPolicy,
     protectedKeys,
     hiddenKeys,
@@ -561,23 +511,15 @@ function mutateFeatureProperties(
     };
   }
 
-  // 当前仍保留 mode 参数，是为了与既有公开 API 保持兼容，
-  // 同时把“删键必须显式调用 removeProperties”这条契约固定在底层实现里。
-  const successMessage =
-    blockedKeys.length > 0
-      ? mode === 'merge'
-        ? `已合并允许修改的属性，以下字段已忽略：${blockedKeys.join('、')}`
-        : `已覆盖允许修改的传入字段，旧字段不会因 replace 被隐式删除；以下字段已忽略：${blockedKeys.join('、')}`
-      : mode === 'merge'
-        ? '属性合并成功'
-        : '属性覆盖成功；旧字段不会因 replace 被隐式删除';
-
   return {
     success: true,
     properties: nextProperties,
     blockedKeys,
     removedKeys: [],
-    message: successMessage,
+    message:
+      blockedKeys.length > 0
+        ? `已保存允许修改的属性，以下字段已忽略：${blockedKeys.join('、')}`
+        : '属性保存成功',
   };
 }
 
@@ -724,7 +666,6 @@ export function saveFeaturePropertiesInCollection<
     propertyPolicy,
     protectedKeys,
     hiddenKeys,
-    mode = 'replace',
   } = options;
 
   if (!featureCollection || !Array.isArray(featureCollection.features)) {
@@ -769,7 +710,6 @@ export function saveFeaturePropertiesInCollection<
   const result = mutateFeatureProperties({
     currentProperties: clonePlainData(currentFeature.properties || {}),
     newProperties,
-    mode,
     propertyPolicy,
     protectedKeys,
     hiddenKeys,

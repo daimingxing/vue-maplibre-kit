@@ -3,7 +3,6 @@ import type { Ref } from 'vue';
 import type { GeoJSONSourceSpecification } from 'maplibre-gl';
 import type {
   FeatureProperties,
-  FeaturePropertySaveMode,
   MapFeatureId,
   SaveFeaturePropertiesResult,
 } from '../composables/useMapDataUpdate';
@@ -166,11 +165,7 @@ export interface MapBusinessSource {
   /** 用最新要素数组整体替换当前 source。 */
   replaceFeatures: (nextFeatures: MapCommonFeature[]) => boolean;
   /** 按业务 ID 写回属性。 */
-  saveProperties: (
-    featureId: MapFeatureId,
-    newProperties: FeatureProperties,
-    mode?: FeaturePropertySaveMode
-  ) => SaveFeaturePropertiesResult;
+  saveProperties: (featureId: MapFeatureId, newProperties: FeatureProperties) => SaveFeaturePropertiesResult;
   /** 按业务 ID 显式删除属性。 */
   removeProperties: (
     featureId: MapFeatureId,
@@ -202,8 +197,7 @@ export interface MapBusinessSourceRegistry {
   saveProperties: (
     sourceId: string,
     featureId: MapFeatureId,
-    newProperties: FeatureProperties,
-    mode?: FeaturePropertySaveMode
+    newProperties: FeatureProperties
   ) => SaveFeaturePropertiesResult;
   /** 向指定 source 显式删除属性。 */
   removeProperties: (
@@ -650,13 +644,11 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    * 按业务 ID 写回属性。
    * @param featureId 目标业务 ID
    * @param newProperties 最新属性对象
-   * @param mode 写回模式
    * @returns 结构化写回结果
    */
   const saveProperties = (
     featureId: MapFeatureId,
-    newProperties: FeatureProperties,
-    mode: FeaturePropertySaveMode = 'replace'
+    newProperties: FeatureProperties
   ): SaveFeaturePropertiesResult => {
     syncValidationLog();
 
@@ -679,7 +671,6 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
       featureMatcher: (feature, currentFeatureId) => {
         return matchesFeature(feature as MapCommonFeature, currentFeatureId);
       },
-      mode,
     });
 
     if (!result.success || !result.data || !result.properties) {
@@ -872,14 +863,12 @@ export function createMapBusinessSourceRegistry(
    * @param sourceId 目标 source ID
    * @param featureId 目标业务 ID
    * @param newProperties 最新属性对象
-   * @param mode 写回模式
    * @returns 结构化写回结果
    */
   const saveProperties = (
     sourceId: string,
     featureId: MapFeatureId,
-    newProperties: FeatureProperties,
-    mode: FeaturePropertySaveMode = 'replace'
+    newProperties: FeatureProperties
   ): SaveFeaturePropertiesResult => {
     const targetSource = getSource(sourceId);
     if (!targetSource) {
@@ -891,7 +880,7 @@ export function createMapBusinessSourceRegistry(
       };
     }
 
-    return targetSource.saveProperties(featureId, newProperties, mode);
+    return targetSource.saveProperties(featureId, newProperties);
   };
 
   /**

@@ -14,7 +14,6 @@ import {
 } from '../../shared/map-common-tools';
 import type {
   FeatureProperties,
-  FeaturePropertySaveMode,
   MapFeatureId,
   SaveFeaturePropertiesResult,
 } from '../../composables/useMapDataUpdate';
@@ -71,8 +70,6 @@ interface SaveLineDraftFeaturePropertiesOptions {
   featureId: MapFeatureId;
   /** 需要写回的属性对象。 */
   newProperties: FeatureProperties;
-  /** 属性写回模式。 */
-  mode?: FeaturePropertySaveMode;
   /** 当前草稿要素继承的业务属性治理配置。 */
   propertyPolicy?: MapFeaturePropertyPolicy | null;
   /** 当前草稿要素继承的强保护键。 */
@@ -397,7 +394,6 @@ export function useLineDraftPreviewStore(options: UseLineDraftPreviewStoreOption
     const {
       featureId,
       newProperties,
-      mode = 'replace',
       propertyPolicy = null,
       protectedKeys = [],
     } = saveOptions;
@@ -421,7 +417,6 @@ export function useLineDraftPreviewStore(options: UseLineDraftPreviewStoreOption
       propertyPolicy,
       protectedKeys,
       hiddenKeys: LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS,
-      mode,
     });
 
     if (!result.success || !result.data || !result.properties) {

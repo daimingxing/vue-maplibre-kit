@@ -63,7 +63,6 @@ export {
 } from './MapLibre/composables/useMapDataUpdate';
 export type {
   FeatureProperties,
-  FeaturePropertySaveMode,
   MapFeatureId,
   MapFeaturePropertyPolicy,
   RemoveMapFeaturePropertiesOptions,

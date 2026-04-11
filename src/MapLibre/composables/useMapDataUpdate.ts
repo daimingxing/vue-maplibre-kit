@@ -9,11 +9,10 @@ import {
   saveFeaturePropertiesInCollection,
   type MapFeatureDataId as MapFeatureId,
   type MapFeatureDataProperties as FeatureProperties,
-  type MapFeatureDataSaveMode as FeaturePropertySaveMode,
   type MapFeaturePropertyPolicy,
 } from '../shared/map-feature-data';
 
-export type { MapFeatureId, FeatureProperties, FeaturePropertySaveMode, MapFeaturePropertyPolicy };
+export type { MapFeatureId, FeatureProperties, MapFeaturePropertyPolicy };
 
 /**
  * TerraDraw 内部保留属性名集合。
@@ -23,7 +22,7 @@ export type { MapFeatureId, FeatureProperties, FeaturePropertySaveMode, MapFeatu
  * 这些字段是引擎正常运行的基础。
  *
  * 【干嘛用的】
- * 当业务层想要更新或替换 TerraDraw 要素的业务属性时，如果直接全量替换（replace），
+ * 当业务层想要保存 TerraDraw 要素的业务属性时，如果直接覆盖底层属性对象，
  * 可能会不小心删掉这些底层保留字段，导致 TerraDraw 内部状态崩溃或报错。
  * 因此提供此列表，用于在执行属性更新或删除时，过滤并保护这些字段不被业务操作覆盖或删除。
  */
@@ -83,14 +82,6 @@ interface BaseSaveFeaturePropertiesOptions {
    * 最新要写回的属性对象
    */
   newProperties: FeatureProperties;
-  /**
-   * 属性写回模式：
-   * 1. replace: 仅覆盖本次传入且允许编辑的业务字段，不会因为缺少某个键就自动删掉旧字段
-   * 2. merge: 显式表达局部合并语义，当前阶段同样只覆盖本次传入且允许编辑的字段
-   * 3. 如果需要删除字段，必须显式调用 removeProperties 对应链路
-   * @default 'replace'
-   */
-  mode?: FeaturePropertySaveMode;
   /**
    * 业务层属性治理配置，用于控制字段的可见性、可编辑性和可删除性。
    *
@@ -462,7 +453,6 @@ export function saveMapFeatureProperties(
     propertyPolicy,
     protectedKeys,
     hiddenKeys,
-    mode = 'replace',
   } = options;
 
   const source = getGeoJsonSource(mapInstance, sourceId);
@@ -483,7 +473,6 @@ export function saveMapFeatureProperties(
       propertyPolicy,
       protectedKeys,
       hiddenKeys,
-      mode,
     });
 
     if (!result.success || !result.data || !result.properties) {
@@ -604,7 +593,6 @@ export function saveTerradrawFeatureProperties(
     protectedKeys,
     hiddenKeys,
     reservedPropertyKeys = TERRADRAW_RESERVED_PROPERTY_KEYS,
-    mode = 'replace',
   } = options;
 
   if (!terradraw || !terradraw.hasFeature(featureId)) {
@@ -625,7 +613,6 @@ export function saveTerradrawFeatureProperties(
     propertyPolicy,
     protectedKeys,
     hiddenKeys: mergedHiddenKeys,
-    mode,
   });
 
   if (!result.success || !result.properties) {

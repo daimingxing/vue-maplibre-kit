@@ -7,7 +7,6 @@ import type {
 } from '../../shared/mapLibre-controls-types';
 import type {
   FeatureProperties,
-  FeaturePropertySaveMode,
   MapFeatureId,
   SaveFeaturePropertiesResult,
 } from '../../composables/useMapDataUpdate';
@@ -71,7 +70,6 @@ export interface LineDraftPreviewPluginApi {
   saveProperties: (saveOptions: {
     featureId: MapFeatureId;
     newProperties: FeatureProperties;
-    mode?: FeaturePropertySaveMode;
     propertyPolicy?: MapFeaturePropertyPolicy | null;
     protectedKeys?: readonly string[];
   }) => SaveFeaturePropertiesResult;
@@ -325,7 +323,6 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
   const saveProperties = (saveOptions: {
     featureId: MapFeatureId;
     newProperties: FeatureProperties;
-    mode?: FeaturePropertySaveMode;
     propertyPolicy?: MapFeaturePropertyPolicy | null;
     protectedKeys?: readonly string[];
   }): SaveFeaturePropertiesResult => {

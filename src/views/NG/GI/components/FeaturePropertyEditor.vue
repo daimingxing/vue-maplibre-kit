@@ -86,7 +86,7 @@
           <el-button type="primary" size="small" @click="handleAddItem">保存</el-button>
         </div>
         <div class="add-panel__tip">
-          支持直接输入字符串，也支持输入数字、`true/false`、`null`、JSON 对象或数组。
+          保存表示新增或修改单个字段；删除请使用每行的删除按钮。
         </div>
       </div>
 

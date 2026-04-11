@@ -287,8 +287,8 @@
       </div>
     </mgl-popup>
     <!--
-      属性面板示例已切到“单键 merge / 显式 remove”模式。
-      业务层不再整包 replace 属性对象，避免误删系统字段，也更贴近真实业务的增量修改场景。
+      属性面板示例已切到“单键保存 / 显式删除”模式。
+      业务层不再整包覆盖属性对象，避免误删系统字段，也更贴近真实业务的增量修改场景。
     -->
     <feature-property-editor
       v-model:visible="contextMenuState.visible"
@@ -2616,7 +2616,7 @@ const syncSavedPropertiesToPanels = (nextProperties: Record<string, any>) => {
 
 /**
  * 统一处理 FeaturePropertyEditor 的单键保存事件。
- * 业务层不再整包 replace，而是统一走单键 merge。
+ * 业务层统一通过单键保存完成属性新增或修改。
  * @param payload 本次需要写回的单个属性载荷
  */
 const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
@@ -2633,7 +2633,6 @@ const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
       newProperties: {
         [payload.key]: payload.value,
       },
-      mode: "merge",
     });
 
     if (!result.success || !result.properties) {
@@ -2659,7 +2658,6 @@ const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
         [payload.key]: payload.value,
       },
       currentProperties: contextMenuState.rawProperties,
-      mode: "merge",
     });
 
     if (!result.success || !result.properties) {
@@ -2677,7 +2675,7 @@ const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
 
 /**
  * 统一处理 FeaturePropertyEditor 的单键删除事件。
- * 删除能力显式走 removeProperties，不再复用 replace 语义。
+ * 删除能力显式走 removeProperties。
  * @param payload 本次需要删除的单个属性键
  */
 const handleRemovePropertyItem = (payload: FeaturePropertyEditorRemovePayload) => {

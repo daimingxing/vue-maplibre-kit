@@ -4,7 +4,6 @@ import {
   removeTerradrawFeatureProperties,
   TERRADRAW_MEASURE_SYSTEM_PROPERTY_KEYS,
   type FeatureProperties,
-  type FeaturePropertySaveMode,
   type MapFeatureId,
 } from '../composables/useMapDataUpdate';
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
@@ -71,8 +70,6 @@ export interface SaveBusinessFeaturePropertiesOptions {
   featureRef: MapSourceFeatureRef | null;
   /** 最新属性对象。 */
   newProperties: FeatureProperties;
-  /** 属性写回模式。 */
-  mode?: FeaturePropertySaveMode;
 }
 
 /**
@@ -97,8 +94,6 @@ export interface SaveTerradrawFeaturePropertiesActionOptions {
   currentProperties?: FeatureProperties;
   /** 最新属性对象。 */
   newProperties: FeatureProperties;
-  /** 属性写回模式。 */
-  mode?: FeaturePropertySaveMode;
   /** TerraDraw 保留字段列表。 */
   reservedPropertyKeys?: readonly string[];
 }
@@ -162,7 +157,6 @@ export interface UseMapFeatureActionsResult {
   /** 保存当前选中的地图要素属性。 */
   saveSelectedMapFeatureProperties: (options: {
     newProperties: FeatureProperties;
-    mode?: FeaturePropertySaveMode;
   }) => MapFeaturePropertyActionResult;
   /** 删除当前选中的地图要素属性。 */
   removeSelectedMapFeatureProperties: (options: {
@@ -274,7 +268,7 @@ export function useMapFeatureActions(
   const saveBusinessFeatureProperties = (
     saveOptions: SaveBusinessFeaturePropertiesOptions
   ): MapFeaturePropertyActionResult => {
-    const { featureRef, newProperties, mode = 'replace' } = saveOptions;
+    const { featureRef, newProperties } = saveOptions;
 
     if (!featureRef?.sourceId || featureRef.featureId === null) {
       return {
@@ -298,7 +292,6 @@ export function useMapFeatureActions(
       const result = lineDraftPreviewApi.saveProperties({
         featureId: featureRef.featureId,
         newProperties,
-        mode,
         propertyPolicy: governance.propertyPolicy,
         protectedKeys: governance.protectedKeys,
       });
@@ -316,8 +309,7 @@ export function useMapFeatureActions(
     const result = sourceRegistry.saveProperties(
       featureRef.sourceId,
       featureRef.featureId,
-      newProperties,
-      mode
+      newProperties
     );
 
     return {
@@ -399,12 +391,10 @@ export function useMapFeatureActions(
    */
   const saveSelectedMapFeatureProperties = (saveOptions: {
     newProperties: FeatureProperties;
-    mode?: FeaturePropertySaveMode;
   }): MapFeaturePropertyActionResult => {
     return saveBusinessFeatureProperties({
       featureRef: featureQuery.getSelectedFeatureRef(),
       newProperties: saveOptions.newProperties,
-      mode: saveOptions.mode,
     });
   };
 
@@ -430,7 +420,7 @@ export function useMapFeatureActions(
   const saveTerradrawFeaturePropertiesAction = (
     saveOptions: SaveTerradrawFeaturePropertiesActionOptions
   ): MapFeaturePropertyActionResult => {
-    const { controlType, featureId, currentProperties, newProperties, mode = 'replace' } = saveOptions;
+    const { controlType, featureId, currentProperties, newProperties } = saveOptions;
     const mapExpose = getMapExpose();
 
     if (!mapExpose) {
@@ -472,7 +462,6 @@ export function useMapFeatureActions(
       hiddenKeys:
         controlType === 'measure' ? TERRADRAW_MEASURE_SYSTEM_PROPERTY_KEYS : undefined,
       reservedPropertyKeys: saveOptions.reservedPropertyKeys,
-      mode,
     });
 
     return {
