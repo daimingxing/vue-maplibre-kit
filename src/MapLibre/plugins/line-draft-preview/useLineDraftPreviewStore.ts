@@ -4,7 +4,9 @@ import {
   MapLineExtensionTool,
   buildMapSourceFeatureRefKey,
   extractManagedPreviewOriginFromProperties,
+  MANAGED_PREVIEW_ORIGIN_FEATURE_ID_PROPERTY,
   MANAGED_PREVIEW_ORIGIN_KEY_PROPERTY,
+  MANAGED_PREVIEW_ORIGIN_SOURCE_ID_PROPERTY,
   type MapCommonFeature,
   type MapCommonFeatureCollection,
   type MapCommonLineFeature,
@@ -16,6 +18,11 @@ import type {
   MapFeatureId,
   SaveFeaturePropertiesResult,
 } from '../../composables/useMapDataUpdate';
+import {
+  removeFeaturePropertiesInCollection,
+  saveFeaturePropertiesInCollection,
+  type MapFeaturePropertyPolicy,
+} from '../../shared/map-feature-data';
 
 /** 线草稿预览数据源 ID。 */
 export const LINE_DRAFT_PREVIEW_SOURCE_ID = 'lineDraftSource';
@@ -28,6 +35,13 @@ export const LINE_DRAFT_PREVIEW_FILL_LAYER_ID = 'lineDraftFillLayer';
 
 /** 线草稿预览线廊草稿 generatedKind 固定值。 */
 export const LINE_DRAFT_PREVIEW_CORRIDOR_KIND = 'line-corridor-draft';
+
+/** 线草稿内部托管来源字段。 */
+export const LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS = [
+  MANAGED_PREVIEW_ORIGIN_SOURCE_ID_PROPERTY,
+  MANAGED_PREVIEW_ORIGIN_FEATURE_ID_PROPERTY,
+  MANAGED_PREVIEW_ORIGIN_KEY_PROPERTY,
+] as const;
 
 interface UseLineDraftPreviewStoreOptions {
   /** 读取当前线草稿预览是否启用。 */
@@ -59,6 +73,21 @@ interface SaveLineDraftFeaturePropertiesOptions {
   newProperties: FeatureProperties;
   /** 属性写回模式。 */
   mode?: FeaturePropertySaveMode;
+  /** 当前草稿要素继承的业务属性治理配置。 */
+  propertyPolicy?: MapFeaturePropertyPolicy | null;
+  /** 当前草稿要素继承的强保护键。 */
+  protectedKeys?: readonly string[];
+}
+
+interface RemoveLineDraftFeaturePropertiesOptions {
+  /** 目标要素业务 ID。 */
+  featureId: MapFeatureId;
+  /** 需要删除的属性键列表。 */
+  propertyKeys: readonly string[];
+  /** 当前草稿要素继承的业务属性治理配置。 */
+  propertyPolicy?: MapFeaturePropertyPolicy | null;
+  /** 当前草稿要素继承的强保护键。 */
+  protectedKeys?: readonly string[];
 }
 
 /**
@@ -200,28 +229,6 @@ function getManagedPreviewOriginKey(feature: MapCommonFeature | null | undefined
 }
 
 /**
- * 计算地图要素属性写回后的新属性集合。
- * @param currentProperties 当前属性对象
- * @param newProperties 最新写回属性对象
- * @param mode 写回模式
- * @returns 计算后的属性对象
- */
-function resolveNextMapProperties(
-  currentProperties: FeatureProperties,
-  newProperties: FeatureProperties,
-  mode: FeaturePropertySaveMode
-): FeatureProperties {
-  if (mode === 'merge') {
-    return {
-      ...currentProperties,
-      ...newProperties,
-    };
-  }
-
-  return clonePlainData(newProperties);
-}
-
-/**
  * 创建统一的失败结果，便于与现有属性写回接口保持一致。
  * @param featureId 当前目标要素业务 ID
  * @param message 失败原因
@@ -235,27 +242,6 @@ function createFailureResult(
     success: false,
     target: 'map',
     featureId,
-    message,
-  };
-}
-
-/**
- * 创建统一的成功结果，便于与现有属性写回接口保持一致。
- * @param featureId 当前目标要素业务 ID
- * @param properties 最新属性对象
- * @param message 成功说明
- * @returns 结构化成功结果
- */
-function createSuccessResult(
-  featureId: MapFeatureId,
-  properties: FeatureProperties,
-  message: string
-): SaveFeaturePropertiesResult {
-  return {
-    success: true,
-    target: 'map',
-    featureId,
-    properties,
     message,
   };
 }
@@ -287,6 +273,14 @@ export function useLineDraftPreviewStore(options: UseLineDraftPreviewStoreOption
       type: 'FeatureCollection',
       features: clonePlainData(nextFeatures),
     };
+  };
+
+  /**
+   * 将最新集合整体写回线草稿数据源。
+   * @param nextCollection 最新线草稿集合
+   */
+  const commitFeatureCollection = (nextCollection: MapCommonFeatureCollection): void => {
+    featureCollection.value = nextCollection;
   };
 
   /**
@@ -400,25 +394,111 @@ export function useLineDraftPreviewStore(options: UseLineDraftPreviewStoreOption
   const saveLineDraftFeatureProperties = (
     saveOptions: SaveLineDraftFeaturePropertiesOptions
   ): SaveFeaturePropertiesResult => {
-    const { featureId, newProperties, mode = 'replace' } = saveOptions;
+    const {
+      featureId,
+      newProperties,
+      mode = 'replace',
+      propertyPolicy = null,
+      protectedKeys = [],
+    } = saveOptions;
 
     if (!isEnabled()) {
       return createFailureResult(featureId, '线草稿预览未启用');
     }
 
-    const currentFeatures = clonePlainData(getCurrentFeatures());
+    const currentFeatures = getCurrentFeatures();
     const featureIndex = findFeatureIndexById(currentFeatures, featureId);
 
     if (featureIndex === -1) {
       return createFailureResult(featureId, `未找到 ID 为 '${featureId}' 的线草稿要素`);
     }
 
-    const currentProperties = clonePlainData(currentFeatures[featureIndex].properties || {});
-    const nextProperties = resolveNextMapProperties(currentProperties, newProperties, mode);
-    currentFeatures[featureIndex].properties = nextProperties;
+    const result = saveFeaturePropertiesInCollection({
+      featureCollection: featureCollection.value,
+      featureId,
+      featureIndex,
+      newProperties,
+      propertyPolicy,
+      protectedKeys,
+      hiddenKeys: LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS,
+      mode,
+    });
 
-    commitFeatures(currentFeatures);
-    return createSuccessResult(featureId, nextProperties, '线草稿要素属性写回成功');
+    if (!result.success || !result.data || !result.properties) {
+      return {
+        success: false,
+        target: 'map',
+        featureId,
+        message: result.message,
+        blockedKeys: result.blockedKeys,
+        removedKeys: result.removedKeys,
+      };
+    }
+
+    commitFeatureCollection(result.data as MapCommonFeatureCollection);
+    return {
+      success: true,
+      target: 'map',
+      featureId,
+      properties: result.properties,
+      message: result.message,
+      blockedKeys: result.blockedKeys,
+      removedKeys: result.removedKeys,
+    };
+  };
+
+  /**
+   * 显式删除线草稿要素属性。
+   * @param saveOptions 删除配置
+   * @returns 结构化写回结果
+   */
+  const removeLineDraftFeatureProperties = (
+    saveOptions: RemoveLineDraftFeaturePropertiesOptions
+  ): SaveFeaturePropertiesResult => {
+    const { featureId, propertyKeys, propertyPolicy = null, protectedKeys = [] } = saveOptions;
+
+    if (!isEnabled()) {
+      return createFailureResult(featureId, '线草稿预览未启用');
+    }
+
+    const currentFeatures = getCurrentFeatures();
+    const featureIndex = findFeatureIndexById(currentFeatures, featureId);
+
+    if (featureIndex === -1) {
+      return createFailureResult(featureId, `未找到 ID 为 '${featureId}' 的线草稿要素`);
+    }
+
+    const result = removeFeaturePropertiesInCollection({
+      featureCollection: featureCollection.value,
+      featureId,
+      featureIndex,
+      propertyKeys,
+      propertyPolicy,
+      protectedKeys,
+      hiddenKeys: LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS,
+    });
+
+    if (!result.success || !result.data || !result.properties) {
+      return {
+        success: false,
+        target: 'map',
+        featureId,
+        message: result.message,
+        blockedKeys: result.blockedKeys,
+        removedKeys: result.removedKeys,
+      };
+    }
+
+    commitFeatureCollection(result.data as MapCommonFeatureCollection);
+    return {
+      success: true,
+      target: 'map',
+      featureId,
+      properties: result.properties,
+      message: result.message,
+      blockedKeys: result.blockedKeys,
+      removedKeys: result.removedKeys,
+    };
   };
 
   const hasFeatures = computed(() => getCurrentFeatures().length > 0);
@@ -442,6 +522,7 @@ export function useLineDraftPreviewStore(options: UseLineDraftPreviewStoreOption
     replaceLineCorridorPreview,
     clearLineDraftFeatures,
     saveLineDraftFeatureProperties,
+    removeLineDraftFeatureProperties,
     getFeatureById,
     isLineDraftFeatureById,
     isLineDraftFeatureSource,

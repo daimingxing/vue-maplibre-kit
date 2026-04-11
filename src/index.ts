@@ -52,7 +52,10 @@ export type {
 } from './MapLibre/shared/mapLibre-controls-types';
 export {
   TERRADRAW_RESERVED_PROPERTY_KEYS,
+  TERRADRAW_MEASURE_SYSTEM_PROPERTY_KEYS,
   omitTerradrawReservedProperties,
+  removeMapFeatureProperties,
+  removeTerradrawFeatureProperties,
   saveFeatureProperties,
   saveMapFeatureProperties,
   saveTerradrawFeatureProperties,
@@ -62,12 +65,19 @@ export type {
   FeatureProperties,
   FeaturePropertySaveMode,
   MapFeatureId,
+  MapFeaturePropertyPolicy,
+  RemoveMapFeaturePropertiesOptions,
+  RemoveTerradrawFeaturePropertiesOptions,
   SaveFeaturePropertiesOptions,
   SaveMapFeaturePropertiesOptions,
   SaveFeaturePropertiesResult,
   SaveTerradrawFeaturePropertiesOptions,
   UpdateFeaturePropertyOptions,
 } from './MapLibre/composables/useMapDataUpdate';
+export type {
+  MapFeaturePropertyPanelItem,
+  MapFeaturePropertyPanelState,
+} from './MapLibre/shared/map-feature-data';
 export {
   createFeatureStateExpression,
   useMapEffect,
@@ -106,6 +116,7 @@ export {
 } from './MapLibre/facades/mapBusinessLayer';
 export {
   useMapFeatureQuery,
+  type ResolveTerradrawPropertyPanelStateOptions,
   type UseMapFeatureQueryOptions,
   type UseMapFeatureQueryResult,
 } from './MapLibre/facades/useMapFeatureQuery';
@@ -116,6 +127,8 @@ export {
   type MapFeatureLineActionResult,
   type MapFeaturePropertyActionResult,
   type PreviewSelectedLineOptions,
+  type RemoveBusinessFeaturePropertiesOptions,
+  type RemoveTerradrawFeaturePropertiesActionOptions,
   type ReplaceSelectedLineCorridorOptions,
   type SaveBusinessFeaturePropertiesOptions,
   type SaveTerradrawFeaturePropertiesActionOptions,

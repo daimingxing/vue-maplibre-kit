@@ -1,6 +1,8 @@
 import { toValue, type MaybeRefOrGetter } from 'vue';
 import {
   saveTerradrawFeatureProperties,
+  removeTerradrawFeatureProperties,
+  TERRADRAW_MEASURE_SYSTEM_PROPERTY_KEYS,
   type FeatureProperties,
   type FeaturePropertySaveMode,
   type MapFeatureId,
@@ -12,11 +14,13 @@ import {
 } from '../plugins/line-draft-preview';
 import {
   MapLineCorridorTool,
+  extractManagedPreviewOriginFromProperties,
   type MapCommonFeature,
   type MapCommonFeatureCollection,
   type MapCommonLineFeature,
   type MapSourceFeatureRef,
 } from '../shared/map-common-tools';
+import type { MapFeaturePropertyPolicy } from '../shared/map-feature-data';
 import type { TerradrawControlType } from '../shared/mapLibre-controls-types';
 import type { MapBusinessSourceRegistry } from './createMapBusinessSource';
 import { resolveLineDraftPreviewApi } from './mapPluginResolver';
@@ -45,6 +49,10 @@ export interface MapFeatureActionResult {
 export interface MapFeaturePropertyActionResult extends MapFeatureActionResult {
   /** 最新属性对象。 */
   properties?: FeatureProperties;
+  /** 被阻止的字段列表。 */
+  blockedKeys?: string[];
+  /** 实际删除的字段列表。 */
+  removedKeys?: string[];
 }
 
 /**
@@ -68,6 +76,16 @@ export interface SaveBusinessFeaturePropertiesOptions {
 }
 
 /**
+ * 业务属性删除入参。
+ */
+export interface RemoveBusinessFeaturePropertiesOptions {
+  /** 目标来源引用。 */
+  featureRef: MapSourceFeatureRef | null;
+  /** 需要删除的属性键列表。 */
+  propertyKeys: readonly string[];
+}
+
+/**
  * TerraDraw 属性写回入参。
  */
 export interface SaveTerradrawFeaturePropertiesActionOptions {
@@ -81,6 +99,22 @@ export interface SaveTerradrawFeaturePropertiesActionOptions {
   newProperties: FeatureProperties;
   /** 属性写回模式。 */
   mode?: FeaturePropertySaveMode;
+  /** TerraDraw 保留字段列表。 */
+  reservedPropertyKeys?: readonly string[];
+}
+
+/**
+ * TerraDraw 属性删除入参。
+ */
+export interface RemoveTerradrawFeaturePropertiesActionOptions {
+  /** 当前控件类型。 */
+  controlType: TerradrawControlType;
+  /** 目标要素 ID。 */
+  featureId: MapFeatureId;
+  /** 当前页面已持有的属性快照。 */
+  currentProperties?: FeatureProperties;
+  /** 需要删除的属性键列表。 */
+  propertyKeys: readonly string[];
   /** TerraDraw 保留字段列表。 */
   reservedPropertyKeys?: readonly string[];
 }
@@ -121,14 +155,26 @@ export interface UseMapFeatureActionsResult {
   saveBusinessFeatureProperties: (
     options: SaveBusinessFeaturePropertiesOptions
   ) => MapFeaturePropertyActionResult;
+  /** 显式删除正式业务源或线草稿源中的地图要素属性。 */
+  removeBusinessFeatureProperties: (
+    options: RemoveBusinessFeaturePropertiesOptions
+  ) => MapFeaturePropertyActionResult;
   /** 保存当前选中的地图要素属性。 */
   saveSelectedMapFeatureProperties: (options: {
     newProperties: FeatureProperties;
     mode?: FeaturePropertySaveMode;
   }) => MapFeaturePropertyActionResult;
+  /** 删除当前选中的地图要素属性。 */
+  removeSelectedMapFeatureProperties: (options: {
+    propertyKeys: readonly string[];
+  }) => MapFeaturePropertyActionResult;
   /** 保存 TerraDraw 要素属性。 */
   saveTerradrawFeatureProperties: (
     options: SaveTerradrawFeaturePropertiesActionOptions
+  ) => MapFeaturePropertyActionResult;
+  /** 删除 TerraDraw 要素属性。 */
+  removeTerradrawFeatureProperties: (
+    options: RemoveTerradrawFeaturePropertiesActionOptions
   ) => MapFeaturePropertyActionResult;
   /** 根据当前选中的线生成线草稿。 */
   previewSelectedLine: (options: PreviewSelectedLineOptions) => MapFeatureLineActionResult;
@@ -138,6 +184,20 @@ export interface UseMapFeatureActionsResult {
   ) => MapFeatureActionResult;
   /** 清空全部线草稿。 */
   clearLineDraft: () => MapFeatureActionResult;
+}
+
+/**
+ * 线草稿继承到的属性治理配置。
+ * 说明：
+ * 1. 正式源的 hiddenKeys / readonlyKeys / fixedKeys 都已经包含在 propertyPolicy 中
+ * 2. 线草稿自身的内部隐藏字段会在插件 store 中额外追加
+ * 3. 因此这里不再单独拆一个 hiddenKeys，避免与 propertyPolicy 形成重复来源
+ */
+interface LineDraftGovernance {
+  /** 正式来源完整的业务属性治理配置，其中已包含 hiddenKeys。 */
+  propertyPolicy: MapFeaturePropertyPolicy | null;
+  /** 正式来源强保护但仍可见的字段列表。 */
+  protectedKeys: readonly string[];
 }
 
 /**
@@ -189,6 +249,24 @@ export function useMapFeatureActions(
   };
 
   /**
+   * 解析当前线草稿要素需要继承的正式源属性治理规则。
+   * @param featureId 当前线草稿业务 ID
+   * @returns 当前线草稿继承到的治理配置
+   */
+  const resolveLineDraftGovernance = (featureId: MapFeatureId): LineDraftGovernance => {
+    const lineDraftFeature = getLineDraftPreviewApi()?.getFeatureById(featureId) || null;
+    const originRef = extractManagedPreviewOriginFromProperties(lineDraftFeature?.properties || {});
+    const targetSource = originRef?.sourceId ? sourceRegistry.getSource(originRef.sourceId) : null;
+
+    return {
+      // 注意：正式源的 hiddenKeys 已经包含在 propertyPolicy 内，
+      // 线草稿自己的内部隐藏字段由 store 层统一追加，这里无需重复拆出 hiddenKeys。
+      propertyPolicy: targetSource?.propertyPolicy || null,
+      protectedKeys: targetSource?.protectedPropertyKeys || [],
+    };
+  };
+
+  /**
    * 保存正式业务源或线草稿源中的地图要素属性。
    * @param saveOptions 写回配置
    * @returns 结构化动作结果
@@ -216,10 +294,13 @@ export function useMapFeatureActions(
         };
       }
 
+      const governance = resolveLineDraftGovernance(featureRef.featureId);
       const result = lineDraftPreviewApi.saveProperties({
         featureId: featureRef.featureId,
         newProperties,
         mode,
+        propertyPolicy: governance.propertyPolicy,
+        protectedKeys: governance.protectedKeys,
       });
 
       return {
@@ -227,6 +308,8 @@ export function useMapFeatureActions(
         target: 'lineDraft',
         message: result.message,
         properties: result.properties,
+        blockedKeys: result.blockedKeys,
+        removedKeys: result.removedKeys,
       };
     }
 
@@ -242,6 +325,70 @@ export function useMapFeatureActions(
       target: 'business',
       message: result.message,
       properties: result.properties,
+      blockedKeys: result.blockedKeys,
+      removedKeys: result.removedKeys,
+    };
+  };
+
+  /**
+   * 显式删除正式业务源或线草稿源中的地图要素属性。
+   * @param saveOptions 删除配置
+   * @returns 结构化动作结果
+   */
+  const removeBusinessFeatureProperties = (
+    saveOptions: RemoveBusinessFeaturePropertiesOptions
+  ): MapFeaturePropertyActionResult => {
+    const { featureRef, propertyKeys } = saveOptions;
+
+    if (!featureRef?.sourceId || featureRef.featureId === null) {
+      return {
+        success: false,
+        target: 'business',
+        message: '当前没有可删除属性的地图要素',
+      };
+    }
+
+    if (featureRef.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID) {
+      const lineDraftPreviewApi = getLineDraftPreviewApi();
+      if (!lineDraftPreviewApi) {
+        return {
+          success: false,
+          target: 'lineDraft',
+          message: '当前未注册线草稿插件，无法删除草稿属性',
+        };
+      }
+
+      const governance = resolveLineDraftGovernance(featureRef.featureId);
+      const result = lineDraftPreviewApi.removeProperties({
+        featureId: featureRef.featureId,
+        propertyKeys,
+        propertyPolicy: governance.propertyPolicy,
+        protectedKeys: governance.protectedKeys,
+      });
+
+      return {
+        success: result.success,
+        target: 'lineDraft',
+        message: result.message,
+        properties: result.properties,
+        blockedKeys: result.blockedKeys,
+        removedKeys: result.removedKeys,
+      };
+    }
+
+    const result = sourceRegistry.removeProperties(
+      featureRef.sourceId,
+      featureRef.featureId,
+      propertyKeys
+    );
+
+    return {
+      success: result.success,
+      target: 'business',
+      message: result.message,
+      properties: result.properties,
+      blockedKeys: result.blockedKeys,
+      removedKeys: result.removedKeys,
     };
   };
 
@@ -262,6 +409,20 @@ export function useMapFeatureActions(
   };
 
   /**
+   * 删除当前选中的地图要素属性。
+   * @param removeOptions 删除配置
+   * @returns 结构化动作结果
+   */
+  const removeSelectedMapFeatureProperties = (removeOptions: {
+    propertyKeys: readonly string[];
+  }): MapFeaturePropertyActionResult => {
+    return removeBusinessFeatureProperties({
+      featureRef: featureQuery.getSelectedFeatureRef(),
+      propertyKeys: removeOptions.propertyKeys,
+    });
+  };
+
+  /**
    * 保存 TerraDraw 要素属性。
    * @param saveOptions TerraDraw 写回配置
    * @returns 结构化动作结果
@@ -269,14 +430,7 @@ export function useMapFeatureActions(
   const saveTerradrawFeaturePropertiesAction = (
     saveOptions: SaveTerradrawFeaturePropertiesActionOptions
   ): MapFeaturePropertyActionResult => {
-    const {
-      controlType,
-      featureId,
-      currentProperties,
-      newProperties,
-      mode = 'replace',
-      reservedPropertyKeys,
-    } = saveOptions;
+    const { controlType, featureId, currentProperties, newProperties, mode = 'replace' } = saveOptions;
     const mapExpose = getMapExpose();
 
     if (!mapExpose) {
@@ -314,7 +468,10 @@ export function useMapFeatureActions(
       featureId,
       newProperties,
       currentProperties,
-      reservedPropertyKeys,
+      propertyPolicy: mapExpose.getTerradrawPropertyPolicy?.(controlType) || null,
+      hiddenKeys:
+        controlType === 'measure' ? TERRADRAW_MEASURE_SYSTEM_PROPERTY_KEYS : undefined,
+      reservedPropertyKeys: saveOptions.reservedPropertyKeys,
       mode,
     });
 
@@ -323,6 +480,70 @@ export function useMapFeatureActions(
       target: 'terradraw',
       message: result.message,
       properties: result.properties,
+      blockedKeys: result.blockedKeys,
+      removedKeys: result.removedKeys,
+    };
+  };
+
+  /**
+   * 删除 TerraDraw 要素属性。
+   * @param saveOptions TerraDraw 删除配置
+   * @returns 结构化动作结果
+   */
+  const removeTerradrawFeaturePropertiesAction = (
+    saveOptions: RemoveTerradrawFeaturePropertiesActionOptions
+  ): MapFeaturePropertyActionResult => {
+    const { controlType, featureId, currentProperties, propertyKeys } = saveOptions;
+    const mapExpose = getMapExpose();
+
+    if (!mapExpose) {
+      return {
+        success: false,
+        target: 'terradraw',
+        message: '地图组件尚未初始化完成',
+      };
+    }
+
+    const terradrawControl =
+      controlType === 'measure'
+        ? mapExpose.getMeasureControl?.() || null
+        : mapExpose.getDrawControl?.() || null;
+
+    if (!terradrawControl) {
+      return {
+        success: false,
+        target: 'terradraw',
+        message: 'TerraDraw 控件尚未初始化完成',
+      };
+    }
+
+    const terradrawInstance = terradrawControl.getTerraDrawInstance?.();
+    if (!terradrawInstance) {
+      return {
+        success: false,
+        target: 'terradraw',
+        message: 'TerraDraw 实例不存在，无法删除属性',
+      };
+    }
+
+    const result = removeTerradrawFeatureProperties({
+      terradraw: terradrawInstance,
+      featureId,
+      propertyKeys,
+      currentProperties,
+      propertyPolicy: mapExpose.getTerradrawPropertyPolicy?.(controlType) || null,
+      hiddenKeys:
+        controlType === 'measure' ? TERRADRAW_MEASURE_SYSTEM_PROPERTY_KEYS : undefined,
+      reservedPropertyKeys: saveOptions.reservedPropertyKeys,
+    });
+
+    return {
+      success: result.success,
+      target: 'terradraw',
+      message: result.message,
+      properties: result.properties,
+      blockedKeys: result.blockedKeys,
+      removedKeys: result.removedKeys,
     };
   };
 
@@ -492,8 +713,11 @@ export function useMapFeatureActions(
 
   return {
     saveBusinessFeatureProperties,
+    removeBusinessFeatureProperties,
     saveSelectedMapFeatureProperties,
+    removeSelectedMapFeatureProperties,
     saveTerradrawFeatureProperties: saveTerradrawFeaturePropertiesAction,
+    removeTerradrawFeatureProperties: removeTerradrawFeaturePropertiesAction,
     previewSelectedLine,
     replaceSelectedLineCorridor,
     clearLineDraft,

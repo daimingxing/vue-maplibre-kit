@@ -286,14 +286,19 @@
         </div>
       </div>
     </mgl-popup>
-    <!-- 引入自定义的属性配置小窗口 -->
+    <!--
+      属性面板示例已切到“单键 merge / 显式 remove”模式。
+      业务层不再整包 replace 属性对象，避免误删系统字段，也更贴近真实业务的增量修改场景。
+    -->
     <feature-property-editor
       v-model:visible="contextMenuState.visible"
       :position="contextMenuState.position"
-      :properties="contextMenuState.properties"
+      :panelState="contextMenuState.panelState"
+      :rawProperties="contextMenuState.rawProperties"
       :summaryRows="contextMenuState.summaryRows"
-      :forbiddenKeys="contextMenuState.targetType === 'map' ? [] : terraDrawReservedPropertyKeys"
-      @save="handleSaveProperty"
+      :note="contextMenuState.note"
+      @save-item="handleSavePropertyItem"
+      @remove-item="handleRemovePropertyItem"
     />
   </div>
 </template>
@@ -306,7 +311,6 @@ import {
   MapBusinessSourceLayers,
   MapLibreInit,
   MglPopup,
-  TERRADRAW_RESERVED_PROPERTY_KEYS,
   createFeatureStateExpression,
   createCircleBusinessLayer,
   createMapBusinessSource,
@@ -326,6 +330,8 @@ import {
   useMapFeatureQuery,
   useMapSelection,
   type MapControlsConfig,
+  type MapFeaturePropertyPanelState,
+  type MapFeaturePropertyPolicy,
   type MapFeatureStateTarget,
   type MapLayerInteractiveContext,
   type MapLayerInteractiveOptions,
@@ -394,6 +400,59 @@ const LAYER_IDS = {
 } as const;
 
 /**
+ * NGGI00 业务源属性治理示例。
+ * 这里故意把 `id` 收紧为只读，把 `mark` 设为稳定字段，并隐藏样式辅助字段，
+ * 用来演示业务层只需要声明规则，不需要自己过滤系统字段。
+ */
+const BUSINESS_SOURCE_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
+  readonlyKeys: ["id"],
+  fixedKeys: ["mark"],
+  hiddenKeys: ["marker-color", "marker-size", "marker-symbol"],
+};
+
+/**
+ * TerraDraw 绘制控件的业务属性治理示例。
+ * 业务层如果约定了稳定字段或只读字段，可以直接在控件配置里声明。
+ */
+const DRAW_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
+  fixedKeys: ["bizName"],
+  readonlyKeys: ["bizCode"],
+};
+
+/**
+ * Measure 控件的业务属性治理示例。
+ * 测量结果字段会由系统层自动隐藏，这里只补业务字段规则即可。
+ */
+const MEASURE_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
+  fixedKeys: ["label"],
+  readonlyKeys: ["taskCode"],
+};
+
+/**
+ * 普通业务源右键面板提示文案。
+ */
+const MAP_PROPERTY_PANEL_NOTE =
+  "上方列表只展示业务可见字段。`id` 是只读字段不能修改，`mark` 被声明为稳定字段可改但不可删；像 marker-color 这类样式辅助字段会被隐藏到下方调试快照。新增的临时字段默认允许删除。";
+
+/**
+ * 线草稿右键面板提示文案。
+ */
+const LINE_DRAFT_PROPERTY_PANEL_NOTE =
+  "线草稿会继承正式来源的属性治理规则。业务层看不到内部来源字段，也不能修改 ID；如果新增了临时字段，仍然可以通过删除按钮显式移除。";
+
+/**
+ * TerraDraw 绘制控件右键面板提示文案。
+ */
+const DRAW_PROPERTY_PANEL_NOTE =
+  "这里展示的是绘制业务字段。TerraDraw 内部状态字段已经被系统层隐藏；如果某个字段命中固定/只读规则，保存后会立即收紧为不可删或不可改。";
+
+/**
+ * Measure 控件右键面板提示文案。
+ */
+const MEASURE_PROPERTY_PANEL_NOTE =
+  "这里展示的是测量业务字段。像 distance、area、segments 这类测量结果由系统维护，不会出现在业务编辑列表里；如需排查，可查看下方原始属性调试快照。";
+
+/**
  * 修改样式示例统一使用的 feature-state 键名。
  * 这里故意使用 feature-state，而不是直接改 GeoJSON 数据，
  * 用最轻量的方式演示“业务层按钮驱动要素样式变化”。
@@ -428,12 +487,15 @@ const primaryBusinessSource = createMapBusinessSource({
   sourceId: SOURCE_IDS.primary,
   data: test_geojson,
   promoteId: "id", // 指定用作要素唯一标识的属性名
+  // 业务层只声明“哪些字段可见、可改、可删”，具体过滤与保护交给底层统一完成。
+  propertyPolicy: BUSINESS_SOURCE_PROPERTY_POLICY,
 });
 
 const secondaryBusinessSource = createMapBusinessSource({
   sourceId: SOURCE_IDS.secondary,
   data: test_geojson_secondary,
   promoteId: "id",
+  propertyPolicy: BUSINESS_SOURCE_PROPERTY_POLICY,
 });
 
 // 将所有业务源注册到管理中心，供查询与写入时使用
@@ -866,6 +928,10 @@ const mapControls: MapControlsConfig = {
       } as TerradrawLineDecorationStyle,
     },
 
+    // TerraDraw 业务属性治理示例。
+    // 业务层只需要在控件配置里声明稳定字段或只读字段，不需要自己过滤引擎系统字段。
+    propertyPolicy: DRAW_PROPERTY_POLICY,
+
     // 统一封装的业务交互入口
     interactive: {
       // 是否启用交互事件监听，设为 false 则完全不响应下面配置的回调
@@ -1049,6 +1115,10 @@ const mapControls: MapControlsConfig = {
       //   } as TerradrawLineDecorationStyle;
       // },
     },
+
+    // Measure 业务属性治理示例。
+    // 测量系统字段会由底层自动隐藏，这里只补充业务字段规则。
+    propertyPolicy: MEASURE_PROPERTY_POLICY,
 
     // ==========================================
     // Measure 业务层调用示例
@@ -1463,6 +1533,39 @@ interface SelectionSummaryRow {
   label: string;
   value: string;
 }
+
+/** 属性编辑器单键保存载荷。 */
+interface FeaturePropertyEditorSavePayload {
+  key: string;
+  value: any;
+}
+
+/** 属性编辑器单键删除载荷。 */
+interface FeaturePropertyEditorRemovePayload {
+  key: string;
+}
+
+/**
+ * 创建空的属性面板态。
+ * @returns 空的业务属性面板态
+ */
+const createEmptyPropertyPanelState = (): MapFeaturePropertyPanelState => {
+  return {
+    properties: {},
+    items: [],
+  };
+};
+
+/**
+ * 克隆一份原始属性快照，避免 UI 直接持有底层引用。
+ * @param properties 原始属性对象
+ * @returns 深拷贝后的属性快照
+ */
+const clonePropertySnapshot = (
+  properties: Record<string, any> | null | undefined,
+): Record<string, any> => {
+  return JSON.parse(JSON.stringify(properties || {}));
+};
 
 /**
  * 当前页面的选择态展示文案。
@@ -2050,7 +2153,7 @@ const openMapFeaturePopup = (context: MapLayerInteractiveContext) => {
 
 /**
  * 打开普通 GeoJSON 图层要素右键属性配置窗口。
- * 该示例用于演示普通图层如何复用统一的 FeaturePropertyEditor。
+ * 该示例用于演示普通图层如何通过属性面板态门面复用统一的 FeaturePropertyEditor。
  * @param context 普通图层统一交互上下文
  */
 const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
@@ -2058,22 +2161,35 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
 
   context.originalEvent.preventDefault();
   popupState.visible = false;
+  const featureRef = featureQuery.getFeatureRef(context);
+  const latestFeature = featureQuery.resolveFeature(featureRef);
   const summaryRows =
     context.selectionMode === "multiple"
       ? buildSelectionSummaryRows(context.selectedFeatures || [], context.selectionMode)
       : [];
 
   contextMenuState.position = { x: context.point.x, y: context.point.y };
-  contextMenuState.properties = JSON.parse(JSON.stringify(context.feature.properties || {}));
+  contextMenuState.panelState =
+    featureQuery.resolveFeaturePropertyPanelState(featureRef) || createEmptyPropertyPanelState();
+  contextMenuState.rawProperties = clonePropertySnapshot(
+    latestFeature?.properties || context.feature.properties || {},
+  );
   contextMenuState.summaryRows = summaryRows;
   contextMenuState.featureId = context.featureId;
   contextMenuState.targetType = "map";
   contextMenuState.sourceId = context.sourceId || "";
   contextMenuState.layerId = context.layerId || "";
   contextMenuState.controlType = "";
+  contextMenuState.note = resolvePropertyPanelNote(
+    "map",
+    context.sourceId || "",
+    "",
+  );
   contextMenuState.visible = true;
   selectionPanelState.contextMenuSummary =
-    summaryRows.length > 0 ? buildSelectionSummaryText(summaryRows) : "单选右键仅展示当前要素属性";
+    summaryRows.length > 0
+      ? buildSelectionSummaryText(summaryRows)
+      : "单选右键现在只展示业务可见字段；系统隐藏字段请看调试快照";
 };
 
 /**
@@ -2254,20 +2370,130 @@ const mapInteractive: MapLayerInteractiveOptions = {
 const contextMenuState = reactive({
   visible: false,
   position: { x: 0, y: 0 },
-  properties: {} as Record<string, any>,
+  panelState: createEmptyPropertyPanelState(),
+  rawProperties: {} as Record<string, any>,
   summaryRows: [] as SelectionSummaryRow[],
   featureId: null as string | number | null,
   targetType: "" as "map" | "terradraw" | "",
   sourceId: "",
   layerId: "",
   controlType: "" as TerradrawControlType | "",
+  note: "",
 });
 
 /**
- * TerraDraw 内部保留属性名集合。
- * 这些字段由引擎内部维护，业务层不能通过 updateFeatureProperties 主动覆写。
+ * 根据当前右键目标解析面板提示文案。
+ * @param targetType 当前目标类型
+ * @param sourceId 当前来源 ID
+ * @param controlType 当前 TerraDraw 控件类型
+ * @returns 适合直接展示的说明文本
  */
-const terraDrawReservedPropertyKeys = [...TERRADRAW_RESERVED_PROPERTY_KEYS];
+const resolvePropertyPanelNote = (
+  targetType: "map" | "terradraw" | "",
+  sourceId: string,
+  controlType: TerradrawControlType | "",
+): string => {
+  if (targetType === "map") {
+    return sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID
+      ? LINE_DRAFT_PROPERTY_PANEL_NOTE
+      : MAP_PROPERTY_PANEL_NOTE;
+  }
+
+  if (targetType === "terradraw") {
+    return controlType === "measure" ? MEASURE_PROPERTY_PANEL_NOTE : DRAW_PROPERTY_PANEL_NOTE;
+  }
+
+  return "";
+};
+
+/**
+ * 获取当前右键面板指向的业务要素引用。
+ * @returns 标准化后的业务要素引用；当前不是地图要素时返回 null
+ */
+const getContextMenuFeatureRef = () => {
+  if (contextMenuState.targetType !== "map" || contextMenuState.featureId === null) {
+    return null;
+  }
+
+  return featureQuery.getFeatureRef({
+    sourceId: contextMenuState.sourceId,
+    featureId: contextMenuState.featureId,
+  });
+};
+
+/**
+ * 获取 TerraDraw 当前要素的原始属性快照。
+ * @param controlType 当前控件类型
+ * @param featureId 当前要素 ID
+ * @param currentProperties 当前页面已持有的属性快照
+ * @returns 原始属性对象
+ */
+const resolveTerradrawRawProperties = (
+  controlType: TerradrawControlType,
+  featureId: string | number | null,
+  currentProperties?: Record<string, any>,
+): Record<string, any> => {
+  if (currentProperties) {
+    return clonePropertySnapshot(currentProperties);
+  }
+
+  if (featureId === null) {
+    return {};
+  }
+
+  const terradrawControl =
+    controlType === "measure"
+      ? mapInitRef.value?.getMeasureControl?.() || null
+      : mapInitRef.value?.getDrawControl?.() || null;
+  const terradrawFeature =
+    terradrawControl?.getTerraDrawInstance?.()?.getSnapshotFeature?.(featureId) || null;
+
+  return clonePropertySnapshot(terradrawFeature?.properties || {});
+};
+
+/**
+ * 按当前右键目标重新解析属性面板态与原始快照。
+ * @param nextRawProperties 最新原始属性快照；传入后优先用于 TerraDraw 面板刷新
+ */
+const syncContextMenuPanelState = (nextRawProperties?: Record<string, any>): void => {
+  if (contextMenuState.featureId === null) {
+    contextMenuState.panelState = createEmptyPropertyPanelState();
+    contextMenuState.rawProperties = {};
+    return;
+  }
+
+  if (contextMenuState.targetType === "map") {
+    const featureRef = getContextMenuFeatureRef();
+    const latestFeature = featureQuery.resolveFeature(featureRef);
+
+    contextMenuState.panelState =
+      featureQuery.resolveFeaturePropertyPanelState(featureRef) || createEmptyPropertyPanelState();
+    contextMenuState.rawProperties = clonePropertySnapshot(
+      nextRawProperties || latestFeature?.properties || {},
+    );
+    return;
+  }
+
+  if (contextMenuState.targetType === "terradraw" && contextMenuState.controlType) {
+    const rawProperties = resolveTerradrawRawProperties(
+      contextMenuState.controlType,
+      contextMenuState.featureId,
+      nextRawProperties,
+    );
+
+    contextMenuState.panelState =
+      featureQuery.resolveTerradrawPropertyPanelState({
+        controlType: contextMenuState.controlType,
+        featureId: contextMenuState.featureId,
+        currentProperties: rawProperties,
+      }) || createEmptyPropertyPanelState();
+    contextMenuState.rawProperties = rawProperties;
+    return;
+  }
+
+  contextMenuState.panelState = createEmptyPropertyPanelState();
+  contextMenuState.rawProperties = {};
+};
 
 /**
  * 统一关闭业务弹窗与右键属性窗口。
@@ -2282,13 +2508,15 @@ const closeBusinessPanels = () => {
   popupState.selectedSegmentLengthMeters = 0;
   popupState.lineLengthMeters = 0;
   contextMenuState.visible = false;
-  contextMenuState.properties = {};
+  contextMenuState.panelState = createEmptyPropertyPanelState();
+  contextMenuState.rawProperties = {};
   contextMenuState.summaryRows = [];
   contextMenuState.featureId = null;
   contextMenuState.targetType = "";
   contextMenuState.sourceId = "";
   contextMenuState.layerId = "";
   contextMenuState.controlType = "";
+  contextMenuState.note = "";
   selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
 };
 
@@ -2339,6 +2567,7 @@ const openTerradrawPopup = (context: TerradrawInteractiveContext) => {
 
 /**
  * 打开 TerraDraw 要素右键属性配置窗口。
+ * 这里同样先走属性面板态查询，让系统字段在进入业务编辑器前就被收口。
  * @param context TerraDraw 统一交互上下文
  */
 const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
@@ -2347,16 +2576,30 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
   context.originalEvent.preventDefault();
   popupState.visible = false;
 
+  const featureId =
+    context.featureId ?? ((context.feature.id as string | number | null | undefined) ?? null);
+  const rawProperties = clonePropertySnapshot(context.feature.properties || {});
+
   contextMenuState.position = { x: context.point.x, y: context.point.y };
-  contextMenuState.properties = JSON.parse(JSON.stringify(context.feature.properties || {}));
+  contextMenuState.panelState =
+    featureId === null
+      ? createEmptyPropertyPanelState()
+      : featureQuery.resolveTerradrawPropertyPanelState({
+          controlType: context.controlType,
+          featureId,
+          currentProperties: rawProperties,
+        }) || createEmptyPropertyPanelState();
+  contextMenuState.rawProperties = rawProperties;
   contextMenuState.summaryRows = [];
-  contextMenuState.featureId = (context.feature.id as string | number | null) ?? null;
+  contextMenuState.featureId = featureId;
   contextMenuState.targetType = "terradraw";
   contextMenuState.sourceId = "";
   contextMenuState.layerId = "";
   contextMenuState.controlType = context.controlType;
+  contextMenuState.note = resolvePropertyPanelNote("terradraw", "", context.controlType);
   contextMenuState.visible = true;
-  selectionPanelState.contextMenuSummary = "TerraDraw 右键仅展示当前要素属性";
+  selectionPanelState.contextMenuSummary =
+    "TerraDraw 右键现在只展示业务可见字段；系统字段请在下方调试快照中查看";
 };
 
 /**
@@ -2364,32 +2607,33 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
  * @param nextProperties 最新保存完成后的属性快照
  */
 const syncSavedPropertiesToPanels = (nextProperties: Record<string, any>) => {
-  contextMenuState.properties = JSON.parse(JSON.stringify(nextProperties));
+  syncContextMenuPanelState(nextProperties);
 
   if (popupState.visible && popupState.featureId === contextMenuState.featureId) {
-    popupState.featureProps = JSON.parse(JSON.stringify(nextProperties));
+    popupState.featureProps = clonePropertySnapshot(nextProperties);
   }
 };
 
 /**
- * 统一处理 FeaturePropertyEditor 的保存事件。
- * 根据当前右键目标类型，分发到普通图层或 TerraDraw 的属性写回逻辑。
- * @param updatedProperties 业务层最新编辑完成的属性对象
+ * 统一处理 FeaturePropertyEditor 的单键保存事件。
+ * 业务层不再整包 replace，而是统一走单键 merge。
+ * @param payload 本次需要写回的单个属性载荷
  */
-const handleSaveProperty = (updatedProperties: Record<string, any>) => {
+const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
   if (contextMenuState.featureId === null) {
     ElMessage.warning("当前没有可写回的目标要素");
     return;
   }
 
   if (contextMenuState.targetType === "map") {
+    const featureRef = getContextMenuFeatureRef();
     const result = featureActions.saveBusinessFeatureProperties({
-      featureRef: featureQuery.getFeatureRef({
-        sourceId: contextMenuState.sourceId,
-        featureId: contextMenuState.featureId,
-      }),
-      newProperties: updatedProperties,
-      mode: "replace",
+      featureRef,
+      // 业务层只提交单个字段，底层统一负责属性治理与增量写回。
+      newProperties: {
+        [payload.key]: payload.value,
+      },
+      mode: "merge",
     });
 
     if (!result.success || !result.properties) {
@@ -2398,11 +2642,7 @@ const handleSaveProperty = (updatedProperties: Record<string, any>) => {
     }
 
     syncSavedPropertiesToPanels(result.properties);
-    ElMessage.success(
-      result.target === "lineDraft"
-        ? "线草稿要素属性已写回（仅前端本地）"
-        : "地图要素属性已写回（仅前端本地）",
-    );
+    ElMessage.success(result.message);
     return;
   }
 
@@ -2415,10 +2655,11 @@ const handleSaveProperty = (updatedProperties: Record<string, any>) => {
     const result = featureActions.saveTerradrawFeatureProperties({
       controlType: contextMenuState.controlType,
       featureId: contextMenuState.featureId,
-      newProperties: updatedProperties,
-      currentProperties: contextMenuState.properties,
-      reservedPropertyKeys: terraDrawReservedPropertyKeys,
-      mode: "replace",
+      newProperties: {
+        [payload.key]: payload.value,
+      },
+      currentProperties: contextMenuState.rawProperties,
+      mode: "merge",
     });
 
     if (!result.success || !result.properties) {
@@ -2427,11 +2668,64 @@ const handleSaveProperty = (updatedProperties: Record<string, any>) => {
     }
 
     syncSavedPropertiesToPanels(result.properties);
-    ElMessage.success("TerraDraw 要素属性已写回（仅前端本地）");
+    ElMessage.success(result.message);
     return;
   }
 
   ElMessage.warning("当前没有可写回的目标要素");
+};
+
+/**
+ * 统一处理 FeaturePropertyEditor 的单键删除事件。
+ * 删除能力显式走 removeProperties，不再复用 replace 语义。
+ * @param payload 本次需要删除的单个属性键
+ */
+const handleRemovePropertyItem = (payload: FeaturePropertyEditorRemovePayload) => {
+  if (contextMenuState.featureId === null) {
+    ElMessage.warning("当前没有可删除属性的目标要素");
+    return;
+  }
+
+  if (contextMenuState.targetType === "map") {
+    const result = featureActions.removeBusinessFeatureProperties({
+      featureRef: getContextMenuFeatureRef(),
+      propertyKeys: [payload.key],
+    });
+
+    if (!result.success || !result.properties) {
+      ElMessage.warning(result.message);
+      return;
+    }
+
+    syncSavedPropertiesToPanels(result.properties);
+    ElMessage.success(result.message);
+    return;
+  }
+
+  if (contextMenuState.targetType === "terradraw") {
+    if (!contextMenuState.controlType) {
+      ElMessage.warning("当前没有可删除属性的 TerraDraw 要素");
+      return;
+    }
+
+    const result = featureActions.removeTerradrawFeatureProperties({
+      controlType: contextMenuState.controlType,
+      featureId: contextMenuState.featureId,
+      currentProperties: contextMenuState.rawProperties,
+      propertyKeys: [payload.key],
+    });
+
+    if (!result.success || !result.properties) {
+      ElMessage.warning(result.message);
+      return;
+    }
+
+    syncSavedPropertiesToPanels(result.properties);
+    ElMessage.success(result.message);
+    return;
+  }
+
+  ElMessage.warning("当前没有可删除属性的目标要素");
 };
 </script>
 

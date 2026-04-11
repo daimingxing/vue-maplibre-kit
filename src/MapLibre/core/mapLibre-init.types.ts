@@ -6,7 +6,9 @@ import type {
 import type {
   MapLayerInteractiveContext,
   TerradrawFeature,
+  TerradrawControlType,
 } from '../shared/mapLibre-controls-types';
+import type { MapFeaturePropertyPolicy } from '../shared/map-feature-data';
 import type { MapCommonFeature } from '../shared/map-common-tools';
 import type { MapPluginHostExpose, MapSelectionService } from '../plugins/types';
 
@@ -41,6 +43,8 @@ export interface MapLibreInitExpose {
   getSelectedMapFeatureSnapshot: () => MapCommonFeature | null;
   /** 获取当前地图注册的普通图层选择服务。 */
   getMapSelectionService: () => MapSelectionService | null;
+  /** 读取当前 Draw / Measure 控件的属性治理配置。 */
+  getTerradrawPropertyPolicy: (controlType: TerradrawControlType) => MapFeaturePropertyPolicy | null;
   /** 清空当前普通图层的整个选中集。 */
   clearSelectedMapFeature: () => void;
   /** 为指定要素写入 feature-state。 */

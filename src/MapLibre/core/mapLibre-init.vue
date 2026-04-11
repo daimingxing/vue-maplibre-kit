@@ -99,10 +99,12 @@ import type {
   MapControlsConfig,
   MapLayerInteractiveOptions,
   MeasureControlOptions,
+  TerradrawControlType,
   TerradrawSnapSharedOptions,
   TerradrawControlOptions,
   TerradrawFeature,
 } from '../shared/mapLibre-controls-types';
+import type { MapFeaturePropertyPolicy } from '../shared/map-feature-data';
 import { terradrawStyleConfig, measureStyleConfig } from '../terradraw/terradraw-config';
 import {
   drawDecorationWeakLineStyleConfig,
@@ -322,6 +324,21 @@ function getDrawFeatures(): TerradrawFeature[] | null {
 
 function getMeasureFeatures(): TerradrawFeature[] | null {
   return getControlFeatures(measureControlRef);
+}
+
+/**
+ * 读取当前 Draw / Measure 控件的属性治理配置。
+ * @param controlType 当前控件类型
+ * @returns 当前控件对应的属性治理配置
+ */
+function getTerradrawPropertyPolicy(
+  controlType: TerradrawControlType
+): MapFeaturePropertyPolicy | null {
+  if (controlType === 'measure') {
+    return props.controls.MaplibreMeasureControl?.propertyPolicy || null;
+  }
+
+  return props.controls.MaplibreTerradrawControl?.propertyPolicy || null;
 }
 
 /**
@@ -874,6 +891,8 @@ defineExpose({
   getSelectedMapFeatureSnapshot,
   /** 获取当前地图注册的普通图层选择服务 */
   getMapSelectionService,
+  /** 读取当前 Draw / Measure 控件的属性治理配置 */
+  getTerradrawPropertyPolicy,
   /** 清空当前普通图层的选中状态 */
   clearSelectedMapFeature,
   /** 为指定要素写入 feature-state */

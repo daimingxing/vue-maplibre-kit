@@ -18,6 +18,7 @@ import type {
   MapFeatureSnapResult,
   MapFeatureSnapSegmentInfo,
 } from './map-feature-snap-types';
+import type { MapFeaturePropertyPolicy } from './map-feature-data';
 import type { TerradrawModeOptionsInput } from './terradraw-mode-types';
 import type { MapCommonFeature } from './map-common-tools';
 
@@ -608,6 +609,8 @@ export interface TerradrawControlOptions extends BaseControlOptions {
   lineDecoration?: TerradrawLineDecorationOptions;
   /** TerraDraw 业务交互回调配置（由 mapLibre-init 统一接管） */
   interactive?: TerradrawInteractiveOptions;
+  /** TerraDraw 业务属性治理配置。 */
+  propertyPolicy?: MapFeaturePropertyPolicy;
   /** 兼容其他配置 */
   // [key: string]: any;
 }
@@ -661,6 +664,8 @@ export interface MeasureControlOptions extends BaseControlOptions {
   lineDecoration?: TerradrawLineDecorationOptions;
   /** 测量控件业务交互回调配置（由 mapLibre-init 统一接管） */
   interactive?: TerradrawInteractiveOptions;
+  /** 测量控件业务属性治理配置。 */
+  propertyPolicy?: MapFeaturePropertyPolicy;
 }
 
 /** 整合所有控件的类型定义 */
