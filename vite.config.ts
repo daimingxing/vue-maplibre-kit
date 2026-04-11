@@ -88,6 +88,11 @@ export default defineConfig(({ command }) => {
     resolve: {
       alias: resolveDevAliases(),
     },
+    // 解决 localhost 解析错误
+    server: {
+      host: '127.0.0.1',
+      port: 5173
+    },
     build: isBuildCommand
       ? {
           lib: {

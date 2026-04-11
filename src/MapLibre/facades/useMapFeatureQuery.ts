@@ -23,8 +23,6 @@ export interface UseMapFeatureQueryOptions {
   mapRef: MaybeRefOrGetter<MapLibreInitExpose | null | undefined>;
   /** 业务 source 注册表。 */
   sourceRegistry: MapBusinessSourceRegistry;
-  /** 可选的线草稿插件 ID。 */
-  lineDraftPreviewPluginId?: string;
 }
 
 /**
@@ -70,7 +68,7 @@ function isLineFeature(
  * @returns 业务层可直接使用的查询结果
  */
 export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFeatureQueryResult {
-  const { mapRef, sourceRegistry, lineDraftPreviewPluginId } = options;
+  const { mapRef, sourceRegistry } = options;
 
   /**
    * 获取当前 mapRef 对应的公开实例。
@@ -85,7 +83,7 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
    * @returns 当前线草稿插件 API
    */
   const getLineDraftPreviewApi = (): LineDraftPreviewPluginApi | null => {
-    return resolveLineDraftPreviewApi(getMapExpose(), lineDraftPreviewPluginId);
+    return resolveLineDraftPreviewApi(getMapExpose());
   };
 
   /**

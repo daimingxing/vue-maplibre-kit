@@ -8,12 +8,6 @@ import type {
 import type { MapCommonFeature } from '../shared/map-common-tools';
 import { resolveLineDraftPreviewApi, resolveLineDraftPreviewState } from './mapPluginResolver';
 
-/** useLineDraftPreview 初始化配置。 */
-export interface UseLineDraftPreviewOptions {
-  /** 可选的线草稿插件 ID。 */
-  pluginId?: string;
-}
-
 /** useLineDraftPreview 返回结果。 */
 export interface UseLineDraftPreviewResult {
   /** 当前线草稿插件状态。 */
@@ -32,15 +26,11 @@ export interface UseLineDraftPreviewResult {
  * 读取当前地图中的线草稿能力门面。
  * 业务层无需再自己监听 `pluginStateChange`，只需要直接读取这里暴露的状态与动作。
  * @param mapRef 地图组件公开实例引用
- * @param options 可选配置
  * @returns 线草稿能力门面
  */
 export function useLineDraftPreview(
-  mapRef: MaybeRefOrGetter<MapLibreInitExpose | null | undefined>,
-  options: UseLineDraftPreviewOptions = {}
+  mapRef: MaybeRefOrGetter<MapLibreInitExpose | null | undefined>
 ): UseLineDraftPreviewResult {
-  const { pluginId } = options;
-
   /**
    * 读取当前 mapRef 对应的地图公开实例。
    * @returns 当前地图公开实例
@@ -54,11 +44,11 @@ export function useLineDraftPreview(
    * @returns 当前线草稿插件 API
    */
   const getLineDraftPreviewApi = (): LineDraftPreviewPluginApi | null => {
-    return resolveLineDraftPreviewApi(getMapExpose(), pluginId);
+    return resolveLineDraftPreviewApi(getMapExpose());
   };
 
   const state = computed<LineDraftPreviewStateChangePayload | null>(() => {
-    return resolveLineDraftPreviewState(getMapExpose(), pluginId);
+    return resolveLineDraftPreviewState(getMapExpose());
   });
 
   const hasFeatures = computed<boolean>(() => {

@@ -5,9 +5,6 @@ import {
   type LineDraftPreviewStateChangePayload,
 } from '../plugins/line-draft-preview';
 
-/** 已输出过歧义提示的插件类型集合。 */
-const warnedPluginTypeSet = new Set<string>();
-
 /** 按类型解析出的插件目标。 */
 export interface ResolvedMapPluginTarget {
   /** 当前插件唯一标识。 */
@@ -17,26 +14,12 @@ export interface ResolvedMapPluginTarget {
 }
 
 /**
- * 针对“同类型插件出现多个实例”的情况输出一次提示。
- * @param pluginType 当前插件类型
- */
-function warnAmbiguousPluginType(pluginType: string): void {
-  if (warnedPluginTypeSet.has(pluginType)) {
-    return;
-  }
-
-  warnedPluginTypeSet.add(pluginType);
-  console.warn(
-    `[resolveMapPluginTargetByType] 检测到多个 type 为 '${pluginType}' 的插件实例，当前会优先使用第一个实例；如需精确控制，请显式传入 pluginId`
-  );
-}
-
-/**
  * 按插件类型解析目标插件。
- * 若未传 pluginId，则默认按 type 自动查找。
+ * 同一个 map 实例内，同类型插件应当唯一，因此这里直接按 type 定位唯一目标。
+ * `pluginId` 仅作为历史兼容参数保留，用于额外校验命中的唯一插件是否符合旧调用方预期。
  * @param mapExpose 地图公开实例
  * @param pluginType 目标插件类型
- * @param pluginId 可选的目标插件 ID
+ * @param pluginId 历史兼容参数；传入时会额外校验唯一插件 ID
  * @returns 命中的插件目标；找不到时返回 null
  */
 export function resolveMapPluginTargetByType(
@@ -49,27 +32,29 @@ export function resolveMapPluginTargetByType(
     return null;
   }
 
-  const pluginList = pluginHost.list();
-  if (pluginId) {
-    return pluginList.find((plugin) => plugin.id === pluginId && plugin.type === pluginType) || null;
-  }
-
-  const matchedPluginList = pluginList.filter((plugin) => plugin.type === pluginType);
+  const matchedPluginList = pluginHost.list().filter((plugin) => plugin.type === pluginType);
   if (!matchedPluginList.length) {
     return null;
   }
 
   if (matchedPluginList.length > 1) {
-    warnAmbiguousPluginType(pluginType);
+    throw new Error(
+      `[resolveMapPluginTargetByType] 当前 map 实例存在多个 type 为 '${pluginType}' 的插件实例，请检查插件注册配置`
+    );
   }
 
-  return matchedPluginList[0];
+  const matchedPlugin = matchedPluginList[0];
+  if (pluginId && matchedPlugin.id !== pluginId) {
+    return null;
+  }
+
+  return matchedPlugin;
 }
 
 /**
  * 读取线草稿插件 API。
  * @param mapExpose 地图公开实例
- * @param pluginId 可选的线草稿插件 ID
+ * @param pluginId 历史兼容参数；传入时会额外校验唯一插件 ID
  * @returns 命中的线草稿插件 API；找不到时返回 null
  */
 export function resolveLineDraftPreviewApi(
@@ -92,7 +77,7 @@ export function resolveLineDraftPreviewApi(
 /**
  * 读取线草稿插件状态。
  * @param mapExpose 地图公开实例
- * @param pluginId 可选的线草稿插件 ID
+ * @param pluginId 历史兼容参数；传入时会额外校验唯一插件 ID
  * @returns 命中的线草稿插件状态；找不到时返回 null
  */
 export function resolveLineDraftPreviewState(

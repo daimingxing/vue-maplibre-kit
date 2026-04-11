@@ -1091,13 +1091,13 @@ const mapControls: MapControlsConfig = {
 
       // 测量要素几何或属性变化时触发。
       // 拖拽编辑节点、移动测量要素、业务层调用 updateFeatureProperties 后都会走这里。
-      onFeatureChange: (context) => {
-        console.log(
-          "[Measure 示例] 测量要素发生变化:",
-          context.featureIds,
-          context.changeType,
-          getMeasureFeatureSummaryText(context),
-        );
+      onFeatureChange: (_context) => {
+        // console.log(
+        //   "[Measure 示例] 测量要素发生变化:",
+        //   _context.featureIds,
+        //   _context.changeType,
+        //   getMeasureFeatureSummaryText(_context),
+        // );
       },
 
       // select 模式下选中某个测量要素时触发。

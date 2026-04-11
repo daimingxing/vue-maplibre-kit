@@ -111,8 +111,6 @@ export interface UseMapFeatureActionsOptions {
   mapRef: MaybeRefOrGetter<MapLibreInitExpose | null | undefined>;
   /** 业务 source 注册表。 */
   sourceRegistry: MapBusinessSourceRegistry;
-  /** 可选的线草稿插件 ID。 */
-  lineDraftPreviewPluginId?: string;
 }
 
 /**
@@ -168,11 +166,10 @@ function getBusinessSourceFeatures(
 export function useMapFeatureActions(
   options: UseMapFeatureActionsOptions
 ): UseMapFeatureActionsResult {
-  const { mapRef, sourceRegistry, lineDraftPreviewPluginId } = options;
+  const { mapRef, sourceRegistry } = options;
   const featureQuery = useMapFeatureQuery({
     mapRef,
     sourceRegistry,
-    lineDraftPreviewPluginId,
   });
 
   /**
@@ -188,7 +185,7 @@ export function useMapFeatureActions(
    * @returns 当前线草稿插件 API
    */
   const getLineDraftPreviewApi = (): LineDraftPreviewPluginApi | null => {
-    return resolveLineDraftPreviewApi(getMapExpose(), lineDraftPreviewPluginId);
+    return resolveLineDraftPreviewApi(getMapExpose());
   };
 
   /**

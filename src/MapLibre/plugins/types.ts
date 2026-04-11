@@ -114,7 +114,7 @@ export interface MapPluginServices {
 export interface AnyMapPluginDescriptor {
   /** 插件唯一标识。 */
   id: string;
-  /** 插件类型标识。 */
+  /** 插件类型标识；同一个 map 实例内必须唯一。 */
   type: string;
   /** 插件配置项。 */
   options: unknown;
@@ -125,7 +125,7 @@ export interface AnyMapPluginDescriptor {
 /** 地图插件描述对象。 */
 export interface MapPluginDescriptor<TType extends string = string, TOptions = unknown>
   extends AnyMapPluginDescriptor {
-  /** 插件类型标识。 */
+  /** 插件类型标识；同一个 map 实例内必须唯一。 */
   type: TType;
   /** 插件配置项。 */
   options: TOptions;
@@ -169,7 +169,13 @@ export interface MapPluginContext<TType extends string = string, TOptions = unkn
 export interface MapPluginInstance<TApi = unknown, TState = unknown> {
   /** 读取当前插件渲染项。 */
   getRenderItems?: () => MapPluginRenderItem[];
-  /** 读取当前插件对普通图层交互的补丁。 */
+  /**
+   * 读取当前插件对普通图层交互的补丁。
+   * 宿主合并规则固定为：
+   * 1. 标量字段后写覆盖
+   * 2. 回调字段按顺序串联
+   * 3. 图层按 layerId 深合并，新图层只追加不重排
+   */
   getMapInteractivePatch?: () => MapLayerInteractiveOptions | null;
   /** 解析当前选中要素快照。 */
   resolveSelectedFeatureSnapshot?: () => MapCommonFeature | null;

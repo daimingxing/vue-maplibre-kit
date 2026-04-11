@@ -124,7 +124,6 @@ export {
 } from './MapLibre/facades/useMapFeatureActions';
 export {
   useLineDraftPreview,
-  type UseLineDraftPreviewOptions,
   type UseLineDraftPreviewResult,
 } from './MapLibre/facades/useLineDraftPreview';
 export {
