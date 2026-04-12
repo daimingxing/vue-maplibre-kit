@@ -61,17 +61,19 @@ export interface MapFeatureLineActionResult extends MapFeatureActionResult {
 }
 
 /**
- * 业务属性写回入参。
+ * 地图要素属性保存入参。
+ * 这里的目标既可能是正式业务源，也可能会被自动分流到线草稿源。
  */
 export interface SaveBusinessFeaturePropertiesOptions {
   /** 目标来源引用。 */
   featureRef: MapSourceFeatureRef | null;
-  /** 最新属性对象。 */
+  /** 本次需要保存的属性键值。 */
   newProperties: FeatureProperties;
 }
 
 /**
- * 业务属性删除入参。
+ * 地图要素属性删除入参。
+ * 这里的目标既可能是正式业务源，也可能会被自动分流到线草稿源。
  */
 export interface RemoveBusinessFeaturePropertiesOptions {
   /** 目标来源引用。 */
@@ -259,7 +261,9 @@ export function useMapFeatureActions(
   };
 
   /**
-   * 保存正式业务源或线草稿源中的地图要素属性。
+   * 保存地图要素属性。
+   * 这里会先判断目标是正式业务源还是线草稿源，再调用对应底层写回能力。
+   *
    * @param saveOptions 写回配置
    * @returns 结构化动作结果
    */
@@ -321,7 +325,9 @@ export function useMapFeatureActions(
   };
 
   /**
-   * 显式删除正式业务源或线草稿源中的地图要素属性。
+   * 删除地图要素属性。
+   * 这里与保存逻辑一样，会先把正式业务源与线草稿源统一分流后再执行。
+   *
    * @param saveOptions 删除配置
    * @returns 结构化动作结果
    */
@@ -412,6 +418,11 @@ export function useMapFeatureActions(
 
   /**
    * 保存 TerraDraw 要素属性。
+   * 这里会统一处理：
+   * 1. 读取控件实例
+   * 2. 取控件级 propertyPolicy
+   * 3. 叠加 TerraDraw / Measure 的保留字段规则
+   *
    * @param saveOptions TerraDraw 写回配置
    * @returns 结构化动作结果
    */
@@ -474,6 +485,8 @@ export function useMapFeatureActions(
 
   /**
    * 删除 TerraDraw 要素属性。
+   * 删除与保存使用同一套控件级规则来源，保证面板态与真实删除结果一致。
+   *
    * @param saveOptions TerraDraw 删除配置
    * @returns 结构化动作结果
    */

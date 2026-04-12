@@ -116,7 +116,7 @@ type MapBusinessSourceBaseOptions = {
   sourceOptions?: MapBusinessSourceOptions;
   /** 是否同步补齐顶层 `feature.id`。 */
   syncFeatureIdToTopLevel?: boolean;
-  /** 业务属性治理配置。 */
+  /** 业务层声明的属性规则输入；面板态与保存/删除都会复用它。 */
   propertyPolicy?: MapFeaturePropertyPolicy;
 };
 
@@ -152,9 +152,9 @@ export type CreateMapBusinessSourceOptions =
 export interface MapBusinessSource {
   /** 当前 source ID。 */
   sourceId: string;
-  /** 当前 source 使用的业务属性治理配置。 */
+  /** 当前 source 使用的业务规则输入。 */
   propertyPolicy: MapFeaturePropertyPolicy | null;
-  /** 当前 source 强保护但仍可见的字段列表。 */
+  /** 当前 source 自动追加的强保护字段，例如业务主键。 */
   protectedPropertyKeys: readonly string[];
   /** 适合直接 `v-bind` 给 `MglGeoJsonSource` 的属性对象。 */
   sourceProps: MapBusinessSourceProps;
@@ -341,7 +341,8 @@ function resolveBusinessFeatureId(
 }
 
 /**
- * 解析当前 source 需要强保护的属性键列表。
+ * 解析当前 source 需要额外强保护的字段。
+ * 这里主要把稳定 ID 字段提升成“可见但不可改、不可删”的系统保护键。
  * @param options 业务 source 配置
  * @returns 需要保护的属性键
  */
@@ -641,6 +642,9 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
 
   /**
    * 按业务 ID 解析属性面板态。
+   * 这一步会把“原始 properties + propertyPolicy + protectedKeys”
+   * 统一转换成业务层可直接渲染的 panelState。
+   *
    * @param featureId 目标业务 ID
    * @returns 命中的属性面板态；找不到时返回 null
    */
@@ -673,9 +677,11 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
   };
 
   /**
-   * 按业务 ID 写回属性。
+   * 按业务 ID 保存属性。
+   * 这里复用与 panelState 相同的字段规则，保证“面板里能改”和“真正写得进去”保持一致。
+   *
    * @param featureId 目标业务 ID
-   * @param newProperties 最新属性对象
+   * @param newProperties 本次需要保存的属性键值
    * @returns 结构化写回结果
    */
   const saveProperties = (
@@ -731,6 +737,8 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
 
   /**
    * 按业务 ID 显式删除属性。
+   * 删除同样复用与 panelState 相同的字段规则，只有最终判定为 removable 的字段才能删掉。
+   *
    * @param featureId 目标业务 ID
    * @param propertyKeys 需要删除的属性键列表
    * @returns 结构化写回结果

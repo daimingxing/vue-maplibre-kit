@@ -31,6 +31,7 @@ import { resolveLineDraftPreviewApi } from './mapPluginResolver';
 
 /**
  * TerraDraw 属性面板态查询入参。
+ * 这一步只负责“读当前可展示的面板态”，不做实际写回。
  */
 export interface ResolveTerradrawPropertyPanelStateOptions {
   /** 当前控件类型。 */
@@ -182,6 +183,9 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
 
   /**
    * 解析线草稿要素的属性面板态。
+   * 线草稿会继承正式来源的 propertyPolicy，
+   * 同时再额外隐藏自己的内部来源字段。
+   *
    * @param featureRef 线草稿来源引用
    * @returns 命中的属性面板态；找不到时返回 null
    */
@@ -205,6 +209,9 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
 
   /**
    * 根据来源引用解析属性面板态。
+   * 这是“从任意来源要素读取 panelState”的统一入口：
+   * 正式业务源、线草稿、TerraDraw 都会在这里被收口成同一种结果结构。
+   *
    * @param featureRef 目标来源引用
    * @returns 命中的属性面板态；找不到时返回 null
    */
@@ -234,6 +241,8 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
 
   /**
    * 解析当前选中的属性面板态。
+   * 适合业务层直接拿来驱动属性面板，而不用再自己判断来源类型。
+   *
    * @returns 当前选中的属性面板态
    */
   const resolveSelectedFeaturePropertyPanelState = (): MapFeaturePropertyPanelState | null => {
@@ -262,6 +271,10 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
 
   /**
    * 解析 TerraDraw / Measure 当前要素的属性面板态。
+   * 这里会叠加两类规则：
+   * 1. 控件级 propertyPolicy
+   * 2. TerraDraw / Measure 内部保留字段隐藏规则
+   *
    * @param options 当前查询配置
    * @returns 当前属性面板态；找不到时返回 null
    */

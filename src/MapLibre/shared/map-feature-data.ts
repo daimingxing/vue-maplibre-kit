@@ -21,44 +21,49 @@ export interface MapFeaturePropertyRule {
 }
 
 /**
- * 地图要素属性治理配置。
+ * 地图要素属性治理规则。
+ * 这是业务层输入给封装层的“字段规则声明”，
+ * 后续的属性面板态与保存/删除权限，都会基于这份规则统一计算。
  */
 export interface MapFeaturePropertyPolicy {
-  /** 表内稳定字段：默认可见、可改、不可删。 */
+  /** 稳定业务字段：默认可见、可改、不可删。 */
   fixedKeys?: readonly string[];
-  /** 业务层不应看到的字段。 */
+  /** 业务面板不应展示的字段。 */
   hiddenKeys?: readonly string[];
   /** 只读字段：默认可见、不可改、不可删。 */
   readonlyKeys?: readonly string[];
-  /** 允许删除的稳定字段。 */
+  /** 给稳定业务字段额外放开的“允许删除”列表。 */
   removableKeys?: readonly string[];
-  /** 单键级别的细粒度覆写规则。 */
+  /** 按单个字段做更细粒度的覆写。 */
   rules?: Record<string, MapFeaturePropertyRule>;
 }
 
 /**
- * 属性面板单行描述。
+ * 属性面板单行结果。
+ * 它不是业务层自己配置的规则，而是系统根据 propertyPolicy 计算出的 UI 行模型。
  */
 export interface MapFeaturePropertyPanelItem {
-  /** 当前属性键。 */
+  /** 当前行对应的属性键。 */
   key: string;
-  /** 当前属性值。 */
+  /** 当前行对应的属性值。 */
   value: any;
-  /** 当前属性是否允许编辑。 */
+  /** 当前行是否允许编辑。 */
   editable: boolean;
-  /** 当前属性是否允许删除。 */
+  /** 当前行是否允许删除。 */
   removable: boolean;
-  /** 当前属性是否为运行时临时字段。 */
+  /** 当前字段是否属于“规则里未显式声明的临时字段”。 */
   temporary: boolean;
 }
 
 /**
  * 业务层属性面板态。
+ * `properties` 适合当作“过滤后的属性对象”使用，
+ * `items` 适合直接驱动属性面板逐行渲染。
  */
 export interface MapFeaturePropertyPanelState {
-  /** 已过滤后的可见属性对象。 */
+  /** 已过滤后的属性对象，只保留业务面板应该看到的字段。 */
   properties: MapFeatureDataProperties;
-  /** 适合直接渲染表格的属性行列表。 */
+  /** 已计算好权限与临时标记的属性行列表。 */
   items: MapFeaturePropertyPanelItem[];
 }
 
@@ -142,11 +147,11 @@ export interface SaveFeaturePropertiesInCollectionResult<
 }
 
 interface ResolveFeaturePropertyAccessOptions {
-  /** 属性治理配置。 */
+  /** 业务层声明的字段规则输入。 */
   propertyPolicy?: MapFeaturePropertyPolicy | null;
   /** 强保护但仍可见的字段列表。 */
   protectedKeys?: readonly string[];
-  /** 强保护且默认隐藏的字段列表。 */
+  /** 强隐藏字段列表。 */
   hiddenKeys?: readonly string[];
 }
 
@@ -221,10 +226,14 @@ export function createDefaultFeatureMatcher(): MapFeatureDataMatcher {
 }
 
 /**
- * 生成适合业务层直接消费的属性面板态。
+ * 将原始属性对象解析成业务层可直接消费的属性面板态。
+ * 这一步会同时产出：
+ * 1. `properties`：过滤后的属性对象
+ * 2. `items`：可直接渲染的行列表
+ *
  * @param properties 原始属性对象
  * @param options 面板态解析配置
- * @returns 过滤后的属性面板态
+ * @returns 面向业务层的属性面板态
  */
 export function resolveMapFeaturePropertyPanelState(
   properties: MapFeatureDataProperties,
@@ -340,7 +349,8 @@ function createKeySet(keys?: readonly string[] | null): Set<string> {
 }
 
 /**
- * 判断当前属性键是否被业务策略显式声明。
+ * 判断当前字段是否被业务规则显式声明过。
+ * 这一步主要用于区分“稳定字段”和“临时字段”。
  * @param key 当前属性键
  * @param policy 当前治理策略
  * @returns 是否为显式声明字段
@@ -363,10 +373,13 @@ function isDeclaredPolicyKey(key: string, policy?: MapFeaturePropertyPolicy | nu
 }
 
 /**
- * 解析单个属性键的业务访问权限。
+ * 解析单个字段最终对业务层开放成什么状态。
+ * 规则优先级可以简单理解为：
+ * 强隐藏 > 强保护 > propertyPolicy 集合规则 > 单字段 rules 覆写。
+ *
  * @param key 当前属性键
  * @param options 权限解析配置
- * @returns 当前属性键的访问权限
+ * @returns 当前字段的最终可见/可改/可删结果
  */
 function resolveFeaturePropertyAccess(
   key: string,
@@ -452,15 +465,12 @@ function resolveFeaturePropertyAccess(
 }
 
 /**
- * 按治理规则执行属性写回。
- * 这里只负责显式增改：
- * 1. 只处理本次传入的字段
- * 2. 只写入允许编辑的字段
- * 3. 不会隐式删掉旧字段
- * 4. 删除字段必须显式走 `removeFeatureProperties`
+ * 按当前字段规则执行“单次保存”。
+ * 这里的保存只处理本次传入的字段，不会顺手删除旧字段；
+ * 如果业务层要删键，必须显式走删除流程。
  *
  * @param options 写回配置
- * @returns 治理后的写回结果
+ * @returns 按规则过滤后的保存结果
  */
 function mutateFeatureProperties(
   options: MutateFeaturePropertiesOptions
@@ -526,9 +536,11 @@ function mutateFeatureProperties(
 }
 
 /**
- * 按治理规则执行显式删键。
+ * 按当前字段规则执行“显式删键”。
+ * 只有最终判定为 removable 的字段，才会真正从属性对象中移除。
+ *
  * @param options 删除配置
- * @returns 治理后的删除结果
+ * @returns 按规则过滤后的删除结果
  */
 function removeFeatureProperties(
   options: RemoveFeaturePropertiesOptions
@@ -650,7 +662,10 @@ function replaceSingleFeaturePropertiesInCollection<
 }
 
 /**
- * 在完整要素集合中按稳定 ID 写回属性。
+ * 在完整要素集合中执行属性保存。
+ * 这里会复用 propertyPolicy / protectedKeys / hiddenKeys，
+ * 让“面板里能不能改”和“真正写回时能不能改”使用同一套规则。
+ *
  * @param options 写回配置
  * @returns 结构化写回结果
  */
@@ -741,7 +756,9 @@ export function saveFeaturePropertiesInCollection<
 }
 
 /**
- * 在完整要素集合中按稳定 ID 显式删除属性。
+ * 在完整要素集合中执行属性删除。
+ * 这里会复用与面板态相同的规则来源，保证“面板里显示可删”和“真正删得掉”保持一致。
+ *
  * @param options 删除配置
  * @returns 结构化删除结果
  */

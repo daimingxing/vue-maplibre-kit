@@ -402,9 +402,13 @@ const LAYER_IDS = {
 } as const;
 
 /**
- * NGGI00 业务源属性治理示例。
- * 这里故意把 `id` 收紧为只读，把 `mark` 设为稳定字段，并隐藏样式辅助字段，
- * 用来演示业务层只需要声明规则，不需要自己过滤系统字段。
+ * 正式业务源的字段规则示例。
+ * 业务层只需要声明：
+ * 1. 哪些字段只读
+ * 2. 哪些字段属于稳定业务字段
+ * 3. 哪些字段不该进入业务属性面板
+ *
+ * 面板态与保存/删除权限都会统一复用这份规则。
  */
 const BUSINESS_SOURCE_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
   readonlyKeys: ["id"],
@@ -413,8 +417,8 @@ const BUSINESS_SOURCE_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
 };
 
 /**
- * TerraDraw 绘制控件的业务属性治理示例。
- * 业务层如果约定了稳定字段或只读字段，可以直接在控件配置里声明。
+ * Draw 控件的字段规则示例。
+ * 绘制要素进入属性面板前，同样会先按这里的规则收口。
  */
 const DRAW_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
   fixedKeys: ["bizName"],
@@ -422,8 +426,9 @@ const DRAW_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
 };
 
 /**
- * Measure 控件的业务属性治理示例。
- * 测量结果字段会由系统层自动隐藏，这里只补业务字段规则即可。
+ * Measure 控件的字段规则示例。
+ * 像距离、面积这类系统测量字段会被底层额外隐藏，
+ * 这里主要声明业务自己关心的字段规则。
  */
 const MEASURE_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
   fixedKeys: ["label"],
@@ -714,8 +719,13 @@ const featureActions = useMapFeatureActions({
 
 /**
  * 统一属性编辑门面。
- * 业务层只维护当前编辑目标，具体是普通业务源、线草稿还是 TerraDraw，
- * 都由门面统一解析属性面板态与写回动作。
+ * 业务层只维护“当前正在编辑谁”，
+ * 然后统一调用：
+ * 1. `resolveEditorState` 读取 panelState
+ * 2. `saveItem` 保存单个字段
+ * 3. `removeItem` 删除单个字段
+ *
+ * 底层到底是正式业务源、线草稿还是 TerraDraw，都由门面自动分流。
  */
 const propertyEditor = useMapFeaturePropertyEditor({
   mapRef: mapInitRef,
@@ -2553,8 +2563,9 @@ const syncSavedPropertiesToPanels = (nextEditorState: MapFeaturePropertyEditorSt
 };
 
 /**
- * 统一处理 FeaturePropertyEditor 的单键保存事件。
- * 业务层统一通过单键保存完成属性新增或修改。
+ * 统一处理属性面板的“单键保存”。
+ * 业务层不再自己判断来源类型，只把当前 editorTarget 和本次字段改动交给 propertyEditor。
+ *
  * @param payload 本次需要写回的单个属性载荷
  */
 const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
@@ -2574,8 +2585,9 @@ const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
 };
 
 /**
- * 统一处理 FeaturePropertyEditor 的单键删除事件。
- * 删除能力显式走 removeProperties。
+ * 统一处理属性面板的“单键删除”。
+ * 删除和保存走同一套门面，保证面板里显示可删的字段，底层也真的删得掉。
+ *
  * @param payload 本次需要删除的单个属性键
  */
 const handleRemovePropertyItem = (payload: FeaturePropertyEditorRemovePayload) => {

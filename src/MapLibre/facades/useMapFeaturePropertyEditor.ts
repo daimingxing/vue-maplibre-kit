@@ -54,11 +54,16 @@ export interface MapFeaturePropertyEditorSaveItemPayload {
   value: unknown;
 }
 
-/** 属性编辑器统一状态。 */
+/**
+ * 属性编辑器统一状态。
+ * 它把同一次读取结果拆成两部分：
+ * 1. `panelState`：适合直接画属性面板
+ * 2. `rawProperties`：适合调试、弹窗或原始值回填
+ */
 export interface MapFeaturePropertyEditorState {
-  /** 当前属性面板态。 */
+  /** 当前目标可直接展示的属性面板态。 */
   panelState: MapFeaturePropertyPanelState;
-  /** 当前原始属性快照。 */
+  /** 当前目标的原始属性快照。 */
   rawProperties: FeatureProperties;
 }
 
@@ -96,7 +101,13 @@ export interface UseMapFeaturePropertyEditorResult {
 
 /**
  * 读取当前地图的统一属性编辑门面。
- * 业务层只需要维护“当前编辑目标”，无需再自行分支 map / 线草稿 / TerraDraw。
+ * 业务层只需要维护“当前编辑目标”，然后统一调用：
+ * 1. `resolveEditorState` 读取 panelState
+ * 2. `saveItem` 保存单个属性键
+ * 3. `removeItem` 删除单个属性键
+ *
+ * 具体是正式业务源、线草稿还是 TerraDraw，都由门面内部自动分发。
+ *
  * @param options 初始化配置
  * @returns 统一属性编辑能力
  */
@@ -170,7 +181,9 @@ export function useMapFeaturePropertyEditor(
   };
 
   /**
-   * 解析当前属性编辑目标的最新状态。
+   * 解析当前编辑目标的最新编辑器状态。
+   * 简单理解就是：把目标要素转换成“面板怎么画 + 当前原始值是什么”。
+   *
    * @param target 当前编辑目标
    * @returns 面板态与原始属性快照
    */
@@ -255,6 +268,9 @@ export function useMapFeaturePropertyEditor(
 
   /**
    * 保存单个属性键。
+   * 这是业务层推荐的属性保存入口：只传一个 key/value，
+   * 门面内部会自动路由到正式业务源、线草稿或 TerraDraw。
+   *
    * @param target 当前编辑目标
    * @param payload 本次保存载荷
    * @returns 结构化保存结果
@@ -298,6 +314,8 @@ export function useMapFeaturePropertyEditor(
 
   /**
    * 删除单个属性键。
+   * 与 `saveItem` 一样，业务层无需关心底层来源类型，只需要给出当前目标与字段名。
+   *
    * @param target 当前编辑目标
    * @param key 本次需要删除的属性键
    * @returns 结构化删除结果
