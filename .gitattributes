@@ -1,3 +1,4 @@
 docs/** merge=ours
 AGENTS.md merge=ours
 CLAUDE.md merge=ours
+.serena/** merge=ours
