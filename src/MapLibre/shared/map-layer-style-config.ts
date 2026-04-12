@@ -64,10 +64,10 @@ export const defaultLineLayerStyle: MapLayerStyle<
   LineLayerSpecification['paint']
 > = {
   layout: {
-    'line-cap': 'round', // 线段末端样式：'butt'、'round'、'square'
-    'line-join': 'round', // 线段拐角样式：'bevel'、'round'、'miter'
-    'line-miter-limit': 2, // miter 拐角的尖角长度限制，超出后回退为 bevel
-    'line-round-limit': 1.05, // round 拐角的圆滑限制阈值
+    'line-cap': 'square', // 线段末端样式：'butt'、'round'、'square'
+    'line-join': 'miter', // 线段拐角样式：'bevel'、'round'、'miter'
+    // 'line-miter-limit': 2, // miter 拐角的尖角长度限制，超出后回退为 bevel
+    // 'line-round-limit': 1.05, // round 拐角的圆滑限制阈值
     'line-sort-key': 0, // 决定线要素的绘制顺序，值越大越靠上
     visibility: 'visible', // 图层显隐控制：'visible' 显示，'none' 隐藏
   },
@@ -123,6 +123,7 @@ export const defaultSymbolLayerStyle: MapLayerStyle<
   layout: {
     visibility: 'visible', // 图层显隐控制：'visible' 显示，'none' 隐藏
     'symbol-sort-key': 0, // 决定标签/图标重叠时的绘制优先级，值越大越靠上
+    // 'symbol-z-order': 'auto', // 符号排序策略：'auto' 自动、'viewport-y' 按屏幕 y 值、'source' 按数据源顺序；只有确实要精细控制叠放顺序时再开
     'text-field': ['get', 'id'], // 文本内容表达式；这里默认显示要素 properties.id
     'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'], // 文本字体栈，需底图字体资源支持
     'text-size': 14, // 文字大小，单位像素
@@ -145,12 +146,18 @@ export const defaultSymbolLayerStyle: MapLayerStyle<
     'text-ignore-placement': false, // 是否让其他符号忽略当前文本的碰撞盒
     'icon-allow-overlap': false, // 是否允许图标与其他符号重叠
     'icon-ignore-placement': false, // 是否让其他符号忽略当前图标的碰撞盒
-    'text-rotation-alignment': 'viewport', // 地图旋转时文本对齐参考：'map'、'viewport'、'auto'
+    'text-rotation-alignment': 'viewport', // 地图旋转时文本对齐参考：'map'、'viewport'、'viewport-glyph'、'auto'
     'text-pitch-alignment': 'viewport', // 地图倾斜时文本对齐参考：'map'、'viewport'、'auto'
     'icon-rotation-alignment': 'auto', // 地图旋转时图标对齐参考：'map'、'viewport'、'auto'
     'icon-pitch-alignment': 'auto', // 地图倾斜时图标对齐参考：'map'、'viewport'、'auto'
+    // 'icon-overlap': 'never', // 图标碰撞策略：'never' 不重叠、'always' 始终显示、'cooperative' 协同避让；复杂图标密集场景才建议显式配置
+    // 'icon-keep-upright': false, // 图标沿线放置时是否尽量保持正向朝上；线标注或方向图标场景可考虑开启
     // 'text-variable-anchor': ['bottom', 'top', 'left', 'right'], // 允许引擎自动挑选更合适的文本锚点，适合点位密集场景；会让标签位置更动态，不需要自动避让时可不启用
+    // 'text-variable-anchor-offset': [['bottom', [0, -1]], ['top', [0, 1]]], // 为不同可变锚点分别配置偏移量；只有需要精细控制自动避让后的文字位置时才建议使用
     // 'text-max-angle': 45, // 文本沿线排布时允许的最大转折角，仅对 line placement 更有意义；点位标签通常不建议配置
+    // 'text-writing-mode': ['horizontal'], // 文本书写方向：可选水平或垂直；只有多语种或竖排标签场景才建议改
+    // 'text-rotate': 0, // 文本顺时针旋转角度；通常优先用锚点和偏移控制位置，需要主动旋转时再开
+    // 'text-keep-upright': true, // 文本沿线布局时是否尽量保持正向朝上；道路名、管线名等沿线标签可考虑开启
     // 'icon-image': 'marker-icon', // 图标名称，必须存在于底图 sprite 中；未接入 sprite 资源前不要随意开启
     // 'icon-text-fit': 'none', // 是否让图标自动包裹文本：'none'、'width'、'height'、'both'；只有做徽标/气泡类效果时才建议启用
     // 'icon-text-fit-padding': [0, 0, 0, 0], // 配合 icon-text-fit 使用的图标内边距 [上, 右, 下, 左]
@@ -158,6 +165,7 @@ export const defaultSymbolLayerStyle: MapLayerStyle<
     // 'icon-optional': false, // 图标与文本同时存在时，是否允许图标在碰撞时被隐藏；需要“文本优先显示”时可改为 true
     // 'text-padding': 2, // 文本碰撞盒内边距；不推荐随意放大，否则容易导致标签大面积消失
     // 'icon-padding': 2, // 图标碰撞盒内边距；不推荐随意放大，否则会显著降低可见图标数量
+    // 'text-overlap': 'never', // 文本碰撞策略：'never' 不重叠、'always' 始终显示、'cooperative' 协同避让；只有确实要覆盖默认避让策略时再开
   },
   paint: {
     'text-color': '#333333', // 文本颜色
@@ -187,12 +195,18 @@ export const defaultRasterLayerStyle: MapLayerStyle<
   RasterLayerSpecification['paint']
 > = {
   layout: {
-    visibility: 'visible',
+    visibility: 'visible', // 图层显隐控制：'visible' 显示，'none' 隐藏
   },
   paint: {
-    'raster-opacity': 1,
-    'raster-fade-duration': 0,
-    'raster-resampling': 'linear',
+    'raster-opacity': 1, // 栅格整体透明度，范围 0 - 1
+    'raster-resampling': 'linear', // 栅格重采样方式：'linear' 更平滑，'nearest' 更锐利
+    'raster-fade-duration': 0, // 新旧瓦片切换时的淡入时长，单位毫秒；0 表示不做淡入
+    // 'raster-hue-rotate': 0, // 栅格色相旋转角度，单位度；只在需要做统一色调偏移时才建议启用
+    // 'raster-brightness-min': 0, // 栅格亮度下限，范围 0 - 1；可用于整体压暗底图暗部
+    // 'raster-brightness-max': 1, // 栅格亮度上限，范围 0 - 1；可用于整体压亮底图高光
+    // 'raster-saturation': 0, // 栅格饱和度调整，范围 -1 到 1；负值更灰，正值更艳
+    // 'raster-contrast': 0, // 栅格对比度调整，范围 -1 到 1；负值更平，正值更强
+    // 'resampling': 'linear', // 旧写法别名，语义与 raster-resampling 一致；新代码建议统一只使用 raster-resampling
   },
 };
 
