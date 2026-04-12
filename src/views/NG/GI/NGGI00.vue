@@ -920,16 +920,8 @@ const mapControls: MapControlsConfig = {
     }, */
 
     // ==========================================
-    // 绘图控件线装饰示例 (Segment Stretch 模式)
+    // 绘图控件线装饰示例
     // ==========================================
-    // 适用场景：需要让一张 SVG 沿每个线段“从起点拉到终点”铺开显示。
-    // 如果一条折线有多个拐点，则会按“相邻点 -> 相邻点”拆成多个独立的拉伸段。
-    // 使用说明：
-    // 1. 业务层只需要在这里声明 `lineDecoration` 配置即可，极简接入。
-    // 2. 底层会自动把每条线拆成多个 segment-stretch 图层，并在缩放/平移时同步更新四角坐标。
-    // 3. 如果传入的是 SVG，底层会先自动光栅化为 PNG，再交给 MapLibre 的 image source 渲染。
-    // 4. 底层已自动处理 TerraDraw 的各种绘制和编辑事件同步。
-    // 5. svg 属性支持：inline SVG 字符串、import 导入的静态资源 URL、data URI。
     lineDecoration: {
       enabled: true,
       // defaultStyle: {

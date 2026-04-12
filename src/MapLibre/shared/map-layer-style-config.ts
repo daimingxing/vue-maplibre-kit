@@ -189,13 +189,18 @@ export const defaultSymbolLayerStyle: MapLayerStyle<
 
 /**
  * 普通栅格图层默认样式。
+ * 这里主要用于栅格瓦片、图片底图、视频底图等 raster 图层。
+ * 当前 MapLibre 版本下，raster 图层可配置项本身就比较少：
+ * - layout 侧当前只有 visibility
+ * - paint 侧当前已把全部可配置项都列出来了
+ * 其中不建议默认启用的项，先保留为注释模板，方便开发者按需打开。
  */
 export const defaultRasterLayerStyle: MapLayerStyle<
   RasterLayerSpecification['layout'],
   RasterLayerSpecification['paint']
 > = {
   layout: {
-    visibility: 'visible', // 图层显隐控制：'visible' 显示，'none' 隐藏
+    visibility: 'visible', // 图层显隐控制：'visible' 显示，'none' 隐藏；当前版本 raster layout 侧主要就是这一项
   },
   paint: {
     'raster-opacity': 1, // 栅格整体透明度，范围 0 - 1
