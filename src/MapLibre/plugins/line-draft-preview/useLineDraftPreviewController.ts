@@ -4,13 +4,13 @@ import { createFillLayerStyle, createLineLayerStyle } from '../../shared/map-lay
 import type {
   MapLayerInteractiveContext,
   MapLayerInteractiveOptions,
-} from '../../shared/mapLibre-contols-types';
+} from '../../shared/mapLibre-controls-types';
 import type {
   FeatureProperties,
-  FeaturePropertySaveMode,
   MapFeatureId,
   SaveFeaturePropertiesResult,
 } from '../../composables/useMapDataUpdate';
+import type { MapFeaturePropertyPolicy } from '../../shared/map-feature-data';
 import {
   createMapSourceFeatureRef,
   extractManagedPreviewOriginFromProperties,
@@ -70,7 +70,15 @@ export interface LineDraftPreviewPluginApi {
   saveProperties: (saveOptions: {
     featureId: MapFeatureId;
     newProperties: FeatureProperties;
-    mode?: FeaturePropertySaveMode;
+    propertyPolicy?: MapFeaturePropertyPolicy | null;
+    protectedKeys?: readonly string[];
+  }) => SaveFeaturePropertiesResult;
+  /** 显式删除线草稿要素属性。 */
+  removeProperties: (saveOptions: {
+    featureId: MapFeatureId;
+    propertyKeys: readonly string[];
+    propertyPolicy?: MapFeaturePropertyPolicy | null;
+    protectedKeys?: readonly string[];
   }) => SaveFeaturePropertiesResult;
 }
 
@@ -315,9 +323,24 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
   const saveProperties = (saveOptions: {
     featureId: MapFeatureId;
     newProperties: FeatureProperties;
-    mode?: FeaturePropertySaveMode;
+    propertyPolicy?: MapFeaturePropertyPolicy | null;
+    protectedKeys?: readonly string[];
   }): SaveFeaturePropertiesResult => {
     return binding.saveLineDraftFeatureProperties(saveOptions);
+  };
+
+  /**
+   * 显式删除线草稿要素属性。
+   * @param saveOptions 删除配置
+   * @returns 结构化写回结果
+   */
+  const removeProperties = (saveOptions: {
+    featureId: MapFeatureId;
+    propertyKeys: readonly string[];
+    propertyPolicy?: MapFeaturePropertyPolicy | null;
+    protectedKeys?: readonly string[];
+  }): SaveFeaturePropertiesResult => {
+    return binding.removeLineDraftFeatureProperties(saveOptions);
   };
 
   return {
@@ -335,5 +358,6 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
     replacePreviewRegion,
     clear,
     saveProperties,
+    removeProperties,
   };
 }

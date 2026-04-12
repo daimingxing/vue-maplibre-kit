@@ -2,10 +2,17 @@ import type { GeoJSONSource } from 'maplibre-gl';
 import type { TerraDraw } from 'terra-draw';
 import type { Ref } from 'vue';
 import type { MapInstance } from 'vue-maplibre-gl';
+import {
+  cleanUndefinedProperties,
+  clonePlainData,
+  removeFeaturePropertiesInCollection,
+  saveFeaturePropertiesInCollection,
+  type MapFeatureDataId as MapFeatureId,
+  type MapFeatureDataProperties as FeatureProperties,
+  type MapFeaturePropertyPolicy,
+} from '../shared/map-feature-data';
 
-export type MapFeatureId = string | number;
-export type FeaturePropertySaveMode = 'replace' | 'merge';
-export type FeatureProperties = Record<string, any>;
+export type { MapFeatureId, FeatureProperties, MapFeaturePropertyPolicy };
 
 /**
  * TerraDraw 内部保留属性名集合。
@@ -15,14 +22,9 @@ export type FeatureProperties = Record<string, any>;
  * 这些字段是引擎正常运行的基础。
  *
  * 【干嘛用的】
- * 当业务层想要更新或替换 TerraDraw 要素的业务属性时，如果直接全量替换（replace），
+ * 当业务层想要保存 TerraDraw 要素的业务属性时，如果直接覆盖底层属性对象，
  * 可能会不小心删掉这些底层保留字段，导致 TerraDraw 内部状态崩溃或报错。
- * 因此提供此列表，用于在执行属性更新（特别是 replace 模式）时，过滤并保护这些字段不被业务操作覆盖或删除。
- *
- * 【开发中要做什么】
- * 1. 业务开发中：不需要直接关心这个列表。调用 `saveFeatureProperties` 时，底层已自动过滤保护这些字段。
- * 2. 调试或展示时：在 UI 面板展示属性时，通常需要将这些字段隐藏，避免干扰业务人员。
- *    例如在自定义属性编辑器中传入该列表作为 forbiddenKeys。
+ * 因此提供此列表，用于在执行属性更新或删除时，过滤并保护这些字段不被业务操作覆盖或删除。
  */
 export const TERRADRAW_RESERVED_PROPERTY_KEYS = [
   'mode',
@@ -42,12 +44,32 @@ export const TERRADRAW_RESERVED_PROPERTY_KEYS = [
   'selectionPoint',
 ] as const;
 
+/**
+ * Measure 控件默认会补充的系统测量字段。
+ * 这些字段主要服务于测量结果展示和引擎内部逻辑，业务面板默认应隐藏。
+ */
+export const TERRADRAW_MEASURE_SYSTEM_PROPERTY_KEYS = [
+  'distance',
+  'distanceUnit',
+  'unit',
+  'segments',
+  'area',
+  'radiusKilometers',
+  'elevation',
+  'elevationUnit',
+] as const;
+
+/**
+ * 通用属性写回结果。
+ */
 export interface SaveFeaturePropertiesResult {
   success: boolean;
   target: 'map' | 'terradraw';
   featureId: MapFeatureId;
   properties?: FeatureProperties;
   message: string;
+  blockedKeys?: string[];
+  removedKeys?: string[];
   removedReservedKeys?: string[];
 }
 
@@ -61,15 +83,102 @@ interface BaseSaveFeaturePropertiesOptions {
    */
   newProperties: FeatureProperties;
   /**
-   * 属性写回模式：
-   * 1. replace: 以新属性集替换旧业务属性
-   * 2. merge: 仅合并传入属性，不主动清理旧业务属性
-   * @default 'replace'
+   * 业务层属性治理配置，用于控制字段的可见性、可编辑性和可删除性。
+   *
+   * 常见场景：
+   * 1. 正式业务源把 `id`、`name` 这类表内字段声明为稳定字段
+   * 2. 把 `internal`、`debugFlag` 这类系统或调试字段隐藏出业务面板
+   * 3. 让业务层统一复用同一套字段治理规则，而不是每个页面自己过滤
+   *
+   * @example
+   * {
+   *   fixedKeys: ['id', 'name'],
+   *   hiddenKeys: ['internal'],
+   *   readonlyKeys: ['bizCode']
+   * }
    */
-  mode?: FeaturePropertySaveMode;
+  propertyPolicy?: MapFeaturePropertyPolicy | null;
+  /**
+   * 强保护但仍可见的字段列表。
+   *
+   * 这些字段优先级高于业务层 `propertyPolicy`，通常用于保护：
+   * 1. `promoteId` / `featureIdKey` 对应的业务主键
+   * 2. 不允许业务层编辑或删除、但仍希望在面板中可见的系统字段
+   *
+   * @example ['id', 'sourceFeatureId']
+   */
+  protectedKeys?: readonly string[];
+  /**
+   * 强保护且默认隐藏的字段列表。
+   *
+   * 这些字段不会暴露给业务面板，也不允许写回或删除。
+   * 常见于 TerraDraw / Measure / 线草稿的内部状态字段。
+   *
+   * @example ['distance', 'segments', 'managedPreviewOriginSourceId']
+   */
+  hiddenKeys?: readonly string[];
+}
+
+interface BaseRemoveFeaturePropertiesOptions {
+  /**
+   * 需要更新的目标要素唯一标识
+   */
+  featureId: MapFeatureId;
+  /**
+   * 需要删除的属性键列表
+   */
+  propertyKeys: readonly string[];
+  /**
+   * 业务层属性治理配置，用于控制字段的可见性、可编辑性和可删除性。
+   *
+   * 这里与保存接口保持一致，保证“能否删除”与“能否编辑/可见”使用同一套规则来源。
+   *
+   * @example
+   * {
+   *   fixedKeys: ['id', 'name'],
+   *   hiddenKeys: ['internal'],
+   *   readonlyKeys: ['bizCode']
+   * }
+   */
+  propertyPolicy?: MapFeaturePropertyPolicy | null;
+  /**
+   * 强保护但仍可见的字段列表。
+   *
+   * 这些字段不会被删除，通常用于业务主键或必须保留的系统字段。
+   *
+   * @example ['id', 'sourceFeatureId']
+   */
+  protectedKeys?: readonly string[];
+  /**
+   * 强保护且默认隐藏的字段列表。
+   *
+   * 这些字段不会进入业务删除能力，常用于引擎内部属性或托管来源字段。
+   *
+   * @example ['distance', 'segments', 'managedPreviewOriginSourceId']
+   */
+  hiddenKeys?: readonly string[];
 }
 
 export interface SaveMapFeaturePropertiesOptions extends BaseSaveFeaturePropertiesOptions {
+  /**
+   * 地图实例对象
+   */
+  mapInstance: MapInstance;
+  /**
+   * 需要更新的数据源 ID
+   */
+  sourceId: string;
+  /**
+   * 绑定的 Vue 响应式 GeoJSON 数据引用，用于同步更新状态
+   */
+  geoJsonRef: Ref<any>;
+  /**
+   * 自定义要素匹配器；不传时默认匹配顶层 id 或 properties.id
+   */
+  featureMatcher?: (feature: any, featureId: MapFeatureId) => boolean;
+}
+
+export interface RemoveMapFeaturePropertiesOptions extends BaseRemoveFeaturePropertiesOptions {
   /**
    * 地图实例对象
    */
@@ -103,6 +212,21 @@ export interface SaveTerradrawFeaturePropertiesOptions extends BaseSaveFeaturePr
   reservedPropertyKeys?: readonly string[];
 }
 
+export interface RemoveTerradrawFeaturePropertiesOptions extends BaseRemoveFeaturePropertiesOptions {
+  /**
+   * TerraDraw 实例
+   */
+  terradraw: Pick<TerraDraw, 'hasFeature' | 'updateFeatureProperties' | 'getSnapshotFeature'>;
+  /**
+   * 当前页面已持有的属性快照；不传时会尝试从 TerraDraw 当前快照读取
+   */
+  currentProperties?: FeatureProperties;
+  /**
+   * 需要过滤掉的 TerraDraw 保留属性；默认使用内置保留字段列表
+   */
+  reservedPropertyKeys?: readonly string[];
+}
+
 export type SaveFeaturePropertiesOptions =
   | ({ target: 'map' } & SaveMapFeaturePropertiesOptions)
   | ({ target: 'terradraw' } & SaveTerradrawFeaturePropertiesOptions);
@@ -112,61 +236,8 @@ export type SaveFeaturePropertiesOptions =
  */
 export type UpdateFeaturePropertyOptions = SaveMapFeaturePropertiesOptions;
 
-function clonePlainData<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
-}
-
-function cleanUndefinedProperties(properties: FeatureProperties): FeatureProperties {
-  return Object.fromEntries(Object.entries(properties).filter(([, value]) => value !== undefined));
-}
-
-function createFailureResult(
-  target: 'map' | 'terradraw',
-  featureId: MapFeatureId,
-  message: string
-): SaveFeaturePropertiesResult {
-  return {
-    success: false,
-    target,
-    featureId,
-    message,
-  };
-}
-
-function createSuccessResult(
-  target: 'map' | 'terradraw',
-  featureId: MapFeatureId,
-  properties: FeatureProperties,
-  message: string,
-  removedReservedKeys: string[] = []
-): SaveFeaturePropertiesResult {
-  return {
-    success: true,
-    target,
-    featureId,
-    properties,
-    message,
-    removedReservedKeys,
-  };
-}
-
-function resolveNextMapProperties(
-  currentProperties: FeatureProperties,
-  newProperties: FeatureProperties,
-  mode: FeaturePropertySaveMode
-): FeatureProperties {
-  if (mode === 'merge') {
-    return {
-      ...currentProperties,
-      ...newProperties,
-    };
-  }
-
-  return clonePlainData(newProperties);
-}
-
 /**
- * 过滤 TerraDraw 保留字段，仅保留业务允许写回的属性。
+ * 兼容 TerraDraw 旧版保留键过滤能力。
  * @param properties 待写回属性对象
  * @param reservedPropertyKeys TerraDraw 保留字段列表
  * @returns 清洗后的属性对象以及被拦截的保留字段
@@ -187,6 +258,7 @@ export function omitTerradrawReservedProperties(
         removedReservedKeys.push(key);
         return false;
       }
+
       return true;
     })
   );
@@ -197,38 +269,173 @@ export function omitTerradrawReservedProperties(
   };
 }
 
-function buildTerradrawPropertyPatch(options: {
-  currentProperties: FeatureProperties;
-  sanitizedProperties: FeatureProperties;
-  mode: FeaturePropertySaveMode;
-  reservedPropertyKeys: readonly string[];
-}): FeatureProperties {
-  const { currentProperties, sanitizedProperties, mode, reservedPropertyKeys } = options;
+/**
+ * 创建统一的失败结果。
+ * @param target 当前操作目标
+ * @param featureId 当前目标要素 ID
+ * @param message 失败原因
+ * @param blockedKeys 被阻止的字段列表
+ * @param removedKeys 已删除的字段列表
+ * @returns 结构化失败结果
+ */
+function createFailureResult(
+  target: 'map' | 'terradraw',
+  featureId: MapFeatureId,
+  message: string,
+  blockedKeys: string[] = [],
+  removedKeys: string[] = []
+): SaveFeaturePropertiesResult {
+  return {
+    success: false,
+    target,
+    featureId,
+    message,
+    blockedKeys,
+    removedKeys,
+  };
+}
 
-  if (mode === 'merge') {
-    return sanitizedProperties;
-  }
+/**
+ * 创建统一的成功结果。
+ * @param target 当前操作目标
+ * @param featureId 当前目标要素 ID
+ * @param properties 最新属性对象
+ * @param message 成功说明
+ * @param blockedKeys 被阻止的字段列表
+ * @param removedKeys 已删除的字段列表
+ * @param removedReservedKeys 被保留字段列表
+ * @returns 结构化成功结果
+ */
+function createSuccessResult(
+  target: 'map' | 'terradraw',
+  featureId: MapFeatureId,
+  properties: FeatureProperties,
+  message: string,
+  blockedKeys: string[] = [],
+  removedKeys: string[] = [],
+  removedReservedKeys: string[] = []
+): SaveFeaturePropertiesResult {
+  return {
+    success: true,
+    target,
+    featureId,
+    properties,
+    message,
+    blockedKeys,
+    removedKeys,
+    removedReservedKeys,
+  };
+}
 
+/**
+ * 合并多个字符串数组并去重。
+ * @param groups 原始字符串数组组
+ * @returns 去重后的字符串列表
+ */
+function mergeKeyGroups(...groups: Array<readonly string[] | undefined>): string[] {
+  return [...new Set(groups.flatMap((group) => [...(group || [])]))];
+}
+
+/**
+ * 构造一个仅用于属性治理计算的伪 FeatureCollection。
+ * @param currentProperties 当前属性对象
+ * @returns 单要素集合
+ */
+function createPropertyOnlyCollection(currentProperties: FeatureProperties) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: [
+      {
+        type: 'Feature' as const,
+        geometry: null,
+        properties: clonePlainData(currentProperties),
+      },
+    ],
+  };
+}
+
+/**
+ * 计算 TerraDraw updateFeatureProperties 所需的最小 patch。
+ * @param currentProperties 当前属性对象
+ * @param nextProperties 最新属性对象
+ * @param reservedPropertyKeys TerraDraw 保留字段列表
+ * @returns 最小 patch 对象
+ */
+function buildTerradrawPropertyPatch(
+  currentProperties: FeatureProperties,
+  nextProperties: FeatureProperties,
+  reservedPropertyKeys: readonly string[] = []
+): FeatureProperties {
+  const patch: FeatureProperties = {};
   const reservedKeySet = new Set(reservedPropertyKeys);
-  const replacePatch: FeatureProperties = {};
+  const keySet = new Set([
+    ...Object.keys(currentProperties || {}),
+    ...Object.keys(nextProperties || {}),
+  ]);
 
-  Object.keys(currentProperties).forEach((key) => {
-    if (!reservedKeySet.has(key) && !(key in sanitizedProperties)) {
-      replacePatch[key] = undefined;
+  keySet.forEach((key) => {
+    // TerraDraw 保留字段只允许由引擎自身维护，这里额外做一层防御性保护。
+    if (reservedKeySet.has(key)) {
+      return;
+    }
+
+    const hasCurrent = key in (currentProperties || {});
+    const hasNext = key in (nextProperties || {});
+
+    if (!hasNext && hasCurrent) {
+      patch[key] = undefined;
+      return;
+    }
+
+    if (!hasNext) {
+      return;
+    }
+
+    const currentValue = currentProperties?.[key];
+    const nextValue = nextProperties?.[key];
+
+    if (JSON.stringify(currentValue) !== JSON.stringify(nextValue)) {
+      patch[key] = nextValue;
     }
   });
 
-  return {
-    ...replacePatch,
-    ...sanitizedProperties,
-  };
+  return patch;
+}
+
+/**
+ * 读取 TerraDraw 当前属性快照。
+ * @param terradraw TerraDraw 实例
+ * @param featureId 目标要素 ID
+ * @param currentProperties 当前页面已有快照
+ * @returns 标准化后的属性对象
+ */
+function getTerradrawCurrentProperties(
+  terradraw: Pick<TerraDraw, 'getSnapshotFeature'>,
+  featureId: MapFeatureId,
+  currentProperties?: FeatureProperties
+): FeatureProperties {
+  return clonePlainData(currentProperties || terradraw.getSnapshotFeature(featureId)?.properties || {});
+}
+
+/**
+ * 读取普通 GeoJSON source 对象。
+ * @param mapInstance 地图实例
+ * @param sourceId 数据源 ID
+ * @returns GeoJSON source
+ */
+function getGeoJsonSource(mapInstance: MapInstance, sourceId: string): GeoJSONSource | null {
+  if (!mapInstance.map || !mapInstance.isLoaded) {
+    return null;
+  }
+
+  return (mapInstance.map.getSource(sourceId) as GeoJSONSource) || null;
 }
 
 /**
  * 保存普通 GeoJSON source 要素属性。
  *
- * 机制：深拷贝原有数据 -> 定位要素 -> 计算新属性 -> setData() 更新引擎 -> 同步 Vue 状态
- * 该方法采用增量更新策略，不会导致地图重置或视角变化。
+ * 机制：定位目标要素 -> 计算治理后的属性结果 -> setData() 更新引擎 -> 同步 Vue 状态。
+ * 该方法只替换目标 feature 与外层集合引用，不再重建整份要素内容。
  *
  * @param options 更新配置项
  * @returns 结构化保存结果
@@ -243,14 +450,12 @@ export function saveMapFeatureProperties(
     newProperties,
     geoJsonRef,
     featureMatcher,
-    mode = 'replace',
+    propertyPolicy,
+    protectedKeys,
+    hiddenKeys,
   } = options;
 
-  if (!mapInstance.map || !mapInstance.isLoaded) {
-    return createFailureResult('map', featureId, '地图尚未加载或实例不存在');
-  }
-
-  const source = mapInstance.map.getSource(sourceId) as GeoJSONSource;
+  const source = getGeoJsonSource(mapInstance, sourceId);
   if (!source) {
     return createFailureResult('map', featureId, `未找到 ID 为 '${sourceId}' 的数据源`);
   }
@@ -260,26 +465,37 @@ export function saveMapFeatureProperties(
   }
 
   try {
-    const newData = clonePlainData(geoJsonRef.value);
-    const matcher =
-      featureMatcher ||
-      ((feature: any, targetFeatureId: MapFeatureId) =>
-        feature.id === targetFeatureId || feature.properties?.id === targetFeatureId);
+    const result = saveFeaturePropertiesInCollection({
+      featureCollection: geoJsonRef.value,
+      featureId,
+      newProperties,
+      featureMatcher,
+      propertyPolicy,
+      protectedKeys,
+      hiddenKeys,
+    });
 
-    const featureIndex = newData.features.findIndex((feature: any) => matcher(feature, featureId));
-
-    if (featureIndex === -1) {
-      return createFailureResult('map', featureId, `未在数据源中找到 ID 为 '${featureId}' 的要素`);
+    if (!result.success || !result.data || !result.properties) {
+      return createFailureResult(
+        'map',
+        featureId,
+        result.message,
+        result.blockedKeys || [],
+        result.removedKeys || []
+      );
     }
 
-    const currentProperties = clonePlainData(newData.features[featureIndex].properties || {});
-    const nextProperties = resolveNextMapProperties(currentProperties, newProperties, mode);
+    source.setData(result.data);
+    geoJsonRef.value = result.data;
 
-    newData.features[featureIndex].properties = nextProperties;
-    source.setData(newData);
-    geoJsonRef.value = newData;
-
-    return createSuccessResult('map', featureId, nextProperties, '地图要素属性写回成功');
+    return createSuccessResult(
+      'map',
+      featureId,
+      result.properties,
+      result.message,
+      result.blockedKeys || [],
+      result.removedKeys || []
+    );
   } catch (error) {
     console.error('[saveMapFeatureProperties] 更新属性时发生错误:', error);
     return createFailureResult('map', featureId, '地图要素属性写回异常');
@@ -287,10 +503,80 @@ export function saveMapFeatureProperties(
 }
 
 /**
+ * 显式删除普通 GeoJSON source 要素属性。
+ *
+ * 机制：定位目标要素 -> 计算治理后的删键结果 -> setData() 更新引擎 -> 同步 Vue 状态。
+ *
+ * @param options 删除配置项
+ * @returns 结构化删除结果
+ */
+export function removeMapFeatureProperties(
+  options: RemoveMapFeaturePropertiesOptions
+): SaveFeaturePropertiesResult {
+  const {
+    mapInstance,
+    sourceId,
+    featureId,
+    propertyKeys,
+    geoJsonRef,
+    featureMatcher,
+    propertyPolicy,
+    protectedKeys,
+    hiddenKeys,
+  } = options;
+
+  const source = getGeoJsonSource(mapInstance, sourceId);
+  if (!source) {
+    return createFailureResult('map', featureId, `未找到 ID 为 '${sourceId}' 的数据源`);
+  }
+
+  if (!geoJsonRef.value || !Array.isArray(geoJsonRef.value.features)) {
+    return createFailureResult('map', featureId, '绑定的 GeoJSON 数据格式不正确');
+  }
+
+  try {
+    const result = removeFeaturePropertiesInCollection({
+      featureCollection: geoJsonRef.value,
+      featureId,
+      propertyKeys,
+      featureMatcher,
+      propertyPolicy,
+      protectedKeys,
+      hiddenKeys,
+    });
+
+    if (!result.success || !result.data || !result.properties) {
+      return createFailureResult(
+        'map',
+        featureId,
+        result.message,
+        result.blockedKeys || [],
+        result.removedKeys || []
+      );
+    }
+
+    source.setData(result.data);
+    geoJsonRef.value = result.data;
+
+    return createSuccessResult(
+      'map',
+      featureId,
+      result.properties,
+      result.message,
+      result.blockedKeys || [],
+      result.removedKeys || []
+    );
+  } catch (error) {
+    console.error('[removeMapFeatureProperties] 删除属性时发生错误:', error);
+    return createFailureResult('map', featureId, '地图要素属性删除异常');
+  }
+}
+
+/**
  * 保存 TerraDraw 要素属性。
  *
- * TerraDraw 底层的 `updateFeatureProperties` 是浅合并接口，本封装在 `replace` 模式下会主动
- * 计算需要清理的旧业务字段，并通过写入 `undefined` 的方式模拟“替换业务属性集合”的语义。
+ * TerraDraw 底层的 `updateFeatureProperties` 是浅合并接口，
+ * 这里先复用统一的属性治理引擎计算出最新属性集合，再转换成最小 patch。
  *
  * @param options 更新配置项
  * @returns 结构化保存结果
@@ -303,44 +589,158 @@ export function saveTerradrawFeatureProperties(
     featureId,
     newProperties,
     currentProperties,
+    propertyPolicy,
+    protectedKeys,
+    hiddenKeys,
     reservedPropertyKeys = TERRADRAW_RESERVED_PROPERTY_KEYS,
-    mode = 'replace',
   } = options;
 
   if (!terradraw || !terradraw.hasFeature(featureId)) {
     return createFailureResult('terradraw', featureId, '目标 TerraDraw 要素已不存在');
   }
 
-  const terradrawCurrentProperties = clonePlainData(
-    currentProperties || terradraw.getSnapshotFeature(featureId)?.properties || {}
+  const terradrawCurrentProperties = getTerradrawCurrentProperties(
+    terradraw,
+    featureId,
+    currentProperties
   );
-  const { sanitizedProperties, removedReservedKeys } = omitTerradrawReservedProperties(
+  const mergedHiddenKeys = mergeKeyGroups(hiddenKeys, reservedPropertyKeys);
+  const result = saveFeaturePropertiesInCollection({
+    featureCollection: createPropertyOnlyCollection(terradrawCurrentProperties),
+    featureId,
+    featureIndex: 0,
     newProperties,
-    reservedPropertyKeys
-  );
-  const terradrawPatch = buildTerradrawPropertyPatch({
-    currentProperties: terradrawCurrentProperties,
-    sanitizedProperties,
-    mode,
-    reservedPropertyKeys,
+    propertyPolicy,
+    protectedKeys,
+    hiddenKeys: mergedHiddenKeys,
   });
 
+  if (!result.success || !result.properties) {
+    return createFailureResult(
+      'terradraw',
+      featureId,
+      result.message,
+      result.blockedKeys || [],
+      result.removedKeys || []
+    );
+  }
+
+  const terradrawPatch = buildTerradrawPropertyPatch(
+    terradrawCurrentProperties,
+    result.properties,
+    reservedPropertyKeys
+  );
   if (Object.keys(terradrawPatch).length === 0) {
-    return createFailureResult('terradraw', featureId, '没有可写回的 TerraDraw 属性变更');
+    return createFailureResult(
+      'terradraw',
+      featureId,
+      '没有可写回的 TerraDraw 属性变更',
+      result.blockedKeys || [],
+      result.removedKeys || []
+    );
   }
 
   terradraw.updateFeatureProperties(featureId, terradrawPatch);
-
-  const nextProperties = cleanUndefinedProperties({
-    ...terradrawCurrentProperties,
-    ...terradrawPatch,
-  });
+  const removedReservedKeys = (result.blockedKeys || []).filter((key) =>
+    reservedPropertyKeys.includes(key)
+  );
 
   return createSuccessResult(
     'terradraw',
     featureId,
-    nextProperties,
-    'TerraDraw 要素属性写回成功',
+    cleanUndefinedProperties({
+      ...terradrawCurrentProperties,
+      ...terradrawPatch,
+    }),
+    result.message,
+    result.blockedKeys || [],
+    result.removedKeys || [],
+    removedReservedKeys
+  );
+}
+
+/**
+ * 显式删除 TerraDraw 要素属性。
+ *
+ * TerraDraw 不支持原生“删除字段”接口，这里通过写入 `undefined` patch 来模拟删键。
+ *
+ * @param options 删除配置项
+ * @returns 结构化删除结果
+ */
+export function removeTerradrawFeatureProperties(
+  options: RemoveTerradrawFeaturePropertiesOptions
+): SaveFeaturePropertiesResult {
+  const {
+    terradraw,
+    featureId,
+    propertyKeys,
+    currentProperties,
+    propertyPolicy,
+    protectedKeys,
+    hiddenKeys,
+    reservedPropertyKeys = TERRADRAW_RESERVED_PROPERTY_KEYS,
+  } = options;
+
+  if (!terradraw || !terradraw.hasFeature(featureId)) {
+    return createFailureResult('terradraw', featureId, '目标 TerraDraw 要素已不存在');
+  }
+
+  const terradrawCurrentProperties = getTerradrawCurrentProperties(
+    terradraw,
+    featureId,
+    currentProperties
+  );
+  const mergedHiddenKeys = mergeKeyGroups(hiddenKeys, reservedPropertyKeys);
+  const result = removeFeaturePropertiesInCollection({
+    featureCollection: createPropertyOnlyCollection(terradrawCurrentProperties),
+    featureId,
+    featureIndex: 0,
+    propertyKeys,
+    propertyPolicy,
+    protectedKeys,
+    hiddenKeys: mergedHiddenKeys,
+  });
+
+  if (!result.success || !result.properties) {
+    return createFailureResult(
+      'terradraw',
+      featureId,
+      result.message,
+      result.blockedKeys || [],
+      result.removedKeys || []
+    );
+  }
+
+  const terradrawPatch = buildTerradrawPropertyPatch(
+    terradrawCurrentProperties,
+    result.properties,
+    reservedPropertyKeys
+  );
+  if (Object.keys(terradrawPatch).length === 0) {
+    return createFailureResult(
+      'terradraw',
+      featureId,
+      '没有可删除的 TerraDraw 属性变更',
+      result.blockedKeys || [],
+      result.removedKeys || []
+    );
+  }
+
+  terradraw.updateFeatureProperties(featureId, terradrawPatch);
+  const removedReservedKeys = (result.blockedKeys || []).filter((key) =>
+    reservedPropertyKeys.includes(key)
+  );
+
+  return createSuccessResult(
+    'terradraw',
+    featureId,
+    cleanUndefinedProperties({
+      ...terradrawCurrentProperties,
+      ...terradrawPatch,
+    }),
+    result.message,
+    result.blockedKeys || [],
+    result.removedKeys || [],
     removedReservedKeys
   );
 }

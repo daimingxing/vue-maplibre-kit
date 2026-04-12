@@ -1,0 +1,3 @@
+sandbox_mode = "danger-full-access"
+[projects.'\\?\E:\Project\vue-maplibre-kit']
+trust_level = "trusted"

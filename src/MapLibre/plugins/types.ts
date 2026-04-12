@@ -7,9 +7,11 @@ import type {
   MapFeatureSnapResult,
   MapLayerInteractiveContext,
   MapLayerInteractiveOptions,
+  MapSelectionState,
+  ResolvedMapSelectionToolOptions,
   TerradrawControlType,
   TerradrawSnapSharedOptions,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 import type { MapCommonFeature } from '../shared/map-common-tools';
 
 /** 地图吸附绑定统一接口。 */
@@ -56,6 +58,40 @@ export interface MapSnapService {
   clearPreview?: () => void;
 }
 
+/** 交互核心挂接给选择服务的控制器接口。 */
+export interface MapSelectionBindingController {
+  /** 激活多选模式。 */
+  activate: () => void;
+  /** 退出多选模式。 */
+  deactivate: () => void;
+  /** 清空当前选中集。 */
+  clear: () => void;
+  /** 读取当前多选模式是否已激活。 */
+  isActive: () => boolean;
+}
+
+/** 地图选择服务统一接口。 */
+export interface MapSelectionService {
+  /** 当前选择服务状态。 */
+  state: Ref<MapSelectionState>;
+  /** 读取当前生效的多选工具配置。 */
+  getOptions: () => ResolvedMapSelectionToolOptions;
+  /** 挂接交互核心控制器。 */
+  attachBinding: (binding: MapSelectionBindingController) => () => void;
+  /** 同步交互核心最新状态。 */
+  syncState: (statePatch: Partial<MapSelectionState>) => void;
+  /** 激活多选模式。 */
+  activate: () => void;
+  /** 退出多选模式。 */
+  deactivate: () => void;
+  /** 切换多选模式。 */
+  toggle: () => void;
+  /** 清空当前选中集。 */
+  clear: () => void;
+  /** 读取当前多选模式是否已激活。 */
+  isActive: () => boolean;
+}
+
 /** 单个插件渲染项。 */
 export interface MapPluginRenderItem {
   /** 当前渲染项唯一标识。 */
@@ -70,13 +106,15 @@ export interface MapPluginRenderItem {
 export interface MapPluginServices {
   /** 普通图层 / TerraDraw / Measure 共用的吸附服务。 */
   mapSnap?: MapSnapService;
+  /** 普通图层选择服务。 */
+  mapSelection?: MapSelectionService;
 }
 
 /** 宿主消费用的已擦除插件描述对象。 */
 export interface AnyMapPluginDescriptor {
   /** 插件唯一标识。 */
   id: string;
-  /** 插件类型标识。 */
+  /** 插件类型标识；同一个 map 实例内必须唯一。 */
   type: string;
   /** 插件配置项。 */
   options: unknown;
@@ -87,7 +125,7 @@ export interface AnyMapPluginDescriptor {
 /** 地图插件描述对象。 */
 export interface MapPluginDescriptor<TType extends string = string, TOptions = unknown>
   extends AnyMapPluginDescriptor {
-  /** 插件类型标识。 */
+  /** 插件类型标识；同一个 map 实例内必须唯一。 */
   type: TType;
   /** 插件配置项。 */
   options: TOptions;
@@ -131,7 +169,13 @@ export interface MapPluginContext<TType extends string = string, TOptions = unkn
 export interface MapPluginInstance<TApi = unknown, TState = unknown> {
   /** 读取当前插件渲染项。 */
   getRenderItems?: () => MapPluginRenderItem[];
-  /** 读取当前插件对普通图层交互的补丁。 */
+  /**
+   * 读取当前插件对普通图层交互的补丁。
+   * 宿主合并规则固定为：
+   * 1. 标量字段后写覆盖
+   * 2. 回调字段按顺序串联
+   * 3. 图层按 layerId 深合并，新图层只追加不重排
+   */
   getMapInteractivePatch?: () => MapLayerInteractiveOptions | null;
   /** 解析当前选中要素快照。 */
   resolveSelectedFeatureSnapshot?: () => MapCommonFeature | null;
