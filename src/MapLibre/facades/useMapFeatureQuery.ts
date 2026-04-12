@@ -7,10 +7,10 @@ import {
 } from '../composables/useMapDataUpdate';
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
 import {
+  LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
-  type LineDraftPreviewPluginApi,
-} from '../plugins/line-draft-preview';
-import { LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS } from '../plugins/line-draft-preview/useLineDraftPreviewStore';
+} from '../plugins/line-draft-preview/useLineDraftPreviewStore';
+import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/useLineDraftPreviewController';
 import {
   createMapSourceFeatureRef,
   extractManagedPreviewOriginFromProperties,

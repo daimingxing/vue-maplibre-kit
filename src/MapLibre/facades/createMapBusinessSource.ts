@@ -221,6 +221,19 @@ interface NormalizedBusinessSourceSnapshot {
 }
 
 /**
+ * 判断当前配置是否属于可稳定复用索引的 ID 策略。
+ * `promoteId / featureIdKey` 都依赖单个稳定属性键，且该键会被保护，
+ * 因此本地单要素属性写回后不需要重新全量扫描整个集合。
+ * @param options 业务 source 配置
+ * @returns 是否为稳定 ID 路径
+ */
+function hasStableBusinessSourceIdStrategy(
+  options: CreateMapBusinessSourceOptions
+): options is CreateMapBusinessSourcePromoteIdOptions | CreateMapBusinessSourceFeatureIdKeyOptions {
+  return hasPromoteIdStrategy(options) || hasFeatureIdKeyStrategy(options);
+}
+
+/**
  * 解析当前配置到底采用了哪一种 ID 策略。
  * @param options 业务 source 配置
  * @returns 策略类型
@@ -386,6 +399,8 @@ function normalizeBusinessSourceData(
   const strategy = resolveBusinessSourceIdStrategy(options);
   if (strategy === 'invalid') {
     return {
+      // 无效策略属于配置错误兜底路径，这里优先保证内部快照与外部输入隔离，
+      // 避免业务层继续原地修改原始集合时反向污染 sourceProps.data。
       featureCollection: clonePlainData(featureCollection),
       valid: false,
       validationMessage: buildBusinessSourceStrategyMessage(options.sourceId),
@@ -394,35 +409,43 @@ function normalizeBusinessSourceData(
   }
 
   const syncTopLevelId = shouldSyncTopLevelFeatureId(options);
-  const nextCollection = clonePlainData(featureCollection);
+  const sourceFeatures = (featureCollection.features || []) as MapCommonFeature[];
+  const nextFeatures = sourceFeatures.slice();
   const duplicatedIdSet = new Set<string | number>();
   const usedIdSet = new Set<string | number>();
   const featureIndexMap = new Map<MapFeatureId, number>();
   const missingIndexes: number[] = [];
 
-  nextCollection.features = (nextCollection.features || []).map((rawFeature, index) => {
-    const feature = rawFeature as MapCommonFeature;
+  sourceFeatures.forEach((feature, index) => {
     const resolvedFeatureId = resolveBusinessFeatureId(feature, options);
 
-    // 需要补齐顶层 ID 时，只对成功解析出业务 ID 的要素写入 `feature.id`。
-    if (syncTopLevelId && resolvedFeatureId !== null) {
-      feature.id = resolvedFeatureId;
+    // 顶层 `feature.id` 仅在确有差异时才浅拷贝当前要素，
+    // 避免为了补 ID 而复制整份 FeatureCollection。
+    if (syncTopLevelId && resolvedFeatureId !== null && feature.id !== resolvedFeatureId) {
+      nextFeatures[index] = {
+        ...feature,
+        id: resolvedFeatureId,
+      };
     }
 
     if (resolvedFeatureId === null) {
       missingIndexes.push(index);
-      return feature;
+      return;
     }
 
     if (usedIdSet.has(resolvedFeatureId)) {
       duplicatedIdSet.add(resolvedFeatureId);
-      return feature;
+      return;
     }
 
     usedIdSet.add(resolvedFeatureId);
     featureIndexMap.set(resolvedFeatureId, index);
-    return feature;
   });
+
+  const nextCollection: MapCommonFeatureCollection = {
+    ...featureCollection,
+    features: nextFeatures,
+  };
 
   const duplicatedIds = [...duplicatedIdSet];
   if (!missingIndexes.length && !duplicatedIds.length) {
@@ -584,6 +607,15 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
   const buildNextSnapshotForLocalMutation = (
     nextCollection: MapCommonFeatureCollection
   ): NormalizedBusinessSourceSnapshot => {
+    // `promoteId / featureIdKey` 路径的业务 ID 依赖稳定字段，
+    // 且这些字段已被保护，本地单要素属性写回不会改变索引拓扑。
+    if (hasStableBusinessSourceIdStrategy(options)) {
+      return {
+        ...snapshotRef.value,
+        featureCollection: nextCollection,
+      };
+    }
+
     // getFeatureId 路径无法自动推断哪些字段会影响业务 ID，
     // 因此保守起见，这里仍执行一次全量标准化，保证索引与校验始终正确。
     if (hasGetFeatureIdStrategy(options)) {

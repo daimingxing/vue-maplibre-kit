@@ -139,6 +139,17 @@ export {
   type UseLineDraftPreviewResult,
 } from './MapLibre/facades/useLineDraftPreview';
 export {
+  useMapFeaturePropertyEditor,
+  type MapFeaturePropertyEditorActionResult,
+  type MapFeaturePropertyEditorMapTarget,
+  type MapFeaturePropertyEditorSaveItemPayload,
+  type MapFeaturePropertyEditorState,
+  type MapFeaturePropertyEditorTarget,
+  type MapFeaturePropertyEditorTerradrawTarget,
+  type UseMapFeaturePropertyEditorOptions,
+  type UseMapFeaturePropertyEditorResult,
+} from './MapLibre/facades/useMapFeaturePropertyEditor';
+export {
   createCircleLayerStyle,
   createFillLayerStyle,
   createLineLayerStyle,

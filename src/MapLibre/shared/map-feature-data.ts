@@ -269,8 +269,10 @@ export function replaceFeatureCollectionFeatures<
   TCollection extends { features?: any[] } = { features?: any[] },
 >(featureCollection: TCollection, nextFeatures: any[]): TCollection {
   return {
-    ...clonePlainData(featureCollection),
-    features: clonePlainData(nextFeatures),
+    ...featureCollection,
+    // 这里只保证集合对象与 features 数组引用都是新的，
+    // 让“整体替换”保持不可变语义，同时避免逐条深拷贝带来的额外成本。
+    features: Array.isArray(nextFeatures) ? nextFeatures.slice() : [],
   };
 }
 

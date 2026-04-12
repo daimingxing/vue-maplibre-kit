@@ -327,9 +327,12 @@ import {
   useMapEffect,
   useLineDraftPreview,
   useMapFeatureActions,
+  useMapFeaturePropertyEditor,
   useMapFeatureQuery,
   useMapSelection,
   type MapControlsConfig,
+  type MapFeaturePropertyEditorState,
+  type MapFeaturePropertyEditorTarget,
   type MapFeaturePropertyPanelState,
   type MapFeaturePropertyPolicy,
   type MapFeatureStateTarget,
@@ -340,7 +343,6 @@ import {
   type MapLibreInitExpose,
   type MapSelectionLayerGroup,
   type MapSelectionMode,
-  type TerradrawControlType,
   type TerradrawInteractiveContext,
   type TerradrawLineDecorationStyle,
 } from "vue-maplibre-kit";
@@ -707,6 +709,16 @@ const featureActions = useMapFeatureActions({
   /** 地图核心实例引用，用于获取底层绘制工具（如 TerraDraw）的状态和实例 */
   mapRef: mapInitRef,
   /** 正式业务数据源注册表，当需要修改正式数据（如更新业务属性）时会操作它 */
+  sourceRegistry: businessSourceRegistry,
+});
+
+/**
+ * 统一属性编辑门面。
+ * 业务层只维护当前编辑目标，具体是普通业务源、线草稿还是 TerraDraw，
+ * 都由门面统一解析属性面板态与写回动作。
+ */
+const propertyEditor = useMapFeaturePropertyEditor({
+  mapRef: mapInitRef,
   sourceRegistry: businessSourceRegistry,
 });
 
@@ -2162,29 +2174,21 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
   context.originalEvent.preventDefault();
   popupState.visible = false;
   const featureRef = featureQuery.getFeatureRef(context);
-  const latestFeature = featureQuery.resolveFeature(featureRef);
   const summaryRows =
     context.selectionMode === "multiple"
       ? buildSelectionSummaryRows(context.selectedFeatures || [], context.selectionMode)
       : [];
-
+  const editorTarget: MapFeaturePropertyEditorTarget = {
+    type: "map",
+    featureRef,
+  };
+  const editorState = propertyEditor.resolveEditorState(editorTarget);
   contextMenuState.position = { x: context.point.x, y: context.point.y };
-  contextMenuState.panelState =
-    featureQuery.resolveFeaturePropertyPanelState(featureRef) || createEmptyPropertyPanelState();
-  contextMenuState.rawProperties = clonePropertySnapshot(
-    latestFeature?.properties || context.feature.properties || {},
-  );
+  contextMenuState.panelState = editorState.panelState;
+  contextMenuState.rawProperties = clonePropertySnapshot(editorState.rawProperties);
   contextMenuState.summaryRows = summaryRows;
-  contextMenuState.featureId = context.featureId;
-  contextMenuState.targetType = "map";
-  contextMenuState.sourceId = context.sourceId || "";
-  contextMenuState.layerId = context.layerId || "";
-  contextMenuState.controlType = "";
-  contextMenuState.note = resolvePropertyPanelNote(
-    "map",
-    context.sourceId || "",
-    "",
-  );
+  contextMenuState.editorTarget = editorTarget;
+  contextMenuState.note = resolvePropertyPanelNote(editorTarget);
   contextMenuState.visible = true;
   selectionPanelState.contextMenuSummary =
     summaryRows.length > 0
@@ -2373,126 +2377,58 @@ const contextMenuState = reactive({
   panelState: createEmptyPropertyPanelState(),
   rawProperties: {} as Record<string, any>,
   summaryRows: [] as SelectionSummaryRow[],
-  featureId: null as string | number | null,
-  targetType: "" as "map" | "terradraw" | "",
-  sourceId: "",
-  layerId: "",
-  controlType: "" as TerradrawControlType | "",
+  editorTarget: null as MapFeaturePropertyEditorTarget | null,
   note: "",
 });
 
 /**
  * 根据当前右键目标解析面板提示文案。
- * @param targetType 当前目标类型
- * @param sourceId 当前来源 ID
- * @param controlType 当前 TerraDraw 控件类型
+ * @param editorTarget 当前编辑目标
  * @returns 适合直接展示的说明文本
  */
-const resolvePropertyPanelNote = (
-  targetType: "map" | "terradraw" | "",
-  sourceId: string,
-  controlType: TerradrawControlType | "",
-): string => {
-  if (targetType === "map") {
-    return sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID
+const resolvePropertyPanelNote = (editorTarget: MapFeaturePropertyEditorTarget | null): string => {
+  if (!editorTarget) {
+    return "";
+  }
+  if (editorTarget.type === "map") {
+    return editorTarget.featureRef?.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID
       ? LINE_DRAFT_PROPERTY_PANEL_NOTE
       : MAP_PROPERTY_PANEL_NOTE;
   }
 
-  if (targetType === "terradraw") {
-    return controlType === "measure" ? MEASURE_PROPERTY_PANEL_NOTE : DRAW_PROPERTY_PANEL_NOTE;
-  }
-
-  return "";
+  return editorTarget.controlType === "measure"
+    ? MEASURE_PROPERTY_PANEL_NOTE
+    : DRAW_PROPERTY_PANEL_NOTE;
 };
 
 /**
- * 获取当前右键面板指向的业务要素引用。
- * @returns 标准化后的业务要素引用；当前不是地图要素时返回 null
+ * 获取当前右键面板指向的目标要素 ID。
+ * @returns 当前目标要素 ID；不存在时返回 null
  */
-const getContextMenuFeatureRef = () => {
-  if (contextMenuState.targetType !== "map" || contextMenuState.featureId === null) {
+const getContextMenuFeatureId = (): string | number | null => {
+  if (!contextMenuState.editorTarget) {
     return null;
   }
 
-  return featureQuery.getFeatureRef({
-    sourceId: contextMenuState.sourceId,
-    featureId: contextMenuState.featureId,
-  });
-};
-
-/**
- * 获取 TerraDraw 当前要素的原始属性快照。
- * @param controlType 当前控件类型
- * @param featureId 当前要素 ID
- * @param currentProperties 当前页面已持有的属性快照
- * @returns 原始属性对象
- */
-const resolveTerradrawRawProperties = (
-  controlType: TerradrawControlType,
-  featureId: string | number | null,
-  currentProperties?: Record<string, any>,
-): Record<string, any> => {
-  if (currentProperties) {
-    return clonePropertySnapshot(currentProperties);
-  }
-
-  if (featureId === null) {
-    return {};
-  }
-
-  const terradrawControl =
-    controlType === "measure"
-      ? mapInitRef.value?.getMeasureControl?.() || null
-      : mapInitRef.value?.getDrawControl?.() || null;
-  const terradrawFeature =
-    terradrawControl?.getTerraDrawInstance?.()?.getSnapshotFeature?.(featureId) || null;
-
-  return clonePropertySnapshot(terradrawFeature?.properties || {});
+  return contextMenuState.editorTarget.type === "map"
+    ? contextMenuState.editorTarget.featureRef?.featureId ?? null
+    : contextMenuState.editorTarget.featureId;
 };
 
 /**
  * 按当前右键目标重新解析属性面板态与原始快照。
- * @param nextRawProperties 最新原始属性快照；传入后优先用于 TerraDraw 面板刷新
+ * @param nextEditorState 最新属性编辑器状态
  */
-const syncContextMenuPanelState = (nextRawProperties?: Record<string, any>): void => {
-  if (contextMenuState.featureId === null) {
+const syncContextMenuPanelState = (nextEditorState?: MapFeaturePropertyEditorState): void => {
+  if (!contextMenuState.editorTarget) {
     contextMenuState.panelState = createEmptyPropertyPanelState();
     contextMenuState.rawProperties = {};
     return;
   }
 
-  if (contextMenuState.targetType === "map") {
-    const featureRef = getContextMenuFeatureRef();
-    const latestFeature = featureQuery.resolveFeature(featureRef);
-
-    contextMenuState.panelState =
-      featureQuery.resolveFeaturePropertyPanelState(featureRef) || createEmptyPropertyPanelState();
-    contextMenuState.rawProperties = clonePropertySnapshot(
-      nextRawProperties || latestFeature?.properties || {},
-    );
-    return;
-  }
-
-  if (contextMenuState.targetType === "terradraw" && contextMenuState.controlType) {
-    const rawProperties = resolveTerradrawRawProperties(
-      contextMenuState.controlType,
-      contextMenuState.featureId,
-      nextRawProperties,
-    );
-
-    contextMenuState.panelState =
-      featureQuery.resolveTerradrawPropertyPanelState({
-        controlType: contextMenuState.controlType,
-        featureId: contextMenuState.featureId,
-        currentProperties: rawProperties,
-      }) || createEmptyPropertyPanelState();
-    contextMenuState.rawProperties = rawProperties;
-    return;
-  }
-
-  contextMenuState.panelState = createEmptyPropertyPanelState();
-  contextMenuState.rawProperties = {};
+  const editorState = nextEditorState || propertyEditor.resolveEditorState(contextMenuState.editorTarget);
+  contextMenuState.panelState = editorState.panelState;
+  contextMenuState.rawProperties = clonePropertySnapshot(editorState.rawProperties);
 };
 
 /**
@@ -2511,11 +2447,7 @@ const closeBusinessPanels = () => {
   contextMenuState.panelState = createEmptyPropertyPanelState();
   contextMenuState.rawProperties = {};
   contextMenuState.summaryRows = [];
-  contextMenuState.featureId = null;
-  contextMenuState.targetType = "";
-  contextMenuState.sourceId = "";
-  contextMenuState.layerId = "";
-  contextMenuState.controlType = "";
+  contextMenuState.editorTarget = null;
   contextMenuState.note = "";
   selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
 };
@@ -2579,24 +2511,23 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
   const featureId =
     context.featureId ?? ((context.feature.id as string | number | null | undefined) ?? null);
   const rawProperties = clonePropertySnapshot(context.feature.properties || {});
-
-  contextMenuState.position = { x: context.point.x, y: context.point.y };
-  contextMenuState.panelState =
+  const editorTarget =
     featureId === null
-      ? createEmptyPropertyPanelState()
-      : featureQuery.resolveTerradrawPropertyPanelState({
+      ? null
+      : ({
+          type: "terradraw",
           controlType: context.controlType,
           featureId,
           currentProperties: rawProperties,
-        }) || createEmptyPropertyPanelState();
-  contextMenuState.rawProperties = rawProperties;
+        } satisfies MapFeaturePropertyEditorTarget);
+  const editorState = propertyEditor.resolveEditorState(editorTarget);
+
+  contextMenuState.position = { x: context.point.x, y: context.point.y };
+  contextMenuState.panelState = editorState.panelState;
+  contextMenuState.rawProperties = clonePropertySnapshot(editorState.rawProperties);
   contextMenuState.summaryRows = [];
-  contextMenuState.featureId = featureId;
-  contextMenuState.targetType = "terradraw";
-  contextMenuState.sourceId = "";
-  contextMenuState.layerId = "";
-  contextMenuState.controlType = context.controlType;
-  contextMenuState.note = resolvePropertyPanelNote("terradraw", "", context.controlType);
+  contextMenuState.editorTarget = editorTarget;
+  contextMenuState.note = resolvePropertyPanelNote(editorTarget);
   contextMenuState.visible = true;
   selectionPanelState.contextMenuSummary =
     "TerraDraw 右键现在只展示业务可见字段；系统字段请在下方调试快照中查看";
@@ -2604,13 +2535,20 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
 
 /**
  * 将最新属性同步回右键面板和详情弹窗，保证页面态与底层数据一致。
- * @param nextProperties 最新保存完成后的属性快照
+ * @param nextEditorState 最新属性编辑器状态
  */
-const syncSavedPropertiesToPanels = (nextProperties: Record<string, any>) => {
-  syncContextMenuPanelState(nextProperties);
+const syncSavedPropertiesToPanels = (nextEditorState: MapFeaturePropertyEditorState) => {
+  syncContextMenuPanelState(nextEditorState);
 
-  if (popupState.visible && popupState.featureId === contextMenuState.featureId) {
-    popupState.featureProps = clonePropertySnapshot(nextProperties);
+  if (contextMenuState.editorTarget?.type === "terradraw") {
+    contextMenuState.editorTarget = {
+      ...contextMenuState.editorTarget,
+      currentProperties: clonePropertySnapshot(nextEditorState.rawProperties),
+    };
+  }
+
+  if (popupState.visible && popupState.featureId === getContextMenuFeatureId()) {
+    popupState.featureProps = clonePropertySnapshot(nextEditorState.rawProperties);
   }
 };
 
@@ -2620,57 +2558,19 @@ const syncSavedPropertiesToPanels = (nextProperties: Record<string, any>) => {
  * @param payload 本次需要写回的单个属性载荷
  */
 const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
-  if (contextMenuState.featureId === null) {
+  if (!contextMenuState.editorTarget) {
     ElMessage.warning("当前没有可写回的目标要素");
     return;
   }
 
-  if (contextMenuState.targetType === "map") {
-    const featureRef = getContextMenuFeatureRef();
-    const result = featureActions.saveBusinessFeatureProperties({
-      featureRef,
-      // 业务层只提交单个字段，底层统一负责属性治理与增量写回。
-      newProperties: {
-        [payload.key]: payload.value,
-      },
-    });
-
-    if (!result.success || !result.properties) {
-      ElMessage.warning(result.message);
-      return;
-    }
-
-    syncSavedPropertiesToPanels(result.properties);
-    ElMessage.success(result.message);
+  const result = propertyEditor.saveItem(contextMenuState.editorTarget, payload);
+  if (!result.success) {
+    ElMessage.warning(result.message);
     return;
   }
 
-  if (contextMenuState.targetType === "terradraw") {
-    if (!contextMenuState.controlType) {
-      ElMessage.warning("当前没有可写回的 TerraDraw 要素");
-      return;
-    }
-
-    const result = featureActions.saveTerradrawFeatureProperties({
-      controlType: contextMenuState.controlType,
-      featureId: contextMenuState.featureId,
-      newProperties: {
-        [payload.key]: payload.value,
-      },
-      currentProperties: contextMenuState.rawProperties,
-    });
-
-    if (!result.success || !result.properties) {
-      ElMessage.warning(result.message);
-      return;
-    }
-
-    syncSavedPropertiesToPanels(result.properties);
-    ElMessage.success(result.message);
-    return;
-  }
-
-  ElMessage.warning("当前没有可写回的目标要素");
+  syncSavedPropertiesToPanels(result.editorState);
+  ElMessage.success(result.message);
 };
 
 /**
@@ -2679,51 +2579,19 @@ const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
  * @param payload 本次需要删除的单个属性键
  */
 const handleRemovePropertyItem = (payload: FeaturePropertyEditorRemovePayload) => {
-  if (contextMenuState.featureId === null) {
+  if (!contextMenuState.editorTarget) {
     ElMessage.warning("当前没有可删除属性的目标要素");
     return;
   }
 
-  if (contextMenuState.targetType === "map") {
-    const result = featureActions.removeBusinessFeatureProperties({
-      featureRef: getContextMenuFeatureRef(),
-      propertyKeys: [payload.key],
-    });
-
-    if (!result.success || !result.properties) {
-      ElMessage.warning(result.message);
-      return;
-    }
-
-    syncSavedPropertiesToPanels(result.properties);
-    ElMessage.success(result.message);
+  const result = propertyEditor.removeItem(contextMenuState.editorTarget, payload.key);
+  if (!result.success) {
+    ElMessage.warning(result.message);
     return;
   }
 
-  if (contextMenuState.targetType === "terradraw") {
-    if (!contextMenuState.controlType) {
-      ElMessage.warning("当前没有可删除属性的 TerraDraw 要素");
-      return;
-    }
-
-    const result = featureActions.removeTerradrawFeatureProperties({
-      controlType: contextMenuState.controlType,
-      featureId: contextMenuState.featureId,
-      currentProperties: contextMenuState.rawProperties,
-      propertyKeys: [payload.key],
-    });
-
-    if (!result.success || !result.properties) {
-      ElMessage.warning(result.message);
-      return;
-    }
-
-    syncSavedPropertiesToPanels(result.properties);
-    ElMessage.success(result.message);
-    return;
-  }
-
-  ElMessage.warning("当前没有可删除属性的目标要素");
+  syncSavedPropertiesToPanels(result.editorState);
+  ElMessage.success(result.message);
 };
 </script>
 

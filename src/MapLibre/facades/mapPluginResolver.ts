@@ -1,9 +1,10 @@
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
-import {
-  LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
-  type LineDraftPreviewPluginApi,
-  type LineDraftPreviewStateChangePayload,
-} from '../plugins/line-draft-preview';
+import type {
+  LineDraftPreviewPluginApi,
+  LineDraftPreviewStateChangePayload,
+} from '../plugins/line-draft-preview/useLineDraftPreviewController';
+
+const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
 
 /** 按类型解析出的插件目标。 */
 export interface ResolvedMapPluginTarget {
