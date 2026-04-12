@@ -1402,8 +1402,29 @@ const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
 /**
  * 4. 标签图层 (Symbol Layer) 样式配置
  * 用于渲染图标(Icon)和文字(Text)
+ * 
+ * 这里演示如何在业务层配置显示的文本字段：
+ * 1. 默认 text-field 会显示要素的 id
+ * 2. 这里覆写为：优先显示 name 字段，如果没有 name 则显示“未知站点”
+ * 3. 也可以用 ['concat', ['get', 'name'], ' (', ['get', 'status'], ')'] 拼接多个字段
  */
-const { layout: symbolLayout, paint: symbolPaint } = createSymbolLayerStyle();
+const { layout: symbolLayout, paint: symbolPaint } = createSymbolLayerStyle({
+  layout: {
+    // 优先读取 properties.id，如果没有则显示备用文本
+    "text-field": ["coalesce", ["get", "id"], "未知站点"],
+    // 调整文字大小
+    "text-size": 14,
+    // 调整文字在图标上方的偏移量 [x, y]
+    "text-offset": [0, -1],
+  },
+  paint: {
+    // 设置文字颜色为深蓝色
+    "text-color": "#1e3a8a",
+    // 增加白色的文字描边，使其在复杂底图上更清晰
+    "text-halo-color": "#ffffff",
+    "text-halo-width": 2,
+  },
+});
 
 /**
  * 主业务源的轻量图层描述对象。
