@@ -1,8 +1,10 @@
 import type { MaybeRefOrGetter } from 'vue';
+import type { MapFeatureId } from '../composables/useMapDataUpdate';
 import { useMapEffect, type UseMapEffectResult } from '../composables/useMapEffect';
 import { useMapSelection, type UseMapSelectionResult } from '../composables/useMapSelection';
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
-import type { MapBusinessSourceRegistry } from './createMapBusinessSource';
+import type { MapSourceFeatureRef } from '../shared/map-common-tools';
+import type { MapBusinessSource, MapBusinessSourceRegistry } from './createMapBusinessSource';
 import { useLineDraftPreview, type UseLineDraftPreviewResult } from './useLineDraftPreview';
 import {
   useMapFeatureActions,
@@ -22,38 +24,80 @@ export interface UseBusinessMapOptions {
   sourceRegistry: MapBusinessSourceRegistry;
 }
 
-/** useBusinessMap 的业务数据源分组。 */
+/**
+ * useBusinessMap 的业务数据源分组。
+ * 当业务层需要按 `sourceId` 读取正式业务源，
+ * 或把 `sourceId + featureId` 收口成标准来源引用时，优先从这里取能力。
+ */
 export interface UseBusinessMapSources {
-  /** 当前页面使用的业务数据源注册表。 */
+  /**
+   * 当前页面使用的业务数据源注册表。
+   * 只有在高层快捷方法不够时，才建议继续下探到 `registry` 本体。
+   */
   registry: MapBusinessSourceRegistry;
-  /** 读取指定业务 source。 */
-  getSource: MapBusinessSourceRegistry['getSource'];
-  /** 列出全部已注册业务 source。 */
-  listSources: MapBusinessSourceRegistry['listSources'];
-  /** 创建标准来源引用。 */
-  createFeatureRef: MapBusinessSourceRegistry['createFeatureRef'];
+  /**
+   * 按 sourceId 读取正式业务 source。
+   * 适合在业务层需要拿到 source 的属性治理规则或完整读写能力时使用。
+   *
+   * @param sourceId 目标业务 source ID
+   * @returns 命中的业务 source；找不到时返回 null
+   */
+  getSource: (sourceId: string | null | undefined) => MapBusinessSource | null;
+  /**
+   * 列出当前页面已注册的全部业务 source。
+   * 适合调试、初始化校验或动态 source 面板展示。
+   *
+   * @returns 当前全部业务 source 列表
+   */
+  listSources: () => MapBusinessSource[];
+  /**
+   * 将 `sourceId + featureId` 归一化为标准来源引用。
+   * 业务层如果需要把上下文对象、表格行或表单项转换成统一目标，
+   * 推荐优先走这里，而不是自己手写对象结构。
+   *
+   * @param sourceId 目标业务 source ID
+   * @param featureId 目标要素 ID
+   * @returns 标准来源引用；参数不足时返回 null
+   */
+  createFeatureRef: (sourceId: string, featureId: MapFeatureId | null) => MapSourceFeatureRef | null;
 }
 
-/** useBusinessMap 的统一要素分组。 */
+/**
+ * useBusinessMap 的统一要素分组。
+ * 这个分组把“查要素”和“改要素”合并到同一个入口里，
+ * 业务层通常先到这里找能力。
+ *
+ * 常见场景：
+ * - 读取当前选中的最新线要素
+ * - 根据事件上下文解析 featureRef
+ * - 生成线草稿
+ * - 替换线廊
+ * - 保存当前选中要素属性
+ */
 export interface UseBusinessMapFeatureGroup
   extends UseMapFeatureQueryResult,
     UseMapFeatureActionsResult {}
 
-/** useBusinessMap 返回结果。 */
+/**
+ * useBusinessMap 返回结果。
+ * 设计目标不是隐藏全部 GIS 概念，
+ * 而是把业务页最常一起使用的能力收口成几个稳定分组，
+ * 让业务层优先按“我要做什么”来找入口。
+ */
 export interface UseBusinessMapResult {
-  /** 当前业务页使用的地图实例引用。 */
+  /** 当前业务页使用的地图实例引用。通常只在极少数高级场景下才需要直接访问。 */
   mapRef: UseBusinessMapOptions['mapRef'];
-  /** 正式业务数据源分组。 */
+  /** 正式业务数据源分组。需要读取 source 或构造标准来源引用时使用。 */
   sources: UseBusinessMapSources;
-  /** 普通图层选中态能力。 */
+  /** 普通图层选中态分组。进入多选、退出多选、读取选中集时使用。 */
   selection: UseMapSelectionResult;
-  /** 要素查询与动作能力。 */
+  /** 要素分组。读取要素、生成线草稿、替换线廊、保存当前选中要素等高频操作都从这里取。 */
   feature: UseBusinessMapFeatureGroup;
-  /** 属性编辑能力。 */
+  /** 属性编辑分组。打开属性面板、保存单个字段、删除单个字段时使用。 */
   editor: UseMapFeaturePropertyEditorResult;
-  /** 线草稿能力。 */
+  /** 线草稿分组。读取草稿数量、判断是否有草稿、清空草稿时使用。 */
   draft: UseLineDraftPreviewResult;
-  /** feature-state 特效能力。 */
+  /** feature-state 特效分组。闪烁、高亮等页面级效果从这里取。 */
   effect: UseMapEffectResult;
 }
 
@@ -100,6 +144,13 @@ function createBusinessMapFeatureGroup(
  * 读取当前地图的业务聚合门面。
  * 它不会试图隐藏全部 GIS 概念，而是把业务页最常一起使用的能力
  * 收口成稳定的分组对象，减少业务层自己拼装多个 `use*` 门面的负担。
+ *
+ * 推荐业务层先按下面的顺序找入口：
+ * 1. 选中态相关 -> `businessMap.selection`
+ * 2. 要素查询/动作 -> `businessMap.feature`
+ * 3. 属性编辑 -> `businessMap.editor`
+ * 4. 线草稿状态 -> `businessMap.draft`
+ * 5. 动效 -> `businessMap.effect`
  *
  * @param options 聚合入口初始化配置
  * @returns 适合业务页直接消费的高层能力分组
