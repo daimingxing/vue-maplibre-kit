@@ -53,7 +53,7 @@
       <section class="demo-panel-card">
         <div class="demo-panel-head">
           <h3>当前选中态面板</h3>
-          <p>直接使用 `useMapSelection(mapInitRef)` 驱动 UI。</p>
+          <p>直接使用 `useBusinessMap(...).selection` 驱动 UI。</p>
         </div>
         <div class="demo-panel-actions">
           <el-button type="primary" plain :disabled="isSelectionActive" @click="activateSelection">
@@ -120,7 +120,7 @@
       <section class="demo-panel-card">
         <div class="demo-panel-head">
           <h3>线草稿状态</h3>
-          <p>线草稿状态现在直接通过 `useLineDraftPreview(mapInitRef)` 读取。</p>
+          <p>线草稿状态现在直接通过 `useBusinessMap(...).draft` 读取。</p>
         </div>
         <div class="demo-panel-kv-list">
           <div class="demo-panel-kv">
@@ -324,12 +324,7 @@ import {
   createSymbolLayerStyle,
   getSelectedFeatureIds,
   groupSelectedFeaturesByLayer,
-  useMapEffect,
-  useLineDraftPreview,
-  useMapFeatureActions,
-  useMapFeaturePropertyEditor,
-  useMapFeatureQuery,
-  useMapSelection,
+  useBusinessMap,
   type MapControlsConfig,
   type MapFeaturePropertyEditorState,
   type MapFeaturePropertyEditorTarget,
@@ -689,58 +684,36 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
 const mapPlugins = [mapFeatureSnapPlugin, lineDraftPreviewPlugin, mapFeatureMultiSelectPlugin];
 
 /**
- * 统一的地图要素查询工具（Facade 门面）。
- *
- * 作用：屏蔽底层多数据源的复杂性。
- * 业务代码只需要调用 featureQuery 的方法（如 resolveSelectedLine），
- * 它就会自动判断并从“正式数据源”或“临时草稿线数据源”中捞取最新的完整 GeoJSON 数据，
- * 而不需要在页面里到处写 if/else 判断要素来源。
- */
-const featureQuery = useMapFeatureQuery({
-  /** 地图核心实例引用，用于获取当前地图的选中状态和交互上下文等 */
-  mapRef: mapInitRef,
-  /** 正式业务数据源注册表，用于解析和查询已存在的正式业务要素数据 */
-  sourceRegistry: businessSourceRegistry,
-});
-
-/**
- * 统一的地图要素操作工具（Facade 门面）。
- *
- * 作用：处理针对地图要素的各类修改动作（如更新属性、删除等）。
- * 它会在底层自动识别要素是存在于正式业务源、还是临时草稿源，亦或是 TerraDraw 的绘制层中，
- * 然后把修改动作精准地分发给对应的管理器，业务页面无需关心底层具体是哪个源在响应。
- */
-const featureActions = useMapFeatureActions({
-  /** 地图核心实例引用，用于获取底层绘制工具（如 TerraDraw）的状态和实例 */
-  mapRef: mapInitRef,
-  /** 正式业务数据源注册表，当需要修改正式数据（如更新业务属性）时会操作它 */
-  sourceRegistry: businessSourceRegistry,
-});
-
-/**
- * 统一属性编辑门面。
- * 业务层只维护“当前正在编辑谁”，
- * 然后统一调用：
- * 1. `resolveEditorState` 读取 panelState
- * 2. `saveItem` 保存单个字段
- * 3. `removeItem` 删除单个字段
- *
- * 底层到底是正式业务源、线草稿还是 TerraDraw，都由门面自动分流。
- */
-const propertyEditor = useMapFeaturePropertyEditor({
-  mapRef: mapInitRef,
-  sourceRegistry: businessSourceRegistry,
-});
-
-/**
- * 统一的线草稿能力门面。
+ * 当前页面统一使用的业务聚合门面。
  *
  * 作用：
- * 1. 自动发现当前页面注册的线草稿插件
- * 2. 直接暴露“是否已有草稿 / 草稿数量 / 清空草稿”等高频状态与动作
- * 3. 业务层不再自己监听 pluginStateChange 或追踪插件 ID
+ * 1. 把选择态、要素查询、要素动作、属性编辑、线草稿、特效统一收口
+ * 2. 业务层不再自己分别拼装多个 `use*` 门面
+ * 3. 后续新增业务能力时，优先继续往这个高层入口下分组扩展
  */
-const lineDraftPreview = useLineDraftPreview(mapInitRef);
+const businessMap = useBusinessMap({
+  mapRef: mapInitRef,
+  sourceRegistry: businessSourceRegistry,
+});
+
+/**
+ * 统一的地图要素分组。
+ * 这里同时包含查询和动作能力，业务层统一走 `businessMap.feature` 即可。
+ */
+const featureQuery = businessMap.feature;
+const featureActions = businessMap.feature;
+
+/**
+ * 统一属性编辑分组。
+ * 业务层只需要维护当前编辑目标，再调用 editor 分组即可。
+ */
+const propertyEditor = businessMap.editor;
+
+/**
+ * 统一线草稿分组。
+ * 业务层通过 businessMap.draft 读取草稿状态与动作。
+ */
+const lineDraftPreview = businessMap.draft;
 
 /**
  * 当前页面是否存在线草稿要素。
@@ -1519,9 +1492,9 @@ const secondaryBusinessLayers = [
 // ==========================================
 // 闪烁特效逻辑示例
 // ==========================================
-// useMapEffect 现在直接接收 mapInitRef。
+// feature-state 特效也统一从业务聚合门面读取。
 // 业务层无需再额外持有 useMap() 的底层实例。
-const { isFeatureFlashing, startFlash, stopFlash } = useMapEffect(mapInitRef);
+const { isFeatureFlashing, startFlash, stopFlash } = businessMap.effect;
 
 /**
  * 当前示例目标集合是否全部处于闪烁状态。
@@ -1623,7 +1596,7 @@ const {
   clear: clearSelection,
   getSelectedPropertyValues: getSelectionPropertyValues,
   groupSelectedFeaturesByLayer: getSelectionGroups,
-} = useMapSelection(mapInitRef);
+} = businessMap.selection;
 
 /**
  * 当前已切换到示例样式的要素键集合。
@@ -1870,7 +1843,7 @@ const selectedLayerDistributionText = computed(() => {
 
 /**
  * 当前 circleLayer 图层中的业务 ID 摘要。
- * 这里演示 useMapSelection 暴露的快捷属性提取方法。
+ * 这里演示 businessMap.selection 暴露的快捷属性提取方法。
  */
 const selectedCircleLayerIdsText = computed(() => {
   return formatValueList(
@@ -1882,7 +1855,7 @@ const selectedCircleLayerIdsText = computed(() => {
 
 /**
  * 当前完整选中集的要素 ID 摘要。
- * 这里直接复用 useMapSelection 已经暴露好的计算结果。
+ * 这里直接复用 businessMap.selection 已经暴露好的计算结果。
  */
 const selectedFeatureIdsText = computed(() => {
   return formatValueList(selectedFeatureIds.value);
@@ -1936,12 +1909,12 @@ const selectedLineOperationText = computed(() => {
 
 /**
  * 当前线草稿状态的说明文本。
- * 用来强调业务层现在直接通过 useLineDraftPreview 读取线草稿状态。
+ * 用来强调业务层现在直接通过 businessMap.draft 读取线草稿状态。
  */
 const lineDraftStatusText = computed(() => {
   return hasLineDraftFeatures.value
     ? `线草稿能力门面当前已有临时结果（共 ${lineDraftPreview.featureCount.value} 个）；如果不需要，直接点击这里的“清空线草稿”即可。`
-    : "当前没有线草稿。选中线并点击“创建线草稿”后，这里会通过 useLineDraftPreview 自动刷新状态。";
+    : "当前没有线草稿。选中线并点击“创建线草稿”后，这里会通过 businessMap.draft 自动刷新状态。";
 });
 
 /**
@@ -2071,7 +2044,7 @@ const handleClearLineDraftFeatures = (): void => {
   }
 
   closeBusinessPanels();
-  ElMessage.success("已通过 useLineDraftPreview 清空全部线草稿");
+  ElMessage.success("已通过 businessMap.draft 清空全部线草稿");
 };
 
 /**

@@ -150,6 +150,13 @@ export {
   type UseMapFeaturePropertyEditorResult,
 } from './MapLibre/facades/useMapFeaturePropertyEditor';
 export {
+  useBusinessMap,
+  type UseBusinessMapFeatureGroup,
+  type UseBusinessMapOptions,
+  type UseBusinessMapResult,
+  type UseBusinessMapSources,
+} from './MapLibre/facades/useBusinessMap';
+export {
   createCircleLayerStyle,
   createFillLayerStyle,
   createLineLayerStyle,
