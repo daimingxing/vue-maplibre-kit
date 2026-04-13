@@ -537,11 +537,17 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
       paint: {
         // 线草稿颜色。
         // hover 时显示为更醒目的红色，默认态显示为橙红色。
-        "line-color": ["case", ["boolean", ["feature-state", "hover"], false], "white", "#fa8c16"],
+        "line-color": createFeatureStateExpression({
+          hover: "white",
+          default: "#fa8c16",
+        }),
 
         // 线草稿宽度。
         // 这里略微调大，用于演示业务层如何只覆写单条样式。
-        "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 6, 5],
+        "line-width": createFeatureStateExpression({
+          hover: 6,
+          default: 5,
+        }),
 
         // 线草稿虚线样式。
         "line-dasharray": [2, 1.2],
