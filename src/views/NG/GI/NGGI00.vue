@@ -312,6 +312,7 @@ import {
   MapLibreInit,
   MglPopup,
   createFeatureStateExpression,
+  matchFeatureProperty,
   createCircleBusinessLayer,
   createMapBusinessSource,
   createMapBusinessSourceRegistry,
@@ -1286,14 +1287,14 @@ const { layout: fillLayout, paint: fillPaint } = createFillLayerStyle();
  *
  * 这里演示“业务层局部覆写公共样式”的推荐写法：
  * 1. 先用 createFeatureStateExpression 收敛 selected / hover / isFlashing 这类常见状态分支。
- * 2. default 仍然允许继续传入原生 MapLibre 表达式，用来承载更细的业务条件。
+ * 2. default 仍然允许继续传入原生 MapLibre 表达式；常见按属性分色场景优先用 helper 收敛。
  *
  * line-color 当前规则说明：
  * 1. 如果 feature-state.isFlashing === true，则当前线要素显示为黄色 `#ffff00`
  * 2. 否则如果 feature-state.demoStyled === true，则显示为洋红色 `#ec4899`
  * 3. 否则如果 feature-state.selected === true，则显示为橙色 `#f97316`
  * 4. 否则如果 feature-state.hover === true，则显示为绿色 `#00ff00`
- * 5. 否则继续走 default 中的原生表达式：line_1 为红色，其余线为蓝色
+ * 5. 否则继续走 default 中的属性匹配 helper：line_1 为红色，其余线为蓝色
  */
 const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
   paint: {
@@ -1306,7 +1307,13 @@ const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
       selected: "#f97316",
       hover: "#00ff00",
       order: DEMO_STYLE_STATE_ORDER,
-      default: ["case", ["==", ["get", "id"], "line_1"], "#ff0000", "#0000ff"],
+      default: matchFeatureProperty(
+        "id",
+        {
+          line_1: "#ff0000",
+        },
+        "#0000ff",
+      ),
     }),
     "line-width": createFeatureStateExpression({
       states: {
@@ -1373,7 +1380,7 @@ const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
 /**
  * 4. 标签图层 (Symbol Layer) 样式配置
  * 用于渲染图标(Icon)和文字(Text)
- * 
+ *
  * 这里演示如何在业务层配置显示的文本字段：
  * 1. 默认 text-field 会显示要素的 id
  * 2. 这里覆写为：优先显示 name 字段，如果没有 name 则显示“未知站点”
@@ -1523,6 +1530,13 @@ const toggleFlash = (): void => {
 
   FLASH_TARGETS.forEach((target) => {
     if (nextFlashing) {
+      if (target.id === "line_1") {
+        // line_1 用更快的闪烁频率，作为“单个目标独立频率”的最小示例。
+        // 其他目标不传频率时，继续走 useMapEffect 默认的 500ms。
+        startFlash(target, 300);
+        return;
+      }
+
       startFlash(target);
       return;
     }
@@ -1531,7 +1545,7 @@ const toggleFlash = (): void => {
   });
 
   if (nextFlashing) {
-    ElMessage.success("已开启 point_1、point_2 和 line_1 闪烁");
+    ElMessage.success("已开启 point_1、point_2 和 line_1 闪烁，line_1 使用 300ms 频率");
     return;
   }
 
@@ -2413,7 +2427,7 @@ const getContextMenuFeatureId = (): string | number | null => {
   }
 
   return contextMenuState.editorTarget.type === "map"
-    ? contextMenuState.editorTarget.featureRef?.featureId ?? null
+    ? (contextMenuState.editorTarget.featureRef?.featureId ?? null)
     : contextMenuState.editorTarget.featureId;
 };
 
@@ -2428,7 +2442,8 @@ const syncContextMenuPanelState = (nextEditorState?: MapFeaturePropertyEditorSta
     return;
   }
 
-  const editorState = nextEditorState || propertyEditor.resolveEditorState(contextMenuState.editorTarget);
+  const editorState =
+    nextEditorState || propertyEditor.resolveEditorState(contextMenuState.editorTarget);
   contextMenuState.panelState = editorState.panelState;
   contextMenuState.rawProperties = clonePropertySnapshot(editorState.rawProperties);
 };
@@ -2511,7 +2526,7 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
   popupState.visible = false;
 
   const featureId =
-    context.featureId ?? ((context.feature.id as string | number | null | undefined) ?? null);
+    context.featureId ?? (context.feature.id as string | number | null | undefined) ?? null;
   const rawProperties = clonePropertySnapshot(context.feature.properties || {});
   const editorTarget =
     featureId === null

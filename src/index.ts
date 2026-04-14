@@ -155,6 +155,15 @@ export { useMapEffect } from './MapLibre/composables/useMapEffect';
 /** feature-state 包装工具。需要在样式表达式里注入状态值时使用。 */
 export { withFeatureState } from './MapLibre/composables/useMapEffect';
 
+/** feature properties 等值比较表达式工具。需要按业务字段快速写条件时使用。 */
+export { whenFeaturePropertyEquals } from './MapLibre/shared/map-feature-property-expression';
+
+/** feature properties 多值命中表达式工具。多个业务字段值共用同一结果时使用。 */
+export { whenFeaturePropertyIn } from './MapLibre/shared/map-feature-property-expression';
+
+/** feature properties 映射匹配表达式工具。按属性映射批量分色分宽时使用。 */
+export { matchFeatureProperty } from './MapLibre/shared/map-feature-property-expression';
+
 /** feature-state 表达式配置类型。声明表达式入参时使用。 */
 export type { FeatureStateExpressionOptions } from './MapLibre/composables/useMapEffect';
 
