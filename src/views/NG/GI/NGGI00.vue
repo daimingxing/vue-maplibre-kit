@@ -1335,45 +1335,7 @@ const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
  * 这里演示 createFeatureStateExpression 的另一种常见写法：
  * 1. 简单场景直接把 default 写成字面量
  * 2. 后续如果业务规则变复杂，再把 default 升级为原生表达式即可
- *
- * ==========================================
- * 属性表达式工具示例（三种写法对比）
- * ==========================================
- * 下面用 circle-color 演示三种属性表达式工具的用法，
- * 实际使用时选择一种即可，其他两种可以注释掉。
  */
-
-// 示例 1：matchFeatureProperty - 按属性值批量映射（推荐用于多值分色场景）
-// 场景：不同 mark 类型的点显示不同颜色
-const circleColorByMark = matchFeatureProperty(
-  "mark",
-  {
-    hole: "#ff0000", // 洞口标记显示红色
-    dec: "#00ff00",  // 装饰点显示绿色
-  },
-  "#0000ff" // 其他类型显示蓝色
-);
-
-/*
-// 示例 2：whenFeaturePropertyEquals - 单值等值比较（推荐用于单个状态判断）
-// 场景：状态为 "urgent" 的点显示红色，其他显示蓝色
-const circleColorByStatus = whenFeaturePropertyEquals(
-  "status",
-  "urgent",
-  "#ff0000", // urgent 状态红色
-  "#0000ff"  // 其他状态蓝色
-);
-
-// 示例 3：whenFeaturePropertyIn - 多值命中（推荐用于多个状态共用样式）
-// 场景：状态为 "warning" 或 "error" 的点显示橙色，其他显示绿色
-const circleColorByStatusList = whenFeaturePropertyIn(
-  "status",
-  ["warning", "error"],
-  "#ff8800", // warning/error 橙色
-  "#00ff00"  // 其他状态绿色
-);
-*/
-
 const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
   paint: {
     "circle-color": createFeatureStateExpression({
@@ -1385,8 +1347,7 @@ const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
       selected: "#f97316",
       hover: "#22c55e",
       order: DEMO_STYLE_STATE_ORDER,
-      // 使用 matchFeatureProperty 作为默认颜色逻辑
-      default: circleColorByMark,
+      default: "#0000ff",
     }),
     "circle-stroke-color": createFeatureStateExpression({
       isFlashing: "#ffff00",
