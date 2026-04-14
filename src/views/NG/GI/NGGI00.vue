@@ -313,6 +313,8 @@ import {
   MglPopup,
   createFeatureStateExpression,
   matchFeatureProperty,
+  whenFeaturePropertyEquals,
+  whenFeaturePropertyIn,
   createCircleBusinessLayer,
   createMapBusinessSource,
   createMapBusinessSourceRegistry,
@@ -457,16 +459,11 @@ const MEASURE_PROPERTY_PANEL_NOTE =
 
 /**
  * 修改样式示例统一使用的 feature-state 键名。
- * 这里故意使用 feature-state，而不是直接改 GeoJSON 数据，
- * 用最轻量的方式演示“业务层按钮驱动要素样式变化”。
+ * 这里故意使用 feature-state，而不是直接改 GeoJSON 数据。
+ * 样式配置里会直接把它写成 `demoStyled`，方便业务层照着示例抄；
+ * 按钮逻辑则统一复用这个常量，避免多处散落字符串。
  */
 const DEMO_STYLE_STATE_KEY = "demoStyled";
-
-/**
- * 示例样式的状态优先级。
- * 闪烁仍然最高，其次才是按钮切换的示例样式，最后才是选中和悬浮。
- */
-const DEMO_STYLE_STATE_ORDER = ["isFlashing", DEMO_STYLE_STATE_KEY, "selected", "hover"];
 
 import sendIcon from "./assets/send.svg";
 // import segment_stretch_test from './assets/segment-stretch.svg';
@@ -1276,6 +1273,48 @@ const getMeasureData = () => {
 // ==========================================
 
 /**
+ * 属性表达式 helper 示例区。
+ * 这 3 个 helper 都只负责读取 feature.properties，不处理 selected / hover / isFlashing。
+ * 推荐写法是：
+ * 1. 先用属性 helper 写“默认态按字段如何显示”
+ * 2. 再把它放进 createFeatureStateExpression({ default: ... })，继续叠加 feature-state 高亮
+ */
+
+/**
+ * matchFeatureProperty 适合“字段值 -> 样式值”可以直接写成映射表的场景。
+ * 这里表示：line.properties.id 为 line_1 时显示红色，其余线显示蓝色。
+ */
+const demoLineColorByIdExpression = matchFeatureProperty(
+  "id",
+  {
+    line_1: "#ff0000",
+  },
+  "#0000ff",
+);
+
+/**
+ * whenFeaturePropertyEquals 适合只判断单个值的场景。
+ * 这里表示：point.properties.mark === "hole" 时，默认描边显示蓝色；否则回退为白色。
+ */
+const demoPointStrokeColorByMarkExpression = whenFeaturePropertyEquals(
+  "mark",
+  "hole",
+  "#1d4ed8",
+  "#ffffff",
+);
+
+/**
+ * whenFeaturePropertyIn 适合“多个值共用同一套样式”的场景。
+ * 这里表示：point.properties.id 属于 point_1 / point_2 时，默认半径显示为 7；否则回退为 6。
+ */
+const demoPointRadiusByIdGroupExpression = whenFeaturePropertyIn(
+  "id",
+  ["point_1", "point_2"],
+  7,
+  6,
+);
+
+/**
  * 1. 面图层 (Fill Layer) 样式配置
  * 用于渲染 Polygon / MultiPolygon 数据
  */
@@ -1288,6 +1327,7 @@ const { layout: fillLayout, paint: fillPaint } = createFillLayerStyle();
  * 这里演示“业务层局部覆写公共样式”的推荐写法：
  * 1. 先用 createFeatureStateExpression 收敛 selected / hover / isFlashing 这类常见状态分支。
  * 2. default 仍然允许继续传入原生 MapLibre 表达式；常见按属性分色场景优先用 helper 收敛。
+ * 3. 下面的 default 演示了 `matchFeatureProperty(...)` 的用法。
  *
  * line-color 当前规则说明：
  * 1. 如果 feature-state.isFlashing === true，则当前线要素显示为黄色 `#ffff00`
@@ -1301,28 +1341,29 @@ const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
     "line-color": createFeatureStateExpression({
       isFlashing: "#ffff00",
       states: {
-        // 点击按钮后，将当前选中线要素切换为更醒目的洋红色。
-        [DEMO_STYLE_STATE_KEY]: "#ec4899",
+        // states 是“自定义 feature-state 键名 -> 命中后的样式值”映射表。
+        // 这里直接写 demoStyled，是为了让业务层一眼看出：
+        // 只要执行 setMapFeatureState(target, { demoStyled: true })，
+        // 当前线要素就会切换为更醒目的洋红色。
+        demoStyled: "#ec4899",
       },
       selected: "#f97316",
       hover: "#00ff00",
-      order: DEMO_STYLE_STATE_ORDER,
-      default: matchFeatureProperty(
-        "id",
-        {
-          line_1: "#ff0000",
-        },
-        "#0000ff",
-      ),
+      // order 用来声明多个状态同时命中时谁优先。
+      // 这里表示：闪烁 > demoStyled > selected > hover。
+      order: ["isFlashing", "demoStyled", "selected", "hover"],
+      default: demoLineColorByIdExpression,
     }),
     "line-width": createFeatureStateExpression({
       states: {
-        // 示例样式顺便把线宽加粗，方便肉眼观察变化。
-        [DEMO_STYLE_STATE_KEY]: 8,
+        // 同一个 demoStyled 也可以同时控制其他样式属性。
+        // 这里让按钮切换后线宽变成 8，方便肉眼观察变化。
+        demoStyled: 8,
       },
       selected: 7,
       hover: 6,
-      order: DEMO_STYLE_STATE_ORDER,
+      // order 只需要写当前这个表达式实际声明过的状态。
+      order: ["demoStyled", "selected", "hover"],
       default: 3,
     }),
   },
@@ -1331,10 +1372,6 @@ const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
 /**
  * 3. 点图层 (Circle Layer) 样式配置
  * 用于渲染 Point / MultiPoint 数据
- *
- * 这里演示 createFeatureStateExpression 的另一种常见写法：
- * 1. 简单场景直接把 default 写成字面量
- * 2. 后续如果业务规则变复杂，再把 default 升级为原生表达式即可
  */
 const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
   paint: {
@@ -1342,36 +1379,40 @@ const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
       isFlashing: "#ff0000",
       states: {
         // 点击按钮后，将当前选中点要素切换为更醒目的洋红色。
-        [DEMO_STYLE_STATE_KEY]: "#ec4899",
+        demoStyled: "#ec4899",
       },
       selected: "#f97316",
       hover: "#22c55e",
-      order: DEMO_STYLE_STATE_ORDER,
+      order: ["isFlashing", "demoStyled", "selected", "hover"],
       default: "#0000ff",
     }),
     "circle-stroke-color": createFeatureStateExpression({
       isFlashing: "#ffff00",
+      // 自定义feature-state 键名 demoStyled，用于控制描边颜色。
       states: {
-        [DEMO_STYLE_STATE_KEY]: "#831843",
+        // 即使 default 已经按 properties.mark 做判断，
+        // feature-state.demoStyled 仍然会在命中时覆盖默认描边结果。
+        demoStyled: "#831843",
       },
       selected: "#7c2d12",
-      order: DEMO_STYLE_STATE_ORDER,
-      default: "#ffffff",
+      order: ["isFlashing", "demoStyled", "selected"],
+      default: demoPointStrokeColorByMarkExpression,
     }),
     "circle-radius": createFeatureStateExpression({
       states: {
-        [DEMO_STYLE_STATE_KEY]: 9,
+        demoStyled: 9,
       },
       selected: 8,
-      order: DEMO_STYLE_STATE_ORDER,
-      default: 6,
+      order: ["demoStyled", "selected"],
+      default: demoPointRadiusByIdGroupExpression,
     }),
     "circle-stroke-width": createFeatureStateExpression({
+      // 自定义feature-state 键名 demoStyled，用于控制描边宽度。
       states: {
-        [DEMO_STYLE_STATE_KEY]: 4,
+        demoStyled: 4,
       },
       selected: 3,
-      order: DEMO_STYLE_STATE_ORDER,
+      order: ["demoStyled", "selected"],
       default: 2,
     }),
   },
