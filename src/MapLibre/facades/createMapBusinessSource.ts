@@ -830,10 +830,10 @@ export function createMapBusinessSourceRegistry(
 
   sources.forEach((source) => {
     if (sourceMap.has(source.sourceId)) {
-      console.error(
-        `[createMapBusinessSourceRegistry] 检测到重复 sourceId：${source.sourceId}，后续重复 source 将被忽略`
+      // 重复 sourceId 会让后续查询和写回目标变得不确定，这里直接 fail-fast。
+      throw new Error(
+        `[createMapBusinessSourceRegistry] 检测到重复 sourceId：${source.sourceId}`
       );
-      return;
     }
 
     sourceMap.set(source.sourceId, source);

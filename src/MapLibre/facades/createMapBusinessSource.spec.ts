@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FeatureProperties } from '../composables/useMapDataUpdate';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
 import * as mapFeatureData from '../shared/map-feature-data';
-import { createMapBusinessSource } from './createMapBusinessSource';
+import { createMapBusinessSource, createMapBusinessSourceRegistry } from './createMapBusinessSource';
 
 /**
  * 创建测试用点要素。
@@ -228,5 +228,22 @@ describe('createMapBusinessSource', () => {
     expect(toRaw(data.value.features)).not.toBe(sentinelCollection.features);
 
     saveSpy.mockRestore();
+  });
+
+  it('重复 sourceId 时会直接抛出异常，避免静默忽略后续 source', () => {
+    const primarySource = createMapBusinessSource({
+      sourceId: 'business-duplicate',
+      data: ref(createFeatureCollection([createPointFeature('feature-1')])),
+      promoteId: 'id',
+    });
+    const secondarySource = createMapBusinessSource({
+      sourceId: 'business-duplicate',
+      data: ref(createFeatureCollection([createPointFeature('feature-2')])),
+      promoteId: 'id',
+    });
+
+    expect(() => {
+      createMapBusinessSourceRegistry([primarySource, secondarySource]);
+    }).toThrowError("[createMapBusinessSourceRegistry] 检测到重复 sourceId：business-duplicate");
   });
 });

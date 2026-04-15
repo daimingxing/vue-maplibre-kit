@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx @anthropic-ai/context7-cli@latest --help)",
+      "Bash(npx playwright:*)",
+      "Bash(npm search:*)",
+      "Bash(npx context7@latest --help)"
+    ]
+  }
+}

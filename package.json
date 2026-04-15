@@ -14,6 +14,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./business": {
+      "types": "./dist/business.d.ts",
+      "import": "./dist/business.js"
+    },
     "./geometry": {
       "types": "./dist/geometry.d.ts",
       "import": "./dist/geometry.js"

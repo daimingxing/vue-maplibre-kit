@@ -1,10 +1,10 @@
 /**
  * vue-maplibre-kit 根入口。
  * 建议业务页面优先按下面顺序找能力：
- * 1. `MapLibreInit`：挂载地图根组件
- * 2. `useBusinessMap`：读取高频业务聚合门面
- * 3. `createMapBusinessSource` / `createMapBusinessSourceRegistry`：组织业务数据源
- * 4. `createCircleBusinessLayer` 等：声明业务图层
+ * 1. `vue-maplibre-kit/business`：业务页面主入口，优先从这里接入
+ * 2. `MapLibreInit`：挂载地图根组件
+ * 3. `useBusinessMap`：读取高频业务聚合门面
+ * 4. `createMapBusinessSource` / `createMapBusinessSourceRegistry`：组织业务数据源
  * 5. 其他低层门面：按需细分接入
  */
 
@@ -295,9 +295,6 @@ export type { MapBusinessLayerGeometryType } from './MapLibre/facades/mapBusines
 
 /** 业务图层等值 where 条件类型。声明简单属性过滤时使用。 */
 export type { MapBusinessLayerWhere } from './MapLibre/facades/mapBusinessLayer';
-
-/** 业务图层 where 值类型。约束等值过滤里允许出现的值类型。 */
-export type { MapBusinessLayerWhereValue } from './MapLibre/facades/mapBusinessLayer';
 
 /** 地图要素查询门面。读取选中要素、来源引用和属性面板态时使用。 */
 export { useMapFeatureQuery } from './MapLibre/facades/useMapFeatureQuery';

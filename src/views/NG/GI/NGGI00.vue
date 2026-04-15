@@ -311,39 +311,13 @@ import {
   MapBusinessSourceLayers,
   MapLibreInit,
   MglPopup,
-  createFeatureStateExpression,
-  matchFeatureProperty,
-  whenFeaturePropertyEquals,
-  whenFeaturePropertyIn,
-  createCircleBusinessLayer,
-  createMapBusinessSource,
-  createMapBusinessSourceRegistry,
-  createFillBusinessLayer,
-  createLineBusinessLayer,
-  createCircleLayerStyle,
-  createFillLayerStyle,
-  createLineLayerStyle,
-  createSymbolBusinessLayer,
-  createSymbolLayerStyle,
-  getSelectedFeatureIds,
-  groupSelectedFeaturesByLayer,
+  businessLayers,
+  businessSources,
+  layerStyles,
+  mapExpressions,
   useBusinessMap,
-  type MapControlsConfig,
-  type MapFeaturePropertyEditorState,
-  type MapFeaturePropertyEditorTarget,
-  type MapFeaturePropertyPanelState,
-  type MapFeaturePropertyPolicy,
-  type MapFeatureStateTarget,
-  type MapLayerInteractiveContext,
-  type MapLayerInteractiveOptions,
-  type MapLayerSelectedFeature,
-  type MapLayerSelectionChangeContext,
-  type MapLibreInitExpose,
-  type MapSelectionLayerGroup,
-  type MapSelectionMode,
-  type TerradrawInteractiveContext,
-  type TerradrawLineDecorationStyle,
-} from "vue-maplibre-kit";
+} from "vue-maplibre-kit/business";
+import type * as BusinessKit from "vue-maplibre-kit/business";
 import FeaturePropertyEditor from "./components/FeaturePropertyEditor.vue";
 import type { LngLatLike, MapOptions } from "maplibre-gl";
 import { MglCustomControl } from "vue-maplibre-gl";
@@ -366,6 +340,33 @@ import {
 import { createMapFeatureMultiSelectPlugin } from "vue-maplibre-kit/plugins/map-feature-multi-select";
 import { createMapFeatureSnapPlugin } from "vue-maplibre-kit/plugins/map-feature-snap";
 
+// 业务 source 工厂统一从分组入口读取，避免业务页面在根入口平铺查找。
+const { createMapBusinessSource, createMapBusinessSourceRegistry } = businessSources;
+
+// 业务图层工厂同样按职责分组，方便业务开发者记忆“去哪里找什么”。
+const {
+  createCircleBusinessLayer,
+  createFillBusinessLayer,
+  createLineBusinessLayer,
+  createSymbolBusinessLayer,
+} = businessLayers;
+
+// 样式工厂统一放在 layerStyles 分组下，减少 import 列表长度。
+const {
+  createCircleLayerStyle,
+  createFillLayerStyle,
+  createLineLayerStyle,
+  createSymbolLayerStyle,
+} = layerStyles;
+
+// 表达式工具收敛到同一个分组，业务层只需要记住一个入口。
+const {
+  createFeatureStateExpression,
+  matchFeatureProperty,
+  whenFeaturePropertyEquals,
+  whenFeaturePropertyIn,
+} = mapExpressions;
+
 /**
  * 当前页面统一使用的业务数据源 ID。
  * 所有 source 相关逻辑只认这一组常量，避免页面里散落字符串。
@@ -383,7 +384,7 @@ const FLASH_TARGETS = [
   { source: SOURCE_IDS.primary, id: "point_1" },
   { source: SOURCE_IDS.primary, id: "point_2" },
   { source: SOURCE_IDS.primary, id: "line_1" },
-] as const satisfies readonly MapFeatureStateTarget[];
+] as const satisfies readonly BusinessKit.MapFeatureStateTarget[];
 
 /**
  * 当前页面统一使用的业务图层 ID。
@@ -408,7 +409,7 @@ const LAYER_IDS = {
  *
  * 面板态与保存/删除权限都会统一复用这份规则。
  */
-const BUSINESS_SOURCE_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
+const BUSINESS_SOURCE_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
   readonlyKeys: ["id"],
   fixedKeys: ["mark"],
   hiddenKeys: ["marker-color", "marker-size", "marker-symbol"],
@@ -418,7 +419,7 @@ const BUSINESS_SOURCE_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
  * Draw 控件的字段规则示例。
  * 绘制要素进入属性面板前，同样会先按这里的规则收口。
  */
-const DRAW_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
+const DRAW_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
   fixedKeys: ["bizName"],
   readonlyKeys: ["bizCode"],
 };
@@ -428,7 +429,7 @@ const DRAW_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
  * 像距离、面积这类系统测量字段会被底层额外隐藏，
  * 这里主要声明业务自己关心的字段规则。
  */
-const MEASURE_PROPERTY_POLICY: MapFeaturePropertyPolicy = {
+const MEASURE_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
   fixedKeys: ["label"],
   readonlyKeys: ["taskCode"],
 };
@@ -508,7 +509,7 @@ const businessSourceRegistry = createMapBusinessSourceRegistry([
  * 当前页面持有的地图组件公开实例引用。
  * 业务层所有地图操作都通过它与底层进行通信。
  */
-const mapInitRef = ref<MapLibreInitExpose | null>(null);
+const mapInitRef = ref<BusinessKit.MapLibreInitExpose | null>(null);
 
 /**
  * ==========================
@@ -783,7 +784,7 @@ const mapOptions: Omit<MapOptions, "container"> = {
  * 以组件名为 key，控制各种原生控件与测绘控件的显隐及初始化参数。
  * 未在此处显式声明的控件默认不渲染。
  */
-const mapControls: MapControlsConfig = {
+const mapControls: BusinessKit.MapControlsConfig = {
   // 导航控件：提供缩放按钮和罗盘(指南针)
   // MglNavigationControl: {
   //     isUse: true,
@@ -916,7 +917,7 @@ const mapControls: MapControlsConfig = {
         opacity: 0.95,
         iconRotate: 0,
         keepUpright: true,
-      } as TerradrawLineDecorationStyle,
+      } as BusinessKit.TerradrawLineDecorationStyle,
     },
 
     // TerraDraw 业务属性治理示例。
@@ -1080,7 +1081,7 @@ const mapControls: MapControlsConfig = {
         svg: texturelabsWater, // 推荐使用可以无缝首尾相接的 SVG 资源
         lineWidth: 20, // 纹理线段的宽度（这决定了图片平铺时的拉伸高度）
         opacity: 0.85, // 纹理线段的透明度
-      } as TerradrawLineDecorationStyle,
+      } as BusinessKit.TerradrawLineDecorationStyle,
       // (可选) 动态样式解析：根据线要素的属性，决定使用哪种装饰。
       // 这里演示：如果要素属性里配置了特定的装饰模式，则优先使用该配置。
       // resolveStyle: (context) => {
@@ -1618,7 +1619,7 @@ interface FeaturePropertyEditorRemovePayload {
  * 创建空的属性面板态。
  * @returns 空的业务属性面板态
  */
-const createEmptyPropertyPanelState = (): MapFeaturePropertyPanelState => {
+const createEmptyPropertyPanelState = (): BusinessKit.MapFeaturePropertyPanelState => {
   return {
     properties: {},
     items: [],
@@ -1688,8 +1689,8 @@ const getDemoStyleTargetKey = (target: {
  * @returns 标准化后的 feature-state 目标；不可写时返回 null
  */
 const getDemoStyleStateTarget = (
-  selectedFeature: MapLayerSelectedFeature,
-): MapFeatureStateTarget | null => {
+  selectedFeature: BusinessKit.MapLayerSelectedFeature,
+): BusinessKit.MapFeatureStateTarget | null => {
   if (!selectedFeature.sourceId || selectedFeature.featureId === null) {
     return null;
   }
@@ -1707,7 +1708,7 @@ const getDemoStyleStateTarget = (
  * @param selectedFeature 当前选中要素快照
  * @returns 是否已处于示例样式态
  */
-const isDemoStyleEnabled = (selectedFeature: MapLayerSelectedFeature): boolean => {
+const isDemoStyleEnabled = (selectedFeature: BusinessKit.MapLayerSelectedFeature): boolean => {
   const targetKey = getDemoStyleTargetKey({
     sourceId: selectedFeature.sourceId,
     sourceLayer: selectedFeature.sourceLayer,
@@ -1730,8 +1731,8 @@ const changeStyle = (): void => {
   const styleTargetMap = new Map<
     string,
     {
-      target: MapFeatureStateTarget;
-      selectedFeature: MapLayerSelectedFeature;
+      target: BusinessKit.MapFeatureStateTarget;
+      selectedFeature: BusinessKit.MapLayerSelectedFeature;
     }
   >();
 
@@ -1821,7 +1822,7 @@ const getFeatureBusinessId = (
  * @param mode 当前选择模式
  * @returns 中文模式文本
  */
-const getSelectionModeText = (mode: MapSelectionMode): string => {
+const getSelectionModeText = (mode: BusinessKit.MapSelectionMode): string => {
   return mode === "multiple" ? "多选" : "单选";
 };
 
@@ -1839,7 +1840,7 @@ const formatValueList = (values: Array<string | number>): string => {
  * @param layerGroups 图层分组结果
  * @returns 图层分布摘要文本
  */
-const formatLayerDistribution = (layerGroups: MapSelectionLayerGroup[]): string => {
+const formatLayerDistribution = (layerGroups: BusinessKit.MapSelectionLayerGroup[]): string => {
   if (layerGroups.length === 0) {
     return "无";
   }
@@ -1853,14 +1854,14 @@ const formatLayerDistribution = (layerGroups: MapSelectionLayerGroup[]): string 
 
 /**
  * 将当前选中集转换为右键面板摘要行。
- * @param selectedFeatures 当前选中集
  * @param currentSelectionMode 当前选择模式
  * @returns 适合直接传给属性面板的摘要行
  */
 const buildSelectionSummaryRows = (
-  selectedFeatures: MapLayerSelectedFeature[],
-  currentSelectionMode: MapSelectionMode,
+  currentSelectionMode: BusinessKit.MapSelectionMode,
 ): SelectionSummaryRow[] => {
+  const currentSelectedFeatures = selectedFeatures.value;
+
   return [
     {
       label: "当前模式",
@@ -1868,15 +1869,15 @@ const buildSelectionSummaryRows = (
     },
     {
       label: "选中数量",
-      value: `${selectedFeatures.length} 个`,
+      value: `${currentSelectedFeatures.length} 个`,
     },
     {
       label: "要素 ID",
-      value: formatValueList(getSelectedFeatureIds(selectedFeatures)),
+      value: formatValueList(selectedFeatureIds.value),
     },
     {
       label: "图层分布",
-      value: formatLayerDistribution(groupSelectedFeaturesByLayer(selectedFeatures)),
+      value: formatLayerDistribution(getSelectionGroups()),
     },
   ];
 };
@@ -1982,7 +1983,7 @@ const lineDraftStatusText = computed(() => {
  * 根据最新的选中集变化上下文更新示例面板文案。
  * @param context 选中集变化上下文
  */
-const syncSelectionPanelFromChange = (context: MapLayerSelectionChangeContext): void => {
+const syncSelectionPanelFromChange = (context: BusinessKit.MapLayerSelectionChangeContext): void => {
   const currentSelectionMode = context.selectionMode || "single";
   const addedIdsText = formatValueList(context.getAddedFeatureIds());
   const removedIdsText = formatValueList(context.getRemovedFeatureIds());
@@ -2172,7 +2173,7 @@ const handleCreateLineDraft = (): void => {
  * 这个"第几段"的数据会被后面的【创建线草稿】和【生成线廊】直接使用。
  * @param context 点击事件传过来的数据
  */
-const openMapFeaturePopup = (context: MapLayerInteractiveContext) => {
+const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) => {
   if (!context.feature || !context.lngLat) return;
 
   contextMenuState.visible = false;
@@ -2225,7 +2226,7 @@ const openMapFeaturePopup = (context: MapLayerInteractiveContext) => {
  * 该示例用于演示普通图层如何通过属性面板态门面复用统一的 FeaturePropertyEditor。
  * @param context 普通图层统一交互上下文
  */
-const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
+const openMapFeatureContextMenu = (context: BusinessKit.MapLayerInteractiveContext) => {
   if (!context.feature || !context.point || !context.originalEvent) return;
 
   context.originalEvent.preventDefault();
@@ -2233,9 +2234,9 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
   const featureRef = featureQuery.getFeatureRef(context);
   const summaryRows =
     context.selectionMode === "multiple"
-      ? buildSelectionSummaryRows(context.selectedFeatures || [], context.selectionMode)
+      ? buildSelectionSummaryRows(context.selectionMode || selectionMode.value)
       : [];
-  const editorTarget: MapFeaturePropertyEditorTarget = {
+  const editorTarget: BusinessKit.MapFeaturePropertyEditorTarget = {
     type: "map",
     featureRef,
   };
@@ -2258,7 +2259,7 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
  * @param label 日志标题
  * @param context 普通图层统一交互上下文
  */
-const logMapInteractiveEvent = (label: string, context: MapLayerInteractiveContext) => {
+const logMapInteractiveEvent = (label: string, context: BusinessKit.MapLayerInteractiveContext) => {
   console.log(`[Map 图层示例] ${label}`, {
     eventType: context.eventType, // 当前回调对应的交互事件类型
     selectionMode: context.selectionMode, // 当前交互层生效的选择模式
@@ -2282,32 +2283,32 @@ const logMapInteractiveEvent = (label: string, context: MapLayerInteractiveConte
  * 将所有业务图层的 hover、click、选中等事件收口，避免在模板中散落事件绑定。
  * `layers` 配置块中的键必须与图层 `layer-id` 完全一致。
  */
-const mapInteractive: MapLayerInteractiveOptions = {
+const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
   // 是否启用普通图层交互封装。
   // 设为 false 时，map-libre-init 不会为普通业务图层挂载任何交互事件。
   enabled: true,
 
   // 普通图层交互管理器初始化完成时触发。
   // 适合做首屏联调日志、默认状态同步或图层可用性检查。
-  onReady: (context: MapLayerInteractiveContext) => {
+  onReady: (context: BusinessKit.MapLayerInteractiveContext) => {
     console.log("[Map 图层示例] 初始化完成，可直接使用普通图层交互能力", context.map);
   },
 
   // 普通图层统一 hover 入口。
   // 所有已声明图层的悬浮逻辑都可以先在这里做公共处理。
-  onHoverEnter: (context: MapLayerInteractiveContext) => {
+  onHoverEnter: (context: BusinessKit.MapLayerInteractiveContext) => {
     logMapInteractiveEvent("顶层鼠标移入要素", context);
   },
 
   // 普通图层统一 hover leave 入口。
   // 适合统一清理 tooltip、状态栏摘要等公共 UI。
-  onHoverLeave: (context: MapLayerInteractiveContext) => {
+  onHoverLeave: (context: BusinessKit.MapLayerInteractiveContext) => {
     logMapInteractiveEvent("顶层鼠标移出要素", context);
   },
 
   // 普通图层统一 click 入口。
   // 点击地图一定会触发；若命中已声明图层要素，则会附带 feature / layerId 等信息。
-  onClick: (context: MapLayerInteractiveContext) => {
+  onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
     logMapInteractiveEvent("顶层单击地图", context);
 
     if (!context.feature) {
@@ -2319,7 +2320,7 @@ const mapInteractive: MapLayerInteractiveOptions = {
 
   // 普通图层选中集变化入口。
   // 业务层可在这里统一处理多图层批量选择，而不需要分别给每个 layer 写回调。
-  onSelectionChange: (context: MapLayerSelectionChangeContext) => {
+  onSelectionChange: (context: BusinessKit.MapLayerSelectionChangeContext) => {
     syncSelectionPanelFromChange(context);
     console.log("[NGGI00 示例] 选中集变化示例", {
       reason: context.reason,
@@ -2336,7 +2337,7 @@ const mapInteractive: MapLayerInteractiveOptions = {
 
   // 普通图层统一 double click 入口。
   // 适合做 flyTo、进入详情页、切换侧边栏等通用行为。
-  onDoubleClick: (context: MapLayerInteractiveContext) => {
+  onDoubleClick: (context: BusinessKit.MapLayerInteractiveContext) => {
     logMapInteractiveEvent("顶层双击地图", context);
 
     if (context.selectionMode === "multiple") {
@@ -2354,7 +2355,7 @@ const mapInteractive: MapLayerInteractiveOptions = {
 
   // 普通图层统一右键入口。
   // 命中要素时可以直接在这里打开公共右键菜单。
-  onContextMenu: (context: MapLayerInteractiveContext) => {
+  onContextMenu: (context: BusinessKit.MapLayerInteractiveContext) => {
     logMapInteractiveEvent("顶层右键地图", context);
 
     if (!context.feature) {
@@ -2373,7 +2374,7 @@ const mapInteractive: MapLayerInteractiveOptions = {
 
   // 单击地图空白区域时触发。
   // 常见用途：关闭 popup、右键菜单、悬浮信息卡片等业务 UI。
-  onBlankClick: (context: MapLayerInteractiveContext) => {
+  onBlankClick: (context: BusinessKit.MapLayerInteractiveContext) => {
     console.log("[Map 图层示例] 点击了空白区域", context.point, context.lngLat);
     closeBusinessPanels();
   },
@@ -2408,7 +2409,7 @@ const mapInteractive: MapLayerInteractiveOptions = {
       // 配合 line-width / line-color 表达式即可直接实现悬浮高亮。
       enableFeatureStateHover: true,
 
-      onClick: (context: MapLayerInteractiveContext) => {
+  onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
         console.log("[Map 图层示例] 正式线图层额外 onClick，可在这里补充专属业务逻辑", context);
       },
     },
@@ -2418,7 +2419,7 @@ const mapInteractive: MapLayerInteractiveOptions = {
     [LAYER_IDS.secondaryLine]: {
       cursor: "pointer",
       enableFeatureStateHover: true,
-      onClick: (context: MapLayerInteractiveContext) => {
+  onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
         console.log("[Map 图层示例] 第二正式线图层额外 onClick，可在这里补充专属业务逻辑", context);
       },
     },
@@ -2434,7 +2435,7 @@ const contextMenuState = reactive({
   panelState: createEmptyPropertyPanelState(),
   rawProperties: {} as Record<string, any>,
   summaryRows: [] as SelectionSummaryRow[],
-  editorTarget: null as MapFeaturePropertyEditorTarget | null,
+  editorTarget: null as BusinessKit.MapFeaturePropertyEditorTarget | null,
   note: "",
 });
 
@@ -2443,7 +2444,9 @@ const contextMenuState = reactive({
  * @param editorTarget 当前编辑目标
  * @returns 适合直接展示的说明文本
  */
-const resolvePropertyPanelNote = (editorTarget: MapFeaturePropertyEditorTarget | null): string => {
+const resolvePropertyPanelNote = (
+  editorTarget: BusinessKit.MapFeaturePropertyEditorTarget | null,
+): string => {
   if (!editorTarget) {
     return "";
   }
@@ -2476,7 +2479,9 @@ const getContextMenuFeatureId = (): string | number | null => {
  * 按当前右键目标重新解析属性面板态与原始快照。
  * @param nextEditorState 最新属性编辑器状态
  */
-const syncContextMenuPanelState = (nextEditorState?: MapFeaturePropertyEditorState): void => {
+const syncContextMenuPanelState = (
+  nextEditorState?: BusinessKit.MapFeaturePropertyEditorState,
+): void => {
   if (!contextMenuState.editorTarget) {
     contextMenuState.panelState = createEmptyPropertyPanelState();
     contextMenuState.rawProperties = {};
@@ -2515,7 +2520,7 @@ const closeBusinessPanels = () => {
  * @param context TerraDraw / Measure 统一交互上下文
  * @returns 适合业务层直接展示的测量摘要文本
  */
-const getMeasureFeatureSummaryText = (context: TerradrawInteractiveContext) => {
+const getMeasureFeatureSummaryText = (context: BusinessKit.TerradrawInteractiveContext) => {
   const properties = context.feature?.properties || {};
 
   if (properties.distance !== undefined) {
@@ -2541,7 +2546,7 @@ const getMeasureFeatureSummaryText = (context: TerradrawInteractiveContext) => {
  * 打开 TerraDraw 要素详情弹窗。
  * @param context TerraDraw 统一交互上下文
  */
-const openTerradrawPopup = (context: TerradrawInteractiveContext) => {
+const openTerradrawPopup = (context: BusinessKit.TerradrawInteractiveContext) => {
   if (!context.feature || !context.lngLat) return;
 
   contextMenuState.visible = false;
@@ -2560,7 +2565,7 @@ const openTerradrawPopup = (context: TerradrawInteractiveContext) => {
  * 这里同样先走属性面板态查询，让系统字段在进入业务编辑器前就被收口。
  * @param context TerraDraw 统一交互上下文
  */
-const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
+const openTerradrawContextMenu = (context: BusinessKit.TerradrawInteractiveContext) => {
   if (!context.feature || !context.point || !context.originalEvent) return;
 
   context.originalEvent.preventDefault();
@@ -2577,7 +2582,7 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
           controlType: context.controlType,
           featureId,
           currentProperties: rawProperties,
-        } satisfies MapFeaturePropertyEditorTarget);
+        } satisfies BusinessKit.MapFeaturePropertyEditorTarget);
   const editorState = propertyEditor.resolveEditorState(editorTarget);
 
   contextMenuState.position = { x: context.point.x, y: context.point.y };
@@ -2595,7 +2600,7 @@ const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
  * 将最新属性同步回右键面板和详情弹窗，保证页面态与底层数据一致。
  * @param nextEditorState 最新属性编辑器状态
  */
-const syncSavedPropertiesToPanels = (nextEditorState: MapFeaturePropertyEditorState) => {
+const syncSavedPropertiesToPanels = (nextEditorState: BusinessKit.MapFeaturePropertyEditorState) => {
   syncContextMenuPanelState(nextEditorState);
 
   if (contextMenuState.editorTarget?.type === "terradraw") {
