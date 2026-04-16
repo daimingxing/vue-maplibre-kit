@@ -19,10 +19,83 @@ import {
 } from './types';
 
 /**
- * 坐标转换函数。
- * 返回 null 表示当前坐标转换失败，需要由上层跳过该坐标。
+ * 坐标转换成功结果。
  */
-type CoordinateTransform = (position: Position) => Position | null;
+interface CoordinateTransformSuccess {
+  ok: true;
+  position: Position;
+}
+
+/**
+ * 坐标转换失败结果。
+ */
+interface CoordinateTransformFailure {
+  ok: false;
+  position: Position;
+  errorMessage: string;
+}
+
+/**
+ * 坐标转换结果。
+ */
+type CoordinateTransformResult = CoordinateTransformSuccess | CoordinateTransformFailure;
+
+/**
+ * 坐标转换函数。
+ * 返回坐标转换结果，失败结果表示当前坐标无法投影。
+ */
+type CoordinateTransform = (position: Position) => CoordinateTransformResult;
+
+/**
+ * 被整要素跳过的诊断信息。
+ */
+interface SkippedFeatureDetail {
+  sourceId: string;
+  featureLabel: string;
+  geometryType: string;
+  message: string;
+}
+
+/**
+ * 当前要素的导出上下文。
+ */
+interface FeatureExportContext {
+  sourceId: string;
+  featureLabel: string;
+  geometryType: string;
+}
+
+/**
+ * 折线部件定义。
+ */
+interface PolylinePart {
+  positions: Position[];
+  label: string;
+}
+
+/**
+ * 折线顶点构建成功结果。
+ */
+interface PolylineVerticesSuccess {
+  ok: true;
+  vertices: LWPolylineVertex[];
+  hasZCoordinate: boolean;
+}
+
+/**
+ * 折线顶点构建失败结果。
+ */
+interface PolylineVerticesFailure {
+  ok: false;
+  message: string;
+}
+
+/**
+ * 折线顶点构建结果。
+ */
+type PolylineVerticesResult = PolylineVerticesSuccess | PolylineVerticesFailure;
+
+const MAX_SKIP_DETAILS_IN_ERROR = 3;
 
 /**
  * 判断对象是否显式包含指定字段。
@@ -169,11 +242,95 @@ function resolveTargetSources(
 }
 
 /**
+ * 统一提取错误文本。
+ * @param error 原始错误
+ * @returns 可读错误文本
+ */
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * 将坐标格式化为可读文本。
+ * @param position 原始坐标
+ * @returns 可读坐标文本
+ */
+function formatPosition(position: Position): string {
+  return position.join(', ');
+}
+
+/**
+ * 生成当前要素的导出上下文。
+ * @param sourceId 所属 sourceId
+ * @param feature 当前要素
+ * @returns 要素上下文
+ */
+function createFeatureExportContext(sourceId: string, feature: MapCommonFeature): FeatureExportContext {
+  return {
+    sourceId,
+    featureLabel: getFeatureLabel(feature),
+    geometryType: feature.geometry.type,
+  };
+}
+
+/**
+ * 构造整要素跳过提示。
+ * @param context 要素上下文
+ * @param reason 跳过原因
+ * @returns 可读提示文本
+ */
+function buildSkippedFeatureMessage(context: FeatureExportContext, reason: string): string {
+  return `已跳过 source '${context.sourceId}' 中要素 '${context.featureLabel}' 的几何类型 '${context.geometryType}'：${reason}`;
+}
+
+/**
+ * 记录整要素跳过信息。
+ * @param skippedFeatures 被跳过要素列表
+ * @param warnings 警告列表
+ * @param context 要素上下文
+ * @param reason 跳过原因
+ */
+function recordSkippedFeature(
+  skippedFeatures: SkippedFeatureDetail[],
+  warnings: string[],
+  context: FeatureExportContext,
+  reason: string
+): void {
+  const message = buildSkippedFeatureMessage(context, reason);
+  warnings.push(message);
+  skippedFeatures.push({
+    sourceId: context.sourceId,
+    featureLabel: context.featureLabel,
+    geometryType: context.geometryType,
+    message,
+  });
+}
+
+/**
+ * 构造“没有可导出实体”的详细错误。
+ * @param skippedFeatures 被跳过要素列表
+ * @returns 最终错误文本
+ */
+function buildNoExportableFeatureError(skippedFeatures: SkippedFeatureDetail[]): string {
+  if (!skippedFeatures.length) {
+    return '当前没有可导出的业务要素';
+  }
+
+  const detailList = skippedFeatures
+    .slice(0, MAX_SKIP_DETAILS_IN_ERROR)
+    .map((item) => item.message)
+    .join('；');
+  const remainingCount = skippedFeatures.length - MAX_SKIP_DETAILS_IN_ERROR;
+  const suffix = remainingCount > 0 ? `；另有 ${remainingCount} 个要素被跳过` : '';
+  return `当前没有可导出的业务要素：${detailList}${suffix}`;
+}
+
+/**
  * 生成坐标转换函数。
  * 预编译 proj4 投影对象以避免重复解析投影定义字符串。
  * @param taskOptions 导出任务配置
  * @param warnings 警告列表
- * @returns 最终生效的坐标转换函数；单个坐标转换失败时返回 null
+ * @returns 最终生效的坐标转换函数；单个坐标转换失败时返回失败结果
  */
 function createCoordinateTransform(
   taskOptions: ResolvedMapDxfExportTaskOptions,
@@ -184,12 +341,18 @@ function createCoordinateTransform(
   if (!sourceCrs || !targetCrs) {
     warnings.push('已跳过坐标转换：未完整配置 sourceCrs 和 targetCrs，将按原坐标导出');
     // 返回副本避免修改原始数据
-    return (position) => [...position] as Position;
+    return (position) => ({
+      ok: true,
+      position: [...position] as Position,
+    });
   }
 
   if (sourceCrs === targetCrs) {
     // 同一坐标系下也需要返回副本
-    return (position) => [...position] as Position;
+    return (position) => ({
+      ok: true,
+      position: [...position] as Position,
+    });
   }
 
   // 预编译投影转换器，避免每次调用都重新解析投影定义
@@ -197,25 +360,36 @@ function createCoordinateTransform(
   try {
     projConverter = proj4(sourceCrs, targetCrs);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     warnings.push(
       `坐标系配置无效，已跳过坐标转换：${errorMessage}。将按原坐标导出`
     );
-    return (position) => [...position] as Position;
+    return (position) => ({
+      ok: true,
+      position: [...position] as Position,
+    });
   }
 
   return (position) => {
     try {
       const [x, y] = projConverter.forward([position[0], position[1]]) as [number, number];
       if (position.length > 2) {
-        return [x, y, position[2]] as Position;
+        return {
+          ok: true,
+          position: [x, y, position[2]] as Position,
+        };
       }
-      return [x, y] as Position;
+      return {
+        ok: true,
+        position: [x, y] as Position,
+      };
     } catch (error) {
-      // 单个坐标转换失败时，返回 null 标记该顶点无效，由上层跳过该顶点或整个几何
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      warnings.push(`坐标转换失败 [${position.join(', ')}]：${errorMessage}，该顶点将被跳过`);
-      return null;
+      // 单个坐标转换失败时，交由上层决定跳过单点还是整要素。
+      return {
+        ok: false,
+        position: [...position] as Position,
+        errorMessage: getErrorMessage(error),
+      };
     }
   };
 }
@@ -232,21 +406,26 @@ function createCoordinateTransform(
 function createPolylineVertices(
   positions: Position[],
   transform: CoordinateTransform,
-  warnings: string[],
-  featureLabel: string
-): LWPolylineVertex[] | null {
+  partLabel: string
+): PolylineVerticesResult {
   let hasZCoordinate = false;
 
   const vertices: LWPolylineVertex[] = [];
 
-  for (const position of positions) {
-    const transformedPosition = transform(position);
+  for (const [vertexIndex, position] of positions.entries()) {
+    const transformedResult = transform(position);
 
-    // 如果坐标转换失败（返回 null），跳过该顶点
-    if (transformedPosition === null) {
-      continue;
+    // 线和面一旦出现失败顶点，就直接放弃整个要素，避免静默改写几何。
+    if (!transformedResult.ok) {
+      return {
+        ok: false,
+        message: `${partLabel}的第 ${vertexIndex + 1} 个顶点坐标转换失败 [${formatPosition(
+          transformedResult.position
+        )}]：${transformedResult.errorMessage}`,
+      };
     }
 
+    const transformedPosition = transformedResult.position;
     if (transformedPosition.length > 2 && transformedPosition[2] !== undefined) {
       hasZCoordinate = true;
     }
@@ -256,19 +435,11 @@ function createPolylineVertices(
     });
   }
 
-  // 如果所有顶点都转换失败，返回 null
-  if (vertices.length === 0) {
-    warnings.push(`要素 '${featureLabel}' 的所有顶点坐标转换均失败，该几何部分将被跳过`);
-    return null;
-  }
-
-  if (hasZCoordinate) {
-    warnings.push(
-      `要素 '${featureLabel}' 包含 Z 坐标，但 DXF LWPOLYLINE 实体不支持 Z 坐标，Z 值已被丢弃`
-    );
-  }
-
-  return vertices;
+  return {
+    ok: true,
+    vertices,
+    hasZCoordinate,
+  };
 }
 
 /**
@@ -334,18 +505,25 @@ function addPointEntities(
   layerName: string,
   transform: CoordinateTransform,
   warnings: string[],
-  featureLabel: string
+  skippedFeatures: SkippedFeatureDetail[],
+  context: FeatureExportContext
 ): number {
   let addedCount = 0;
+  const failedPointList: Array<CoordinateTransformFailure & { pointIndex: number }> = [];
 
-  positions.forEach((position) => {
-    const transformedPosition = transform(position);
+  positions.forEach((position, pointIndex) => {
+    const transformedResult = transform(position);
 
-    // 如果坐标转换失败（返回 null），跳过该点
-    if (transformedPosition === null) {
+    // 点要素继续保留逐点容错能力，只跳过失败点。
+    if (!transformedResult.ok) {
+      failedPointList.push({
+        ...transformedResult,
+        pointIndex,
+      });
       return;
     }
 
+    const transformedPosition = transformedResult.position;
     writer.addPoint(
       transformedPosition[0],
       transformedPosition[1],
@@ -357,10 +535,29 @@ function addPointEntities(
     addedCount += 1;
   });
 
-  // 如果所有点都转换失败，记录警告
-  if (addedCount === 0 && positions.length > 0) {
-    warnings.push(`要素 '${featureLabel}' 的所有点坐标转换均失败，该要素将被跳过`);
+  if (!failedPointList.length) {
+    return addedCount;
   }
+
+  if (addedCount === 0) {
+    const firstFailedPoint = failedPointList[0];
+    const reason =
+      positions.length === 1
+        ? `点坐标转换失败 [${formatPosition(firstFailedPoint.position)}]：${firstFailedPoint.errorMessage}`
+        : `所有点坐标转换均失败，其中第 ${firstFailedPoint.pointIndex + 1} 个点 [${formatPosition(
+            firstFailedPoint.position
+          )}]：${firstFailedPoint.errorMessage}`;
+    recordSkippedFeature(skippedFeatures, warnings, context, reason);
+    return 0;
+  }
+
+  failedPointList.forEach((failedPoint) => {
+    warnings.push(
+      `source '${context.sourceId}' 中要素 '${context.featureLabel}' 的第 ${failedPoint.pointIndex + 1} 个点坐标转换失败 [${formatPosition(
+        failedPoint.position
+      )}]：${failedPoint.errorMessage}，已跳过该点`
+    );
+  });
 
   return addedCount;
 }
@@ -368,59 +565,101 @@ function addPointEntities(
 /**
  * 写入折线要素。
  * @param writer DXF 写入器
- * @param lineList 折线坐标集合
+ * @param partList 折线部件集合
  * @param layerName 图层名
  * @param transform 坐标转换函数
  * @param warnings 警告列表
- * @param featureLabel 要素标识
+ * @param skippedFeatures 被跳过要素列表
+ * @param context 当前要素上下文
  * @param closed 是否写成闭合折线
  * @returns 新增的实体数量
  */
 function addPolylineEntities(
   writer: DxfWriter,
-  lineList: Position[][],
+  partList: PolylinePart[],
   layerName: string,
   transform: CoordinateTransform,
   warnings: string[],
-  featureLabel: string,
+  skippedFeatures: SkippedFeatureDetail[],
+  context: FeatureExportContext,
   closed = false
 ): number {
-  let entityCount = 0;
   const minPoints = closed ? 3 : 2; // 闭合线至少 3 点，开放线至少 2 点
+  let hasZCoordinate = false;
+  const polylineList: LWPolylineVertex[][] = [];
 
-  lineList.forEach((lineCoordinates, index) => {
-    if (lineCoordinates.length < minPoints) {
-      if (lineCoordinates.length > 0) {
-        warnings.push(
-          `要素 '${featureLabel}' 的第 ${index + 1} 个几何部分点数不足（需要至少 ${minPoints} 个点，实际 ${lineCoordinates.length} 个），已跳过`
-        );
-      }
-      return;
-    }
-
-    const vertices = createPolylineVertices(lineCoordinates, transform, warnings, featureLabel);
-
-    // 如果所有顶点都转换失败，跳过该几何部分
-    if (vertices === null) {
-      return;
-    }
-
-    // 转换后的有效顶点数可能少于原始顶点数，需要重新检查最小点数要求
-    if (vertices.length < minPoints) {
-      warnings.push(
-        `要素 '${featureLabel}' 的第 ${index + 1} 个几何部分在坐标转换后有效点数不足（需要至少 ${minPoints} 个点，实际 ${vertices.length} 个），已跳过`
+  for (const part of partList) {
+    if (part.positions.length < minPoints) {
+      recordSkippedFeature(
+        skippedFeatures,
+        warnings,
+        context,
+        `${part.label}点数不足（需要至少 ${minPoints} 个点，实际 ${part.positions.length} 个），已跳过整个要素`
       );
-      return;
+      return 0;
     }
 
+    const verticesResult = createPolylineVertices(part.positions, transform, part.label);
+
+    if (!verticesResult.ok) {
+      recordSkippedFeature(
+        skippedFeatures,
+        warnings,
+        context,
+        `${verticesResult.message}，已跳过整个要素`
+      );
+      return 0;
+    }
+
+    hasZCoordinate = hasZCoordinate || verticesResult.hasZCoordinate;
+    polylineList.push(verticesResult.vertices);
+  }
+
+  polylineList.forEach((vertices) => {
     writer.addLWPolyline(vertices, {
       layerName,
       flags: closed ? LWPolylineFlags.Closed : LWPolylineFlags.None,
     });
-    entityCount += 1;
   });
 
-  return entityCount;
+  if (hasZCoordinate) {
+    warnings.push(
+      `要素 '${context.featureLabel}' 包含 Z 坐标，但 DXF LWPOLYLINE 实体不支持 Z 坐标，Z 值已被丢弃`
+    );
+  }
+
+  return polylineList.length;
+}
+
+/**
+ * 生成线要素的折线部件。
+ * @param lineList 线坐标集合
+ * @returns 折线部件列表
+ */
+function createLineParts(lineList: Position[][]): PolylinePart[] {
+  return lineList.map((positions, index) => ({
+    positions,
+    label: lineList.length === 1 ? '线串' : `第 ${index + 1} 个几何部分`,
+  }));
+}
+
+/**
+ * 生成面要素的折线部件。
+ * @param polygonCoordinates 面坐标
+ * @param polygonIndex 面片序号
+ * @returns 折线部件列表
+ */
+function createPolygonParts(
+  polygonCoordinates: Position[][],
+  polygonIndex?: number
+): PolylinePart[] {
+  return polygonCoordinates.map((positions, ringIndex) => ({
+    positions,
+    label:
+      polygonIndex === undefined
+        ? `第 ${ringIndex + 1} 个环`
+        : `第 ${polygonIndex + 1} 个面片的第 ${ringIndex + 1} 个环`,
+  }));
 }
 
 /**
@@ -439,62 +678,78 @@ function addFeatureGeometryToDxf(
   sourceId: string,
   layerName: string,
   transform: CoordinateTransform,
-  warnings: string[]
+  warnings: string[],
+  skippedFeatures: SkippedFeatureDetail[]
 ): number {
-  const featureLabel = getFeatureLabel(feature);
+  const context = createFeatureExportContext(sourceId, feature);
 
   switch (feature.geometry.type) {
     case 'Point':
-      return addPointEntities(writer, [feature.geometry.coordinates], layerName, transform, warnings, featureLabel);
-    case 'MultiPoint':
-      return addPointEntities(writer, feature.geometry.coordinates, layerName, transform, warnings, featureLabel);
-    case 'LineString':
-      return addPolylineEntities(
+      return addPointEntities(
         writer,
         [feature.geometry.coordinates],
         layerName,
         transform,
         warnings,
-        featureLabel
+        skippedFeatures,
+        context
+      );
+    case 'MultiPoint':
+      return addPointEntities(
+        writer,
+        feature.geometry.coordinates,
+        layerName,
+        transform,
+        warnings,
+        skippedFeatures,
+        context
+      );
+    case 'LineString':
+      return addPolylineEntities(
+        writer,
+        createLineParts([feature.geometry.coordinates]),
+        layerName,
+        transform,
+        warnings,
+        skippedFeatures,
+        context
       );
     case 'MultiLineString':
       return addPolylineEntities(
         writer,
-        feature.geometry.coordinates,
+        createLineParts(feature.geometry.coordinates),
         layerName,
         transform,
         warnings,
-        featureLabel
+        skippedFeatures,
+        context
       );
     case 'Polygon':
       return addPolylineEntities(
         writer,
-        feature.geometry.coordinates,
+        createPolygonParts(feature.geometry.coordinates),
         layerName,
         transform,
         warnings,
-        featureLabel,
+        skippedFeatures,
+        context,
         true
       );
     case 'MultiPolygon':
-      return feature.geometry.coordinates.reduce((count, polygonCoordinates) => {
-        return (
-          count +
-          addPolylineEntities(
-            writer,
-            polygonCoordinates,
-            layerName,
-            transform,
-            warnings,
-            featureLabel,
-            true
-          )
-        );
-      }, 0);
-    default:
-      warnings.push(
-        `已跳过 source '${sourceId}' 中要素 '${getFeatureLabel(feature)}' 的几何类型 '${feature.geometry.type}'，当前 DXF 导出暂不支持`
+      return addPolylineEntities(
+        writer,
+        feature.geometry.coordinates.flatMap((polygonCoordinates, polygonIndex) =>
+          createPolygonParts(polygonCoordinates, polygonIndex)
+        ),
+        layerName,
+        transform,
+        warnings,
+        skippedFeatures,
+        context,
+        true
       );
+    default:
+      recordSkippedFeature(skippedFeatures, warnings, context, '当前 DXF 导出暂不支持');
       return 0;
   }
 }
@@ -510,6 +765,7 @@ export function exportBusinessSourcesToDxf(
   const { sourceRegistry, taskOptions } = options;
   const writer = new DxfWriter();
   const warnings: string[] = [];
+  const skippedFeatures: SkippedFeatureDetail[] = [];
   const addedLayerSet = new Set<string>(['0']);
   const transform = createCoordinateTransform(taskOptions, warnings);
   const sourceList = sourceRegistry.listSources();
@@ -542,13 +798,14 @@ export function exportBusinessSourcesToDxf(
         source.sourceId,
         layerName,
         transform,
-        warnings
+        warnings,
+        skippedFeatures
       );
     });
   });
 
   if (!entityCount) {
-    throw new Error('当前没有可导出的业务要素');
+    throw new Error(buildNoExportableFeatureError(skippedFeatures));
   }
 
   return {

@@ -361,6 +361,157 @@ describe('exportBusinessSourcesToDxf', () => {
     expect(result.warnings[0]).toContain("几何类型 'GeometryCollection'");
   });
 
+  it('应在折线顶点转换失败时跳过整个要素并保留其他实体', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [
+        createPointFeature('point-a', [0, 0]),
+        createLineFeature('line-bad', [
+          [0, 0],
+          [Number.NaN, 1],
+          [2, 2],
+        ]),
+      ]),
+    ]);
+
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:3857',
+      }),
+    });
+
+    expect(result.featureCount).toBe(2);
+    expect(result.entityCount).toBe(1);
+    expect(countEntity(result.content, 'POINT')).toBe(1);
+    expect(countEntity(result.content, 'LWPOLYLINE')).toBe(0);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("要素 'line-bad'");
+    expect(result.warnings[0]).toContain('第 2 个顶点坐标转换失败');
+    expect(result.warnings[0]).toContain('已跳过整个要素');
+  });
+
+  it('应在多面任一环顶点转换失败时跳过整个要素', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [
+        createPointFeature('point-a', [0, 0]),
+        {
+          type: 'Feature',
+          id: 'multi-polygon-bad',
+          properties: { id: 'multi-polygon-bad' },
+          geometry: {
+            type: 'MultiPolygon',
+            coordinates: [
+              [
+                [
+                  [0, 0],
+                  [5, 0],
+                  [5, 5],
+                  [0, 0],
+                ],
+              ],
+              [
+                [
+                  [10, 10],
+                  [Number.NaN, 10],
+                  [12, 12],
+                  [10, 10],
+                ],
+              ],
+            ],
+          },
+        } as MapCommonFeature,
+      ]),
+    ]);
+
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:3857',
+      }),
+    });
+
+    expect(result.featureCount).toBe(2);
+    expect(result.entityCount).toBe(1);
+    expect(countEntity(result.content, 'POINT')).toBe(1);
+    expect(countEntity(result.content, 'LWPOLYLINE')).toBe(0);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("要素 'multi-polygon-bad'");
+    expect(result.warnings[0]).toContain('第 2 个面片的第 1 个环的第 2 个顶点坐标转换失败');
+    expect(result.warnings[0]).toContain('已跳过整个要素');
+  });
+
+  it('应在多点部分坐标转换失败时仅跳过失败点', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [
+        {
+          type: 'Feature',
+          id: 'multi-point-bad',
+          properties: { id: 'multi-point-bad' },
+          geometry: {
+            type: 'MultiPoint',
+            coordinates: [
+              [0, 0],
+              [Number.NaN, 1],
+              [2, 2],
+            ],
+          },
+        } as MapCommonFeature,
+      ]),
+    ]);
+
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:3857',
+      }),
+    });
+
+    expect(result.featureCount).toBe(1);
+    expect(result.entityCount).toBe(2);
+    expect(countEntity(result.content, 'POINT')).toBe(2);
+    expect(countEntity(result.content, 'LWPOLYLINE')).toBe(0);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("要素 'multi-point-bad'");
+    expect(result.warnings[0]).toContain('第 2 个点坐标转换失败');
+    expect(result.warnings[0]).toContain('已跳过该点');
+  });
+
+  it('应在全部实体都因坐标转换失败被跳过时抛出详细错误', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [
+        createPointFeature('point-bad', [Number.NaN, 0]),
+        createLineFeature('line-bad', [
+          [0, 0],
+          [Number.NaN, 1],
+          [2, 2],
+        ]),
+      ]),
+    ]);
+
+    let thrownError: Error | null = null;
+
+    try {
+      exportBusinessSourcesToDxf({
+        sourceRegistry,
+        taskOptions: resolveMapDxfExportTaskOptions({
+          sourceCrs: 'EPSG:4326',
+          targetCrs: 'EPSG:3857',
+        }),
+      });
+    } catch (error) {
+      thrownError = error as Error;
+    }
+
+    expect(thrownError).not.toBeNull();
+    expect(thrownError?.message).toContain('当前没有可导出的业务要素：');
+    expect(thrownError?.message).toContain("要素 'point-bad'");
+    expect(thrownError?.message).toContain("要素 'line-bad'");
+    expect(thrownError?.message).toContain('coordinates must be finite numbers');
+  });
+
   it('应在存在未知 sourceId 时直接报错', () => {
     const sourceRegistry = createMapBusinessSourceRegistry([
       createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
