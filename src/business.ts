@@ -175,6 +175,9 @@ export type { MapBusinessFeatureContext } from './MapLibre/facades/useMapFeature
 /** 业务层友好的选中项类型。 */
 export type { MapBusinessSelectionItem } from './MapLibre/facades/useMapFeatureQuery';
 
+/** 业务层友好的选中集变化触发目标类型。 */
+export type { MapBusinessSelectionTrigger } from './MapLibre/facades/useMapFeatureQuery';
+
 /** 业务层友好的选中集变化上下文类型。 */
 export type { MapBusinessSelectionContext } from './MapLibre/facades/useMapFeatureQuery';
 

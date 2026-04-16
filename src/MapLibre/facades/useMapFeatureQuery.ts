@@ -157,16 +157,50 @@ export interface MapBusinessFeatureContext {
   selectedFeatures: MapLayerSelectedFeature[];
 }
 
+/** 选中集变化对应的触发目标视图。 */
+export interface MapBusinessSelectionTrigger {
+  /** 触发本次选中集变化的主目标标准来源引用。 */
+  featureRef: MapSourceFeatureRef | null;
+  /** 触发本次选中集变化的主目标最新业务要素。 */
+  feature: MapCommonFeature | null;
+  /** 触发本次选中集变化的主目标属性对象。 */
+  properties: Record<string, any> | null;
+  /** 触发本次选中集变化的主目标业务 ID。 */
+  featureId: MapFeatureId | null;
+  /** 触发本次选中集变化的主目标图层 ID。 */
+  layerId: string | null;
+  /** 触发本次选中集变化的主目标 source ID。 */
+  sourceId: string | null;
+  /** 触发本次选中集变化的主目标 source-layer。 */
+  sourceLayer: string | null;
+  /** 触发本次选中集变化的主目标几何类型。 */
+  geometryType: string | null;
+  /** 触发本次选中集变化的主目标是否为点要素。 */
+  isPoint: boolean;
+  /** 触发本次选中集变化的主目标是否为线要素。 */
+  isLine: boolean;
+  /** 触发本次选中集变化的主目标是否为面要素。 */
+  isPolygon: boolean;
+  /** 触发本次选中集变化的事件经纬度坐标。 */
+  lngLat: { lng: number; lat: number } | null;
+}
+
 /** 选中集变化上下文对应的业务层视图。 */
-export interface MapBusinessSelectionContext extends MapBusinessFeatureContext {
+export interface MapBusinessSelectionContext {
   /** 当前选中集变化原因。 */
   reason: MapSelectionChangeReason | null;
+  /** 触发本次选中集变化的主目标信息。 */
+  trigger: MapBusinessSelectionTrigger;
   /** 当前完整选中集的业务层视图。 */
   selected: MapBusinessSelectionItem[];
   /** 本次新增选中项的业务层视图。 */
   added: MapBusinessSelectionItem[];
   /** 本次移除选中项的业务层视图。 */
   removed: MapBusinessSelectionItem[];
+  /** 当前选中项数量。 */
+  selectedCount: number;
+  /** 当前完整选中集快照。 */
+  selectedFeatures: MapLayerSelectedFeature[];
 }
 
 /**
@@ -523,11 +557,26 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
     const baseContext = toBusinessContext(context);
 
     return {
-      ...baseContext,
       reason: context?.reason || null,
+      trigger: {
+        featureRef: baseContext.featureRef,
+        feature: baseContext.feature,
+        properties: baseContext.properties,
+        featureId: baseContext.featureId,
+        layerId: baseContext.layerId,
+        sourceId: baseContext.sourceId,
+        sourceLayer: baseContext.sourceLayer,
+        geometryType: baseContext.geometryType,
+        isPoint: baseContext.isPoint,
+        isLine: baseContext.isLine,
+        isPolygon: baseContext.isPolygon,
+        lngLat: baseContext.lngLat,
+      },
       selected: toBusinessSelectionItems(context?.selectedFeatures),
       added: toBusinessSelectionItems(context?.addedFeatures),
       removed: toBusinessSelectionItems(context?.removedFeatures),
+      selectedCount: baseContext.selectedCount,
+      selectedFeatures: baseContext.selectedFeatures,
     };
   };
 

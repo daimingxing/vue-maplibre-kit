@@ -408,7 +408,12 @@ describe('useMapFeatureQuery', () => {
     const businessContext = featureQuery.toSelectionBusinessContext(context);
 
     expect(businessContext.reason).toBe('click');
+    expect(businessContext.trigger.featureId).toBe('feature-1');
+    expect(businessContext.trigger.layerId).toBe('circleLayer');
+    expect(businessContext.trigger.feature?.properties?.name).toBe('最新业务名称');
+    expect(businessContext.trigger.isPoint).toBe(true);
     expect(businessContext.selectedCount).toBe(2);
+    expect(businessContext.selectedFeatures).toHaveLength(2);
     expect(businessContext.selected).toHaveLength(2);
     expect(businessContext.added).toHaveLength(1);
     expect(businessContext.removed).toHaveLength(1);

@@ -687,11 +687,10 @@ const businessMap = useBusinessMap({
 });
 
 /**
- * 统一的地图要素分组。
+ * 统一的地图要素能力分组。
  * 这里同时包含查询和动作能力，业务层统一走 `businessMap.feature` 即可。
  */
 const featureQuery = businessMap.feature;
-const featureActions = businessMap.feature;
 
 /**
  * 统一属性编辑分组。
@@ -1969,6 +1968,7 @@ const lineDraftStatusText = computed(() => {
  * @param context 选中集变化上下文
  */
 const syncSelectionPanelFromChange = (context: BusinessKit.MapLayerSelectionChangeContext): void => {
+  // 将底层选中变化上下文转换为业务层更易消费的结构；集合字段与触发目标字段已分组。
   const selectionContext = featureQuery.toSelectionBusinessContext(context);
   const currentSelectionMode = context.selectionMode || selectionMode.value;
   const addedIdsText = formatValueList(getSelectionItemIds(selectionContext.added));
@@ -2304,7 +2304,7 @@ const handleGenerateLineCorridor = (): void => {
     return;
   }
 
-  const result = featureActions.replaceSelectedLineCorridor({
+  const result = featureQuery.replaceSelectedLineCorridor({
     widthMeters: lineActionForm.widthMeters,
   });
   if (!result.success) {
@@ -2328,7 +2328,7 @@ const handleCreateLineDraft = (): void => {
     return;
   }
 
-  const result = featureActions.previewSelectedLine({
+  const result = featureQuery.previewSelectedLine({
     segmentIndex: popupSelectedSegmentIndex.value,
     extendLengthMeters: lineActionForm.extendLengthMeters,
   });
@@ -2512,6 +2512,7 @@ const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
   // 普通图层选中集变化入口。
   // 业务层可在这里统一处理多图层批量选择，而不需要分别给每个 layer 写回调。
   onSelectionChange: (context: BusinessKit.MapLayerSelectionChangeContext) => {
+    // 将底层选中变化上下文转换为业务层更易消费的结构；集合字段与触发目标字段已分组。
     const selectionContext = featureQuery.toSelectionBusinessContext(context);
     syncSelectionPanelFromChange(context);
     console.log("[NGGI00 示例] 选中集变化示例", {
