@@ -303,7 +303,6 @@ import {
   mapExpressions,
   useBusinessMap,
   useMapPopupState,
-  type MapOptions,
 } from "vue-maplibre-kit/business";
 import type * as BusinessKit from "vue-maplibre-kit/business";
 import FeaturePropertyEditor from "./components/FeaturePropertyEditor.vue";
@@ -723,7 +722,7 @@ const hasLineDraftFeatures = computed(() => {
  * - zoom: 初始缩放级别
  * - style: 底图样式地址
  */
-const mapOptions: Omit<MapOptions, "container"> = {
+const mapOptions: Omit<BusinessKit.MapOptions, "container"> = {
   // 无需 container 属性，因为 vue-maplibre-gl 组件内部会自动挂载和管理容器
 
   // === 以下为 MapOptions 核心 API 示例 (按需取消注释使用) ===
