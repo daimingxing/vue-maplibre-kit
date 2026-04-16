@@ -22,8 +22,8 @@ export type { PopupOptions, LngLatLike };
 const props = defineProps<{
   /** 控制 Popup 是否显示 (支持 v-model:visible) */
   visible: boolean;
-  /** 经纬度坐标 [lng, lat] */
-  lngLat: LngLatLike;
+  /** 经纬度坐标 [lng, lat]，允许为空（为空时组件内部不显示弹窗） */
+  lngLat: LngLatLike | null;
   /**
    * 原生 Popup 的配置项
    * @property closeButton {boolean} - 是否显示右上角的关闭按钮，默认 true
@@ -79,9 +79,12 @@ const initPopup = () => {
 
 // 显示 Popup
 const showPopup = () => {
-  if (popup && mapInstance.map && props.lngLat) {
-    popup.setLngLat(props.lngLat).addTo(mapInstance.map);
+  // 坐标为空时不显示弹窗，避免把空值传给 MapLibre 原生 API。
+  if (!popup || !mapInstance.map || !props.lngLat) {
+    return;
   }
+
+  popup.setLngLat(props.lngLat).addTo(mapInstance.map);
 };
 
 // 隐藏 Popup
@@ -107,6 +110,12 @@ watch(
   () => props.visible,
   (newVal) => {
     if (newVal) {
+      // 业务层即使传了 visible=true，只要坐标为空，组件层也会自动兜底不显示。
+      if (!props.lngLat) {
+        hidePopup();
+        return;
+      }
+
       // 确保 DOM 已经更新后再显示
       nextTick(() => {
         showPopup();
@@ -121,9 +130,17 @@ watch(
 watch(
   () => props.lngLat,
   (newLngLat) => {
-    if (popup && props.visible && newLngLat) {
-      popup.setLngLat(newLngLat);
+    if (!popup || !props.visible) {
+      return;
     }
+
+    // 坐标变为空时，主动隐藏弹窗，避免停留在旧坐标位置。
+    if (!newLngLat) {
+      hidePopup();
+      return;
+    }
+
+    popup.setLngLat(newLngLat);
   },
   { deep: true }
 );

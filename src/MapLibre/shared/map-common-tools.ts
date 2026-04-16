@@ -640,10 +640,16 @@ export class MapLineExtensionTool {
   }
 
   /**
-   * 统一解析线交互快照。
-   * 优先使用业务层提供的最新原始线要素，避免渲染态几何被裁剪或简化后影响线段命中判断。
-   * @param options 线交互解析配置
-   * @returns 线要素快照与命中线段结果；无法解析时返回 null
+   * 精准解析用户“点击了线要素的哪一段”，并返回未被裁剪的完整线数据。
+   *
+   * @description
+   * 地图引擎（如 MapLibre）在渲染长线时，为了性能通常会把屏幕外的坐标点裁剪掉。
+   * 如果直接拿点击事件返回的线段去计算长度或提取坐标，结果往往是错误的（因为它不完整）。
+   * 本方法会通过 `resolveLatestFeature` 回调，回到真实的业务源中捞出最原始、最完整的线数据，
+   * 然后基于这段完整数据，计算出当前经纬度落在了哪两个坐标点之间（即命中线段的索引）。
+   *
+   * @param options 线交互解析配置（需提供点击坐标、要素标识与获取最新要素的方法）
+   * @returns 包含完整线要素（lineFeature）和命中线段信息（segmentSelection）的结果对象；如果无法解析则返回 null
    */
   static resolveLineInteractionSnapshot(
     options: MapLineInteractionResolveOptions

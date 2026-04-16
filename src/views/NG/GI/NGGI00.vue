@@ -143,16 +143,12 @@
     </div>
     <!-- 引入自定义的 Vue Popup 组件 -->
     <mgl-popup
-      v-model:visible="popupState.visible"
-      :lngLat="popupState.lngLat"
+      v-model:visible="popupVisible"
+      :lngLat="popupLngLat"
       :options="{ closeButton: true, closeOnClick: true, maxWidth: '420px' }"
     >
       <!-- 动态判断内容：这个例子中使用了type属性来分辨要素 -->
-      <div
-        v-if="popupState.type === popupType.line"
-        class="my-popup-container"
-        style="min-width: 320px"
-      >
+      <div v-if="hasLinePopup" class="my-popup-container" style="min-width: 320px">
         <h3 style="margin: 0 0 10px 0; color: #409eff">
           <el-icon>
             <InfoFilled />
@@ -161,20 +157,20 @@
         </h3>
         <el-descriptions :column="1" border size="small">
           <el-descriptions-item label="编号">
-            <el-tag size="small">{{ popupState.featureProps.id }}</el-tag>
+            <el-tag size="small">{{ popupLineFeatureProps.id }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="总长度">
-            {{ popupState.lineLengthMeters.toFixed(2) }} m
+            {{ popupLineLengthMeters.toFixed(2) }} m
           </el-descriptions-item>
           <el-descriptions-item label="选中线段">
             {{
-              popupState.selectedSegmentIndex >= 0
-                ? `第 ${popupState.selectedSegmentIndex + 1} 段`
+              popupSelectedSegmentIndex >= 0
+                ? `第 ${popupSelectedSegmentIndex + 1} 段`
                 : "未识别"
             }}
           </el-descriptions-item>
           <el-descriptions-item label="当前段长">
-            {{ popupState.selectedSegmentLengthMeters.toFixed(2) }} m
+            {{ popupSelectedSegmentLengthMeters.toFixed(2) }} m
           </el-descriptions-item>
         </el-descriptions>
 
@@ -226,11 +222,7 @@
       </div>
 
       <!-- 动态判断内容：如果是点 -->
-      <div
-        v-else-if="popupState.type === popupType.point"
-        class="my-popup-container"
-        style="min-width: 200px"
-      >
+      <div v-else-if="hasPointPopup" class="my-popup-container" style="min-width: 200px">
         <h3 style="margin: 0 0 10px 0; color: #67c23a">
           <el-icon>
             <Location />
@@ -239,26 +231,19 @@
         </h3>
         <p>
           <strong>名称：</strong>
-          {{ popupState.featureProps.name || "未命名站点" }}
+          {{ popupPointFeatureProps.name || "未命名站点" }}
         </p>
         <p>
           <strong>状态：</strong>
-          <el-tag
-            :type="popupState.featureProps.status === 'normal' ? 'success' : 'danger'"
-            size="small"
-          >
-            {{ popupState.featureProps.status === "normal" ? "正常" : "异常" }}
+          <el-tag :type="popupPointFeatureProps.status === 'normal' ? 'success' : 'danger'" size="small">
+            {{ popupPointFeatureProps.status === "normal" ? "正常" : "异常" }}
           </el-tag>
         </p>
         <el-button type="success" size="small" style="width: 100%" @click="handlePopupAction">
           进入站点视图
         </el-button>
       </div>
-      <div
-        v-else-if="popupState.type === popupType.terradraw"
-        class="my-popup-container"
-        style="min-width: 260px"
-      >
+      <div v-else-if="hasTerradrawPopup" class="my-popup-container" style="min-width: 260px">
         <h3 style="margin: 0 0 10px 0; color: #e6a23c">
           <el-icon>
             <InfoFilled />
@@ -268,20 +253,20 @@
         <el-descriptions :column="1" border size="small">
           <el-descriptions-item label="要素 ID">
             <el-tag size="small">
-              {{ popupState.featureId || popupState.featureProps.id || "无" }}
+              {{ popupTerradrawFeatureIdText }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="几何类型">
-            {{ popupState.geometryType || "未知" }}
+            {{ popupTerradrawGeometryType || "未知" }}
           </el-descriptions-item>
           <el-descriptions-item label="绘制模式">
-            {{ popupState.featureProps.mode || "未知" }}
+            {{ popupTerradrawFeatureProps.mode || "未知" }}
           </el-descriptions-item>
         </el-descriptions>
         <div style="margin-top: 10px">
           <div style="margin-bottom: 4px; font-weight: bold; color: #606266">属性快照</div>
           <pre class="terradraw-popup-json">{{
-            JSON.stringify(popupState.featureProps, null, 2)
+            JSON.stringify(popupTerradrawFeatureProps, null, 2)
           }}</pre>
         </div>
       </div>
@@ -316,10 +301,11 @@ import {
   layerStyles,
   mapExpressions,
   useBusinessMap,
+  useMapPopupState,
 } from "vue-maplibre-kit/business";
 import type * as BusinessKit from "vue-maplibre-kit/business";
 import FeaturePropertyEditor from "./components/FeaturePropertyEditor.vue";
-import type { LngLatLike, MapOptions } from "maplibre-gl";
+import type { MapOptions } from "maplibre-gl";
 import { MglCustomControl } from "vue-maplibre-gl";
 import { computed, ref, reactive } from "vue";
 import mapGeojson from "./mock/map.geojson";
@@ -1984,52 +1970,170 @@ const lineDraftStatusText = computed(() => {
  * @param context 选中集变化上下文
  */
 const syncSelectionPanelFromChange = (context: BusinessKit.MapLayerSelectionChangeContext): void => {
-  const currentSelectionMode = context.selectionMode || "single";
-  const addedIdsText = formatValueList(context.getAddedFeatureIds());
-  const removedIdsText = formatValueList(context.getRemovedFeatureIds());
+  const selectionContext = featureQuery.toSelectionBusinessContext(context);
+  const currentSelectionMode = context.selectionMode || selectionMode.value;
+  const addedIdsText = formatValueList(getSelectionItemIds(selectionContext.added));
+  const removedIdsText = formatValueList(getSelectionItemIds(selectionContext.removed));
   const circleLayerIdsText = formatValueList(
-    context.getSelectedPropertyValues<string | number>("id", {
-      layerId: LAYER_IDS.circle,
-    }),
+    getSelectionItemIds(
+      selectionContext.selected.filter((selectedItem) => selectedItem.layerId === LAYER_IDS.circle),
+    ),
   );
 
+  /*
+   * 旧写法 / 逃生出口：
+   * const addedIdsText = formatValueList(context.getAddedFeatureIds());
+   * const removedIdsText = formatValueList(context.getRemovedFeatureIds());
+   * const circleLayerIdsText = formatValueList(
+   *   context.getSelectedPropertyValues<string | number>("id", { layerId: LAYER_IDS.circle }),
+   * );
+   * 适合需要直接处理底层 context / 自定义状态结构时使用。
+   */
   selectionPanelState.lastChangeSummary =
-    `原因：${context.reason}；模式：${getSelectionModeText(currentSelectionMode)}；` +
-    `当前 ${context.selectedCount} 个；新增 ${addedIdsText}；移除 ${removedIdsText}；` +
+    `原因：${selectionContext.reason || "unknown"}；模式：${getSelectionModeText(currentSelectionMode)}；` +
+    `当前 ${selectionContext.selectedCount} 个；新增 ${addedIdsText}；移除 ${removedIdsText}；` +
     `circleLayer 业务 ID：${circleLayerIdsText}`;
 };
 
 /**
- * 将线弹窗中展示的线要素摘要同步为最新状态。
- * @param lineFeature 当前线要素
- * @param segmentIndex 当前选中的线段索引
+ * 从业务层选中项中提取适合展示的业务 ID 列表。
+ * @param items 当前选中项列表
+ * @returns 归一化后的业务 ID 列表
  */
-const syncLinePopupMetrics = (lineFeature: MapCommonLineFeature, segmentIndex: number): void => {
+const getSelectionItemIds = (
+  items: BusinessKit.MapBusinessSelectionItem[],
+): Array<string | number> => {
+  return items.flatMap((item) => {
+    const propertyId = item.properties?.id;
+    if (propertyId !== undefined && propertyId !== null) {
+      return [propertyId as string | number];
+    }
+
+    return item.featureId === null ? [] : [item.featureId];
+  });
+};
+
+/**
+ * 将地图经纬度对象转换为 Popup helper 需要的锚点格式。
+ * @param lngLat 当前地图经纬度
+ * @returns 可直接传给 Popup 的坐标数组
+ */
+const createPopupLngLat = (lngLat: { lng: number; lat: number }): [number, number] => {
+  return [lngLat.lng, lngLat.lat];
+};
+
+/**
+ * 当前页面 Popup 类型常量。
+ * 用常量对象而不是散落字符串，方便模板与业务逻辑共用。
+ */
+const POPUP_TYPE = {
+  point: "point",
+  line: "line",
+  terradraw: "terradraw",
+} as const;
+
+/** 当前页面支持的 Popup 类型。 */
+type NgPopupType = (typeof POPUP_TYPE)[keyof typeof POPUP_TYPE];
+
+/** Popup 统一基础载荷。 */
+interface NgPopupBasePayload {
+  type: NgPopupType;
+  featureId: string | number | null;
+  geometryType: string;
+  featureProps: Record<string, any>;
+}
+
+/** 点弹窗载荷。 */
+interface NgPointPopupPayload extends NgPopupBasePayload {
+  type: typeof POPUP_TYPE.point;
+}
+
+/** 线弹窗载荷。 */
+interface NgLinePopupPayload extends NgPopupBasePayload {
+  type: typeof POPUP_TYPE.line;
+  selectedSegmentIndex: number;
+  selectedSegmentLengthMeters: number;
+  lineLengthMeters: number;
+}
+
+/** TerraDraw 弹窗载荷。 */
+interface NgTerradrawPopupPayload extends NgPopupBasePayload {
+  type: typeof POPUP_TYPE.terradraw;
+}
+
+/** 当前页面 Popup 联合载荷。 */
+type NgPopupPayload = NgPointPopupPayload | NgLinePopupPayload | NgTerradrawPopupPayload;
+
+/**
+ * 创建点要素弹窗载荷。
+ * @param feature 当前点要素
+ * @param featureId 当前要素 ID
+ * @returns 点弹窗载荷
+ */
+const createPointPopupPayload = (
+  feature: MapCommonFeature,
+  featureId: string | number | null,
+): NgPointPopupPayload => {
+  return {
+    type: POPUP_TYPE.point,
+    featureId: featureId ?? getFeatureBusinessId(feature),
+    geometryType: feature.geometry?.type || "",
+    featureProps: clonePropertySnapshot(feature.properties || {}),
+  };
+};
+
+/**
+ * 创建线要素弹窗载荷。
+ * 该 helper 会顺手补齐总长度和命中线段长度，业务层后续只消费结果即可。
+ *
+ * @param lineFeature 当前线要素
+ * @param segmentIndex 当前线段索引；传负数表示当前未识别到具体线段
+ * @returns 线弹窗载荷
+ */
+const createLinePopupPayload = (
+  lineFeature: MapCommonLineFeature,
+  segmentIndex: number,
+): NgLinePopupPayload => {
   const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(
     lineFeature.geometry.coordinates,
   );
+
+  const lineLengthMeters =
+    normalizedCoordinates.length >= 2
+      ? MapLineMeasureTool.getCoordinatesLengthInMeters(normalizedCoordinates)
+      : 0;
+
   if (normalizedCoordinates.length < 2) {
-    popupState.featureId = getFeatureBusinessId(lineFeature);
-    popupState.geometryType = lineFeature.geometry.type;
-    popupState.featureProps = JSON.parse(JSON.stringify(lineFeature.properties || {}));
-    popupState.selectedSegmentIndex = -1;
-    popupState.selectedSegmentLengthMeters = 0;
-    popupState.lineLengthMeters = 0;
-    return;
+    return {
+      type: POPUP_TYPE.line,
+      featureId: getFeatureBusinessId(lineFeature),
+      geometryType: lineFeature.geometry.type,
+      featureProps: clonePropertySnapshot(lineFeature.properties || {}),
+      selectedSegmentIndex: -1,
+      selectedSegmentLengthMeters: 0,
+      lineLengthMeters,
+    };
   }
 
-  const currentSegmentIndex = Math.max(0, Math.min(segmentIndex, normalizedCoordinates.length - 2));
+  const currentSegmentIndex =
+    segmentIndex >= 0 ? Math.max(0, Math.min(segmentIndex, normalizedCoordinates.length - 2)) : -1;
+  const selectedSegmentLengthMeters =
+    currentSegmentIndex >= 0
+      ? MapLineMeasureTool.getDistanceInMeters(
+          normalizedCoordinates[currentSegmentIndex],
+          normalizedCoordinates[currentSegmentIndex + 1],
+        )
+      : 0;
 
-  popupState.featureId = getFeatureBusinessId(lineFeature);
-  popupState.geometryType = lineFeature.geometry.type;
-  popupState.featureProps = JSON.parse(JSON.stringify(lineFeature.properties || {}));
-  popupState.selectedSegmentIndex = currentSegmentIndex;
-  popupState.selectedSegmentLengthMeters = MapLineMeasureTool.getDistanceInMeters(
-    normalizedCoordinates[currentSegmentIndex],
-    normalizedCoordinates[currentSegmentIndex + 1],
-  );
-  popupState.lineLengthMeters =
-    MapLineMeasureTool.getCoordinatesLengthInMeters(normalizedCoordinates);
+  return {
+    type: POPUP_TYPE.line,
+    featureId: getFeatureBusinessId(lineFeature),
+    geometryType: lineFeature.geometry.type,
+    featureProps: clonePropertySnapshot(lineFeature.properties || {}),
+    selectedSegmentIndex: currentSegmentIndex,
+    selectedSegmentLengthMeters,
+    lineLengthMeters,
+  };
 };
 
 /**
@@ -2051,25 +2155,86 @@ const showClickedLineMeasureExample = (lineFeature: MapCommonLineFeature): void 
 };
 
 // ==========================================
-// 响应式 Popup 状态管理
+// Popup 状态管理
 // ==========================================
 
-// 定义 Popup 类型枚举
-enum popupType {
-  point = "point",
-  line = "line",
-  terradraw = "terradraw",
-}
-const popupState = reactive({
-  visible: false,
-  lngLat: [0, 0] as LngLatLike,
-  featureProps: {} as any,
-  type: "" as popupType | "", // 新增字段：用于标识当前点击的是什么类型的要素
-  featureId: null as string | number | null,
-  geometryType: "",
-  selectedSegmentIndex: -1,
-  selectedSegmentLengthMeters: 0,
-  lineLengthMeters: 0,
+/**
+ * 当前页面的统一 Popup 状态管理实例。
+ * 泛型传入当前页面支持的全部弹窗载荷联合类型（NgPopupPayload），
+ * 确保后续在调用 popup.open / popup.setPayload 时具备严格的类型提示与校验。
+ */
+const popup = useMapPopupState<NgPopupPayload>();
+const { visible: popupVisible, lngLat: popupLngLat, payload: popupPayload } = popup;
+
+/**
+ * 当前是否为线弹窗。
+ * 模板只关心“当前该显示哪一块内容”，不直接处理联合类型分支。
+ */
+const popupLinePayload = computed<NgLinePopupPayload | null>(() => {
+  const currentPayload = popupPayload.value;
+  return currentPayload?.type === POPUP_TYPE.line ? currentPayload : null
+});
+
+/** 当前是否为点弹窗。 */
+const popupPointPayload = computed<NgPointPopupPayload | null>(() => {
+  const currentPayload = popupPayload.value;
+  return currentPayload?.type === POPUP_TYPE.point ? currentPayload : null;
+});
+
+/** 当前是否为 TerraDraw 弹窗。 */
+const popupTerradrawPayload = computed<NgTerradrawPopupPayload | null>(() => {
+  const currentPayload = popupPayload.value;
+  return currentPayload?.type === POPUP_TYPE.terradraw ? currentPayload : null;
+});
+
+/** 线弹窗是否开启。 */
+const hasLinePopup = computed(() => popupLinePayload.value !== null);
+
+/** 点弹窗是否开启。 */
+const hasPointPopup = computed(() => popupPointPayload.value !== null);
+
+/** TerraDraw 弹窗是否开启。 */
+const hasTerradrawPopup = computed(() => popupTerradrawPayload.value !== null);
+
+/** 线弹窗属性快照。 */
+const popupLineFeatureProps = computed<Record<string, any>>(() => {
+  return popupLinePayload.value?.featureProps || {};
+});
+
+/** 线弹窗总长度。 */
+const popupLineLengthMeters = computed(() => {
+  return popupLinePayload.value?.lineLengthMeters ?? 0;
+});
+
+/** 当前选中的线段索引。 */
+const popupSelectedSegmentIndex = computed(() => {
+  return popupLinePayload.value?.selectedSegmentIndex ?? -1;
+});
+
+/** 当前选中线段长度。 */
+const popupSelectedSegmentLengthMeters = computed(() => {
+  return popupLinePayload.value?.selectedSegmentLengthMeters ?? 0;
+});
+
+/** 点弹窗属性快照。 */
+const popupPointFeatureProps = computed<Record<string, any>>(() => {
+  return popupPointPayload.value?.featureProps || {};
+});
+
+/** TerraDraw 弹窗属性快照。 */
+const popupTerradrawFeatureProps = computed<Record<string, any>>(() => {
+  return popupTerradrawPayload.value?.featureProps || {};
+});
+
+/** TerraDraw 弹窗几何类型。 */
+const popupTerradrawGeometryType = computed(() => {
+  return popupTerradrawPayload.value?.geometryType || "";
+});
+
+/** TerraDraw 弹窗要素 ID 展示文本。 */
+const popupTerradrawFeatureIdText = computed(() => {
+  const currentPayload = popupTerradrawPayload.value;
+  return currentPayload?.featureId ?? currentPayload?.featureProps.id ?? "无";
 });
 
 const lineActionForm = reactive({
@@ -2080,14 +2245,26 @@ const lineActionForm = reactive({
 /**
  * 处理弹窗中的业务按钮点击动作。
  */
-const handlePopupAction = () => {
-  const msgMap = {
-    [popupType.line]: `查看线路详情：${popupState.featureProps.id}`,
-    [popupType.point]: `进入站点：${popupState.featureProps.name}`,
-    [popupType.terradraw]: `查看 TerraDraw 要素：${popupState.featureId || popupState.featureProps.id}`,
-  };
-  const msg = msgMap[popupState.type as popupType] || "未定义的弹窗动作";
-  ElMessage.success(msg);
+const handlePopupAction = (): void => {
+  const currentPayload = popupPayload.value;
+  if (!currentPayload) {
+    ElMessage.info("当前没有打开中的弹窗");
+    return;
+  }
+
+  if (currentPayload.type === POPUP_TYPE.line) {
+    ElMessage.success(`查看线路详情：${String(currentPayload.featureProps.id || currentPayload.featureId)}`);
+    return;
+  }
+
+  if (currentPayload.type === POPUP_TYPE.point) {
+    ElMessage.success(`进入站点：${String(currentPayload.featureProps.name || "未命名站点")}`);
+    return;
+  }
+
+  ElMessage.success(
+    `查看 TerraDraw 要素：${String(currentPayload.featureId || currentPayload.featureProps.id || "无")}`,
+  );
 };
 
 /**
@@ -2136,7 +2313,7 @@ const handleGenerateLineCorridor = (): void => {
     return;
   }
 
-  syncLinePopupMetrics(selectedLineFeature, popupState.selectedSegmentIndex);
+  popup.setPayload(createLinePopupPayload(selectedLineFeature, popupSelectedSegmentIndex.value));
   ElMessage.success(result.message);
 };
 
@@ -2153,7 +2330,7 @@ const handleCreateLineDraft = (): void => {
   }
 
   const result = featureActions.previewSelectedLine({
-    segmentIndex: popupState.selectedSegmentIndex,
+    segmentIndex: popupSelectedSegmentIndex.value,
     extendLengthMeters: lineActionForm.extendLengthMeters,
   });
 
@@ -2162,7 +2339,7 @@ const handleCreateLineDraft = (): void => {
     return;
   }
 
-  syncLinePopupMetrics(result.lineFeature, 0);
+  popup.setPayload(createLinePopupPayload(result.lineFeature, 0));
   ElMessage.success(result.message);
 };
 
@@ -2174,51 +2351,60 @@ const handleCreateLineDraft = (): void => {
  * @param context 点击事件传过来的数据
  */
 const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) => {
-  if (!context.feature || !context.lngLat) return;
+  const businessContext = featureQuery.toBusinessContext(context);
+  if (!businessContext.feature || !businessContext.lngLat) return;
 
   contextMenuState.visible = false;
   contextMenuState.summaryRows = [];
   selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
-  popupState.type =
-    context.feature.geometry?.type === "LineString" ? popupType.line : popupType.point;
-  popupState.geometryType = context.feature.geometry?.type || "";
-  popupState.lngLat = [context.lngLat.lng, context.lngLat.lat];
-  popupState.visible = true;
 
-  if (context.feature.geometry?.type === "LineString") {
+  /*
+   * 旧写法 / 逃生出口：
+   * const featureRef = featureQuery.getFeatureRef(context);
+   * const latestFeature =
+   *   featureQuery.resolveFeature(featureRef) || (context.feature as unknown as MapCommonFeature);
+   * 适合需要直接处理底层 context / 自定义状态结构时使用。
+   */
+  if (businessContext.isLine) {
     // 注意：
-    // 这里优先使用 context.lngLat，而不是直接使用原始鼠标坐标。
+    // 这里优先使用 businessContext.lngLat，而不是直接使用原始鼠标坐标。
     // 一旦当前点击命中了吸附结果，lngLat 已经是“吸附后的有效坐标”，
     // 这样后续线段识别、弹窗摘要、线草稿生成等业务计算就都会自动跟随吸附点工作。
+    // resolveLineInteractionSnapshot获取未被引擎裁剪的完整线数据，并计算当前点击命中了第几段线段。
+    // （MapLibre 渲染时长线会被裁剪，导致坐标缺失，必须回源取完整数据才能算准）
     const lineInteractionSnapshot = MapLineExtensionTool.resolveLineInteractionSnapshot({
-      feature: context.feature as unknown as MapCommonFeature,
-      featureRef: featureQuery.getFeatureRef(context),
-      lngLat: context.lngLat,
+      feature: businessContext.feature,
+      featureRef: businessContext.featureRef,
+      lngLat: businessContext.lngLat,
       resolveLatestFeature: featureQuery.resolveFeature,
     });
 
     if (!lineInteractionSnapshot) {
-      popupState.featureId = context.featureId;
-      popupState.featureProps = JSON.parse(JSON.stringify(context.feature.properties || {}));
-      popupState.selectedSegmentIndex = -1;
-      popupState.selectedSegmentLengthMeters = 0;
-      popupState.lineLengthMeters = 0;
+      popup.open({
+        lngLat: createPopupLngLat(businessContext.lngLat),
+        payload: createLinePopupPayload(
+          businessContext.feature as MapCommonLineFeature,
+          -1,
+        ),
+      });
       return;
     }
 
-    syncLinePopupMetrics(
-      lineInteractionSnapshot.lineFeature,
-      lineInteractionSnapshot.segmentSelection?.index ?? 0,
-    );
+    popup.open({
+      lngLat: createPopupLngLat(businessContext.lngLat),
+      payload: createLinePopupPayload(
+        lineInteractionSnapshot.lineFeature,
+        lineInteractionSnapshot.segmentSelection?.index ?? 0,
+      ),
+    });
     showClickedLineMeasureExample(lineInteractionSnapshot.lineFeature);
     return;
   }
 
-  popupState.featureId = context.featureId;
-  popupState.featureProps = JSON.parse(JSON.stringify(context.feature.properties || {}));
-  popupState.selectedSegmentIndex = -1;
-  popupState.selectedSegmentLengthMeters = 0;
-  popupState.lineLengthMeters = 0;
+  popup.open({
+    lngLat: createPopupLngLat(businessContext.lngLat),
+    payload: createPointPopupPayload(businessContext.feature, businessContext.featureId),
+  });
 };
 
 /**
@@ -2227,18 +2413,24 @@ const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) =>
  * @param context 普通图层统一交互上下文
  */
 const openMapFeatureContextMenu = (context: BusinessKit.MapLayerInteractiveContext) => {
-  if (!context.feature || !context.point || !context.originalEvent) return;
+  const businessContext = featureQuery.toBusinessContext(context);
+  if (!businessContext.feature || !context.point || !context.originalEvent) return;
 
   context.originalEvent.preventDefault();
-  popupState.visible = false;
-  const featureRef = featureQuery.getFeatureRef(context);
+  popup.close();
+
+  /*
+   * 旧写法 / 逃生出口：
+   * const featureRef = featureQuery.getFeatureRef(context);
+   * const latestFeature = featureQuery.resolveFeature(featureRef);
+   * 适合需要直接处理底层 context / 自定义状态结构时使用。
+   */
+  const currentSelectionMode = context.selectionMode || selectionMode.value;
   const summaryRows =
-    context.selectionMode === "multiple"
-      ? buildSelectionSummaryRows(context.selectionMode || selectionMode.value)
-      : [];
+    currentSelectionMode === "multiple" ? buildSelectionSummaryRows(currentSelectionMode) : [];
   const editorTarget: BusinessKit.MapFeaturePropertyEditorTarget = {
     type: "map",
-    featureRef,
+    featureRef: businessContext.featureRef,
   };
   const editorState = propertyEditor.resolveEditorState(editorTarget);
   contextMenuState.position = { x: context.point.x, y: context.point.y };
@@ -2321,16 +2513,17 @@ const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
   // 普通图层选中集变化入口。
   // 业务层可在这里统一处理多图层批量选择，而不需要分别给每个 layer 写回调。
   onSelectionChange: (context: BusinessKit.MapLayerSelectionChangeContext) => {
+    const selectionContext = featureQuery.toSelectionBusinessContext(context);
     syncSelectionPanelFromChange(context);
     console.log("[NGGI00 示例] 选中集变化示例", {
-      reason: context.reason,
+      reason: selectionContext.reason,
       selectionMode: context.selectionMode,
-      selectedCount: context.selectedCount,
-      addedFeatureIds: context.getAddedFeatureIds(),
-      removedFeatureIds: context.getRemovedFeatureIds(),
-      circleLayerIds: context.getSelectedPropertyValues<string | number>("id", {
-        layerId: LAYER_IDS.circle,
-      }),
+      selectedCount: selectionContext.selectedCount,
+      addedFeatureIds: getSelectionItemIds(selectionContext.added),
+      removedFeatureIds: getSelectionItemIds(selectionContext.removed),
+      circleLayerIds: getSelectionItemIds(
+        selectionContext.selected.filter((selectedItem) => selectedItem.layerId === LAYER_IDS.circle),
+      ),
       summary: selectionPanelState.lastChangeSummary,
     });
   },
@@ -2498,14 +2691,7 @@ const syncContextMenuPanelState = (
  * 统一关闭业务弹窗与右键属性窗口。
  */
 const closeBusinessPanels = () => {
-  popupState.visible = false;
-  popupState.type = "";
-  popupState.featureId = null;
-  popupState.geometryType = "";
-  popupState.featureProps = {};
-  popupState.selectedSegmentIndex = -1;
-  popupState.selectedSegmentLengthMeters = 0;
-  popupState.lineLengthMeters = 0;
+  popup.close();
   contextMenuState.visible = false;
   contextMenuState.panelState = createEmptyPropertyPanelState();
   contextMenuState.rawProperties = {};
@@ -2552,12 +2738,15 @@ const openTerradrawPopup = (context: BusinessKit.TerradrawInteractiveContext) =>
   contextMenuState.visible = false;
   contextMenuState.summaryRows = [];
   selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
-  popupState.type = popupType.terradraw;
-  popupState.featureId = (context.feature.id as string | number | null) ?? null;
-  popupState.geometryType = context.feature.geometry?.type || "";
-  popupState.featureProps = JSON.parse(JSON.stringify(context.feature.properties || {}));
-  popupState.lngLat = [context.lngLat.lng, context.lngLat.lat];
-  popupState.visible = true;
+  popup.open({
+    lngLat: createPopupLngLat(context.lngLat),
+    payload: {
+      type: POPUP_TYPE.terradraw,
+      featureId: (context.feature.id as string | number | null) ?? null,
+      geometryType: context.feature.geometry?.type || "",
+      featureProps: clonePropertySnapshot(context.feature.properties || {}),
+    },
+  });
 };
 
 /**
@@ -2569,7 +2758,7 @@ const openTerradrawContextMenu = (context: BusinessKit.TerradrawInteractiveConte
   if (!context.feature || !context.point || !context.originalEvent) return;
 
   context.originalEvent.preventDefault();
-  popupState.visible = false;
+  popup.close();
 
   const featureId =
     context.featureId ?? (context.feature.id as string | number | null | undefined) ?? null;
@@ -2610,8 +2799,12 @@ const syncSavedPropertiesToPanels = (nextEditorState: BusinessKit.MapFeatureProp
     };
   }
 
-  if (popupState.visible && popupState.featureId === getContextMenuFeatureId()) {
-    popupState.featureProps = clonePropertySnapshot(nextEditorState.rawProperties);
+  const currentPopupPayload = popupPayload.value;
+  if (popupVisible.value && currentPopupPayload?.featureId === getContextMenuFeatureId()) {
+    popup.setPayload({
+      ...currentPopupPayload,
+      featureProps: clonePropertySnapshot(nextEditorState.rawProperties),
+    });
   }
 };
 

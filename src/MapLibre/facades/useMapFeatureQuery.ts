@@ -19,11 +19,15 @@ import {
   type MapSourceFeatureRef,
 } from '../shared/map-common-tools';
 import {
+  clonePlainData,
   resolveMapFeaturePropertyPanelState,
   type MapFeaturePropertyPanelState,
 } from '../shared/map-feature-data';
 import type {
   MapLayerInteractiveContext,
+  MapLayerSelectedFeature,
+  MapLayerSelectionChangeContext,
+  MapSelectionChangeReason,
   TerradrawControlType,
 } from '../shared/mapLibre-controls-types';
 import type { MapBusinessSourceRegistry } from './createMapBusinessSource';
@@ -81,10 +85,88 @@ export interface UseMapFeatureQueryResult {
   resolveSelectedFeaturePropertyPanelState: () => MapFeaturePropertyPanelState | null;
   /** 解析当前选中的线要素。 */
   resolveSelectedLine: () => MapCommonLineFeature | null;
+  /** 将普通图层交互上下文转换为业务层友好的视图对象。 */
+  toBusinessContext: (
+    context: MapLayerInteractiveContext | null | undefined
+  ) => MapBusinessFeatureContext;
+  /** 将选中集变化上下文转换为业务层友好的视图对象。 */
+  toSelectionBusinessContext: (
+    context: MapLayerSelectionChangeContext | null | undefined
+  ) => MapBusinessSelectionContext;
   /** 解析 TerraDraw / Measure 当前要素的属性面板态。 */
   resolveTerradrawPropertyPanelState: (
     options: ResolveTerradrawPropertyPanelStateOptions
   ) => MapFeaturePropertyPanelState | null;
+}
+
+/** 业务层友好的单条选中项视图。 */
+export interface MapBusinessSelectionItem {
+  /** 当前选中项的标准来源引用。 */
+  featureRef: MapSourceFeatureRef | null;
+  /** 当前选中项对应的最新业务要素。 */
+  feature: MapCommonFeature | null;
+  /** 当前选中项最终可直接消费的属性对象。 */
+  properties: Record<string, any> | null;
+  /** 当前选中项业务 ID。 */
+  featureId: MapFeatureId | null;
+  /** 当前选中项所属图层 ID。 */
+  layerId: string | null;
+  /** 当前选中项所属 source ID。 */
+  sourceId: string | null;
+  /** 当前选中项所属 source-layer。 */
+  sourceLayer: string | null;
+  /** 当前选中项几何类型。 */
+  geometryType: string | null;
+  /** 当前选中项是否为点要素。 */
+  isPoint: boolean;
+  /** 当前选中项是否为线要素。 */
+  isLine: boolean;
+  /** 当前选中项是否为面要素。 */
+  isPolygon: boolean;
+}
+
+/** 普通图层交互上下文对应的业务层视图。 */
+export interface MapBusinessFeatureContext {
+  /** 当前主目标要素的标准来源引用。 */
+  featureRef: MapSourceFeatureRef | null;
+  /** 当前主目标对应的最新业务要素。 */
+  feature: MapCommonFeature | null;
+  /** 当前主目标最终可直接消费的属性对象。 */
+  properties: Record<string, any> | null;
+  /** 当前主目标业务 ID。 */
+  featureId: MapFeatureId | null;
+  /** 当前命中的图层 ID。 */
+  layerId: string | null;
+  /** 当前命中的 source ID。 */
+  sourceId: string | null;
+  /** 当前命中的 source-layer。 */
+  sourceLayer: string | null;
+  /** 当前主目标几何类型。 */
+  geometryType: string | null;
+  /** 当前主目标是否为点要素。 */
+  isPoint: boolean;
+  /** 当前主目标是否为线要素。 */
+  isLine: boolean;
+  /** 当前主目标是否为面要素。 */
+  isPolygon: boolean;
+  /** 当前事件对应的经纬度坐标。 */
+  lngLat: { lng: number; lat: number } | null;
+  /** 当前选中项数量。 */
+  selectedCount: number;
+  /** 当前完整选中集快照。 */
+  selectedFeatures: MapLayerSelectedFeature[];
+}
+
+/** 选中集变化上下文对应的业务层视图。 */
+export interface MapBusinessSelectionContext extends MapBusinessFeatureContext {
+  /** 当前选中集变化原因。 */
+  reason: MapSelectionChangeReason | null;
+  /** 当前完整选中集的业务层视图。 */
+  selected: MapBusinessSelectionItem[];
+  /** 本次新增选中项的业务层视图。 */
+  added: MapBusinessSelectionItem[];
+  /** 本次移除选中项的业务层视图。 */
+  removed: MapBusinessSelectionItem[];
 }
 
 /**
@@ -96,6 +178,71 @@ function isLineFeature(
   feature: MapCommonFeature | null | undefined
 ): feature is MapCommonLineFeature {
   return feature?.geometry?.type === 'LineString';
+}
+
+/**
+ * 判断给定几何类型是否属于点类型。
+ * @param geometryType 待判断几何类型
+ * @returns 是否为点或多点
+ */
+function isPointGeometryType(geometryType: string | null): boolean {
+  return geometryType === 'Point' || geometryType === 'MultiPoint';
+}
+
+/**
+ * 判断给定几何类型是否属于线类型。
+ * @param geometryType 待判断几何类型
+ * @returns 是否为线或多线
+ */
+function isLineGeometryType(geometryType: string | null): boolean {
+  return geometryType === 'LineString' || geometryType === 'MultiLineString';
+}
+
+/**
+ * 判断给定几何类型是否属于面类型。
+ * @param geometryType 待判断几何类型
+ * @returns 是否为面或多面
+ */
+function isPolygonGeometryType(geometryType: string | null): boolean {
+  return geometryType === 'Polygon' || geometryType === 'MultiPolygon';
+}
+
+/**
+ * 将任意 feature-like 对象裁剪为标准 GeoJSON 要素快照。
+ * @param featureLike 任意 feature-like 对象
+ * @returns 可安全下发给业务层的普通要素；不完整时返回 null
+ */
+function toPlainCommonFeature(
+  featureLike:
+    | Pick<MapCommonFeature, 'type' | 'id' | 'geometry' | 'properties'>
+    | null
+    | undefined
+): MapCommonFeature | null {
+  if (!featureLike?.geometry || featureLike.type !== 'Feature') {
+    return null;
+  }
+
+  return {
+    type: 'Feature',
+    ...(featureLike.id === undefined ? {} : { id: featureLike.id }),
+    geometry: clonePlainData(featureLike.geometry),
+    properties: featureLike.properties ? clonePlainData(featureLike.properties) : null,
+  } as MapCommonFeature;
+}
+
+/**
+ * 深拷贝当前选中集快照，避免业务层误改交互核心内部状态。
+ * @param selectedFeatures 当前选中集快照
+ * @returns 可安全消费的选中集副本
+ */
+function cloneSelectedFeatureList(
+  selectedFeatures: MapLayerSelectedFeature[] | null | undefined
+): MapLayerSelectedFeature[] {
+  if (!selectedFeatures?.length) {
+    return [];
+  }
+
+  return clonePlainData(selectedFeatures);
 }
 
 /**
@@ -270,6 +417,121 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
   };
 
   /**
+   * 将普通图层交互上下文转换为业务层友好的视图对象。
+   * @param context 普通图层交互上下文
+   * @returns 业务层可直接消费的上下文
+   */
+  const toBusinessContext = (
+    context: MapLayerInteractiveContext | null | undefined
+  ): MapBusinessFeatureContext => {
+    const featureRef = getFeatureRef(context);
+    const fallbackFeature = toPlainCommonFeature(
+      context?.feature as unknown as MapCommonFeature | null | undefined
+    );
+    const resolvedFeature = resolveFeature(featureRef);
+    const feature = resolvedFeature || fallbackFeature;
+    const geometryType = feature?.geometry?.type || null;
+    const selectedFeatures = cloneSelectedFeatureList(context?.selectedFeatures);
+
+    return {
+      featureRef,
+      feature,
+      properties: feature?.properties
+        ? clonePlainData(feature.properties)
+        : context?.properties
+          ? clonePlainData(context.properties)
+          : null,
+      featureId:
+        featureRef?.featureId ??
+        context?.featureId ??
+        ((feature?.id as MapFeatureId | null | undefined) ?? null),
+      layerId: context?.layerId || null,
+      sourceId: context?.sourceId || featureRef?.sourceId || null,
+      sourceLayer: context?.sourceLayer || null,
+      geometryType,
+      isPoint: isPointGeometryType(geometryType),
+      isLine: isLineGeometryType(geometryType),
+      isPolygon: isPolygonGeometryType(geometryType),
+      lngLat: context?.lngLat ? { ...context.lngLat } : null,
+      selectedCount: context?.selectedCount ?? selectedFeatures.length,
+      selectedFeatures,
+    };
+  };
+
+  /**
+   * 将单条选中项快照转换为业务层友好的视图对象。
+   * @param selectedFeature 当前选中项快照
+   * @returns 业务层可直接消费的选中项
+   */
+  const createBusinessSelectionItem = (
+    selectedFeature: MapLayerSelectedFeature
+  ): MapBusinessSelectionItem => {
+    const featureRef = createMapSourceFeatureRef(
+      selectedFeature.sourceId || null,
+      selectedFeature.featureId ?? null
+    );
+    const snapshotFeature = toPlainCommonFeature(selectedFeature.snapshot);
+    const resolvedFeature = resolveFeature(featureRef);
+    const feature = resolvedFeature || snapshotFeature;
+    const geometryType = feature?.geometry?.type || null;
+
+    return {
+      featureRef,
+      feature,
+      properties: feature?.properties
+        ? clonePlainData(feature.properties)
+        : snapshotFeature?.properties
+          ? clonePlainData(snapshotFeature.properties)
+          : selectedFeature.properties
+            ? clonePlainData(selectedFeature.properties)
+            : null,
+      featureId:
+        selectedFeature.featureId ??
+        featureRef?.featureId ??
+        ((feature?.id as MapFeatureId | null | undefined) ?? null),
+      layerId: selectedFeature.layerId || null,
+      sourceId: selectedFeature.sourceId || featureRef?.sourceId || null,
+      sourceLayer: selectedFeature.sourceLayer || null,
+      geometryType,
+      isPoint: isPointGeometryType(geometryType),
+      isLine: isLineGeometryType(geometryType),
+      isPolygon: isPolygonGeometryType(geometryType),
+    };
+  };
+
+  /**
+   * 将选中集快照列表转换为业务层友好的视图数组。
+   * @param selectedFeatures 当前选中项快照列表
+   * @returns 标准化后的业务层选中项数组
+   */
+  const toBusinessSelectionItems = (
+    selectedFeatures: MapLayerSelectedFeature[] | null | undefined
+  ): MapBusinessSelectionItem[] => {
+    return (selectedFeatures || []).map((selectedFeature) => {
+      return createBusinessSelectionItem(selectedFeature);
+    });
+  };
+
+  /**
+   * 将选中集变化上下文转换为业务层友好的视图对象。
+   * @param context 选中集变化上下文
+   * @returns 业务层可直接消费的选中集变化结果
+   */
+  const toSelectionBusinessContext = (
+    context: MapLayerSelectionChangeContext | null | undefined
+  ): MapBusinessSelectionContext => {
+    const baseContext = toBusinessContext(context);
+
+    return {
+      ...baseContext,
+      reason: context?.reason || null,
+      selected: toBusinessSelectionItems(context?.selectedFeatures),
+      added: toBusinessSelectionItems(context?.addedFeatures),
+      removed: toBusinessSelectionItems(context?.removedFeatures),
+    };
+  };
+
+  /**
    * 解析 TerraDraw / Measure 当前要素的属性面板态。
    * 这里会叠加两类规则：
    * 1. 控件级 propertyPolicy
@@ -310,6 +572,8 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
     resolveSelectedFeature,
     resolveSelectedFeaturePropertyPanelState,
     resolveSelectedLine,
+    toBusinessContext,
+    toSelectionBusinessContext,
     resolveTerradrawPropertyPanelState,
   };
 }

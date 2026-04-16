@@ -36,6 +36,9 @@ export { default as MapBusinessSourceLayers } from './MapLibre/facades/MapBusine
 /** 高层业务聚合门面。业务页面优先从这里读取选择、编辑、草稿和动效能力。 */
 export { useBusinessMap } from './MapLibre/facades/useBusinessMap';
 
+/** 通用 Popup 状态门面。业务页面管理弹窗显隐与载荷时优先使用。 */
+export { useMapPopupState } from './MapLibre/facades/useMapPopupState';
+
 /** 单个业务数据源工厂。 */
 export { createMapBusinessSource } from './MapLibre/facades/createMapBusinessSource';
 
@@ -159,3 +162,15 @@ export type { MapFeaturePropertyEditorTarget } from './MapLibre/facades/useMapFe
 
 /** 高层业务聚合门面返回类型。 */
 export type { UseBusinessMapResult } from './MapLibre/facades/useBusinessMap';
+
+/** 业务层友好的单条要素上下文类型。 */
+export type { MapBusinessFeatureContext } from './MapLibre/facades/useMapFeatureQuery';
+
+/** 业务层友好的选中项类型。 */
+export type { MapBusinessSelectionItem } from './MapLibre/facades/useMapFeatureQuery';
+
+/** 业务层友好的选中集变化上下文类型。 */
+export type { MapBusinessSelectionContext } from './MapLibre/facades/useMapFeatureQuery';
+
+/** 通用 Popup 状态门面返回类型。 */
+export type { UseMapPopupStateResult } from './MapLibre/facades/useMapPopupState';
