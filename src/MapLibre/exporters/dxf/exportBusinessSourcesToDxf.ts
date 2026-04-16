@@ -35,13 +35,44 @@ function hasOwnKey<T extends object>(
 }
 
 /**
- * 归一化文件名。
+ * 归一化文件名，确保以 .dxf 结尾。
  * @param fileName 原始文件名
  * @returns 最终文件名
  */
 function normalizeFileName(fileName: string | null | undefined): string {
   const trimmedName = fileName?.trim();
-  return trimmedName || DEFAULT_DXF_FILE_NAME;
+  if (!trimmedName) {
+    return DEFAULT_DXF_FILE_NAME;
+  }
+
+  // 如果已经有 .dxf 扩展名（不区分大小写），直接返回
+  if (/\.dxf$/i.test(trimmedName)) {
+    return trimmedName;
+  }
+
+  // 移除其他扩展名并添加 .dxf
+  const nameWithoutExt = trimmedName.replace(/\.[^.]*$/, '');
+  return nameWithoutExt ? `${nameWithoutExt}.dxf` : DEFAULT_DXF_FILE_NAME;
+}
+
+/**
+ * 清理图层名，移除或替换 DXF 非法字符。
+ * DXF 图层名不能包含：/ \ : * ? " < > |
+ * @param layerName 原始图层名
+ * @returns 清理后的图层名
+ */
+function sanitizeLayerName(layerName: string): string {
+  // 移除非法字符，替换为下划线
+  const sanitized = layerName.replace(/[/\\:*?"<>|]/g, '_');
+
+  // 限制长度（AutoCAD 标准为 255 字符）
+  const maxLength = 255;
+  if (sanitized.length > maxLength) {
+    return sanitized.substring(0, maxLength);
+  }
+
+  // 确保不为空
+  return sanitized || 'default_layer';
 }
 
 /**
@@ -149,44 +180,77 @@ function createCoordinateTransform(
 
   if (!sourceCrs || !targetCrs) {
     warnings.push('已跳过坐标转换：未完整配置 sourceCrs 和 targetCrs，将按原坐标导出');
-    // 无需坐标变换时直接返回原引用，避免高频导出中的数组复制开销
-    return (position) => position;
+    // 返回副本避免修改原始数据
+    return (position) => [...position] as Position;
   }
 
   if (sourceCrs === targetCrs) {
-    // 同一坐标系下无需创建新数组，直接复用输入坐标
-    return (position) => position;
+    // 同一坐标系下也需要返回副本
+    return (position) => [...position] as Position;
   }
 
   // 预编译投影转换器，避免每次调用都重新解析投影定义
-  const projConverter = proj4(sourceCrs, targetCrs);
+  let projConverter: proj4.Converter;
+  try {
+    projConverter = proj4(sourceCrs, targetCrs);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    warnings.push(
+      `坐标系配置无效，已跳过坐标转换：${errorMessage}。将按原坐标导出`
+    );
+    return (position) => [...position] as Position;
+  }
 
   return (position) => {
-    const [x, y] = projConverter.forward([position[0], position[1]]) as [number, number];
-    if (position.length > 2) {
-      return [x, y, position[2]] as Position;
+    try {
+      const [x, y] = projConverter.forward([position[0], position[1]]) as [number, number];
+      if (position.length > 2) {
+        return [x, y, position[2]] as Position;
+      }
+      return [x, y] as Position;
+    } catch (error) {
+      // 单个坐标转换失败时，记录警告并返回原坐标副本
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      warnings.push(`坐标转换失败 [${position.join(', ')}]：${errorMessage}`);
+      return [...position] as Position;
     }
-
-    return [x, y] as Position;
   };
 }
 
 /**
  * 构造线实体顶点列表。
+ * 注意：DXF 的 LWPOLYLINE 实体不支持 Z 坐标，Z 值会被丢弃。
  * @param positions 坐标列表
  * @param transform 坐标转换函数
+ * @param warnings 警告列表（用于记录 Z 坐标丢弃警告）
+ * @param featureLabel 要素标识（用于警告信息）
  * @returns DXF 顶点列表
  */
 function createPolylineVertices(
   positions: Position[],
-  transform: CoordinateTransform
+  transform: CoordinateTransform,
+  warnings: string[],
+  featureLabel: string
 ): LWPolylineVertex[] {
-  return positions.map((position) => {
+  let hasZCoordinate = false;
+
+  const vertices = positions.map((position) => {
     const transformedPosition = transform(position);
+    if (transformedPosition.length > 2 && transformedPosition[2] !== undefined) {
+      hasZCoordinate = true;
+    }
     return {
       point: point2d(transformedPosition[0], transformedPosition[1]),
     };
   });
+
+  if (hasZCoordinate) {
+    warnings.push(
+      `要素 '${featureLabel}' 包含 Z 坐标，但 DXF LWPOLYLINE 实体不支持 Z 坐标，Z 值已被丢弃`
+    );
+  }
+
+  return vertices;
 }
 
 /**
@@ -202,7 +266,8 @@ function resolveLayerName(
   taskOptions: ResolvedMapDxfExportTaskOptions
 ): string {
   const resolvedLayerName = taskOptions.layerNameResolver?.(feature, sourceId)?.trim();
-  return resolvedLayerName || sourceId;
+  const rawLayerName = resolvedLayerName || sourceId;
+  return sanitizeLayerName(rawLayerName);
 }
 
 /**
@@ -272,6 +337,8 @@ function addPointEntities(
  * @param lineList 折线坐标集合
  * @param layerName 图层名
  * @param transform 坐标转换函数
+ * @param warnings 警告列表
+ * @param featureLabel 要素标识
  * @param closed 是否写成闭合折线
  * @returns 新增的实体数量
  */
@@ -280,19 +347,30 @@ function addPolylineEntities(
   lineList: Position[][],
   layerName: string,
   transform: CoordinateTransform,
+  warnings: string[],
+  featureLabel: string,
   closed = false
 ): number {
   let entityCount = 0;
+  const minPoints = closed ? 3 : 2; // 闭合线至少 3 点，开放线至少 2 点
 
-  lineList.forEach((lineCoordinates) => {
-    if (!lineCoordinates.length) {
+  lineList.forEach((lineCoordinates, index) => {
+    if (lineCoordinates.length < minPoints) {
+      if (lineCoordinates.length > 0) {
+        warnings.push(
+          `要素 '${featureLabel}' 的第 ${index + 1} 个几何部分点数不足（需要至少 ${minPoints} 个点，实际 ${lineCoordinates.length} 个），已跳过`
+        );
+      }
       return;
     }
 
-    writer.addLWPolyline(createPolylineVertices(lineCoordinates, transform), {
-      layerName,
-      flags: closed ? LWPolylineFlags.Closed : LWPolylineFlags.None,
-    });
+    writer.addLWPolyline(
+      createPolylineVertices(lineCoordinates, transform, warnings, featureLabel),
+      {
+        layerName,
+        flags: closed ? LWPolylineFlags.Closed : LWPolylineFlags.None,
+      }
+    );
     entityCount += 1;
   });
 
@@ -317,21 +395,54 @@ function addFeatureGeometryToDxf(
   transform: CoordinateTransform,
   warnings: string[]
 ): number {
+  const featureLabel = getFeatureLabel(feature);
+
   switch (feature.geometry.type) {
     case 'Point':
       return addPointEntities(writer, [feature.geometry.coordinates], layerName, transform);
     case 'MultiPoint':
       return addPointEntities(writer, feature.geometry.coordinates, layerName, transform);
     case 'LineString':
-      return addPolylineEntities(writer, [feature.geometry.coordinates], layerName, transform);
+      return addPolylineEntities(
+        writer,
+        [feature.geometry.coordinates],
+        layerName,
+        transform,
+        warnings,
+        featureLabel
+      );
     case 'MultiLineString':
-      return addPolylineEntities(writer, feature.geometry.coordinates, layerName, transform);
+      return addPolylineEntities(
+        writer,
+        feature.geometry.coordinates,
+        layerName,
+        transform,
+        warnings,
+        featureLabel
+      );
     case 'Polygon':
-      return addPolylineEntities(writer, feature.geometry.coordinates, layerName, transform, true);
+      return addPolylineEntities(
+        writer,
+        feature.geometry.coordinates,
+        layerName,
+        transform,
+        warnings,
+        featureLabel,
+        true
+      );
     case 'MultiPolygon':
       return feature.geometry.coordinates.reduce((count, polygonCoordinates) => {
         return (
-          count + addPolylineEntities(writer, polygonCoordinates, layerName, transform, true)
+          count +
+          addPolylineEntities(
+            writer,
+            polygonCoordinates,
+            layerName,
+            transform,
+            warnings,
+            featureLabel,
+            true
+          )
         );
       }, 0);
     default:
