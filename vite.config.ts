@@ -38,6 +38,9 @@ function resolveLibraryEntries() {
     'plugins/map-feature-multi-select': fileURLToPath(
       new URL('./src/plugins/map-feature-multi-select.ts', import.meta.url)
     ),
+    'plugins/map-dxf-export': fileURLToPath(
+      new URL('./src/plugins/map-dxf-export.ts', import.meta.url)
+    ),
   };
 }
 
@@ -76,6 +79,10 @@ function resolveDevAliases() {
       replacement: fileURLToPath(
         new URL('./src/plugins/map-feature-multi-select.ts', import.meta.url)
       ),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins\/map-dxf-export$/,
+      replacement: fileURLToPath(new URL('./src/plugins/map-dxf-export.ts', import.meta.url)),
     },
     {
       find: '@',

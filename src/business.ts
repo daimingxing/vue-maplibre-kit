@@ -42,6 +42,9 @@ export { useBusinessMap } from './MapLibre/facades/useBusinessMap';
 /** 通用 Popup 状态门面。业务页面管理弹窗显隐与载荷时优先使用。 */
 export { useMapPopupState } from './MapLibre/facades/useMapPopupState';
 
+/** DXF 导出插件 API 解析工具。业务页面主动读取 DXF 导出能力时使用。 */
+export { resolveMapDxfExportApi } from './MapLibre/facades/mapPluginResolver';
+
 /** 单个业务数据源工厂。 */
 export { createMapBusinessSource } from './MapLibre/facades/createMapBusinessSource';
 

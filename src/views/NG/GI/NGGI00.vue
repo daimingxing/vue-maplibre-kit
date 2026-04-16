@@ -31,6 +31,11 @@
               {{ flashButtonText }}
             </ElButton>
           </mgl-custom-control>
+          <mgl-custom-control position="top-right" :noClasses="false">
+            <ElButton style="background: white; width: 140px" @click="downloadPrimaryBusinessSourceDxf">
+              导出主业务DXF
+            </ElButton>
+          </mgl-custom-control>
         </template>
         <template #dataSource>
           <!--
@@ -139,6 +144,29 @@
             清空线草稿
           </el-button>
         </div>
+      </section>
+
+      <section class="demo-panel-card">
+        <div class="demo-panel-head">
+          <h3>DXF 导出插件</h3>
+          <p>这个示例同时演示“插件默认导出全部业务源”和“业务层局部覆写导出”。</p>
+        </div>
+        <div class="demo-panel-kv-list">
+          <div class="demo-panel-kv">
+            <span>插件默认文件</span>
+            <strong>{{ DXF_DEFAULT_FILE_NAME }}</strong>
+          </div>
+          <div class="demo-panel-kv">
+            <span>默认坐标转换</span>
+            <strong>{{ dxfDefaultCrsText }}</strong>
+          </div>
+          <div class="demo-panel-kv">
+            <span>局部覆写文件</span>
+            <strong>{{ DXF_PRIMARY_ONLY_FILE_NAME }}</strong>
+          </div>
+        </div>
+        <p class="demo-panel-note">{{ dxfResolvedOptionsText }}</p>
+        <p class="demo-panel-note">{{ DXF_OVERRIDE_GUIDE_TEXT }}</p>
       </section>
     </div>
     <!-- 引入自定义的 Vue Popup 组件 -->
@@ -301,6 +329,7 @@ import {
   businessSources,
   layerStyles,
   mapExpressions,
+  resolveMapDxfExportApi,
   useBusinessMap,
   useMapPopupState,
 } from "vue-maplibre-kit/business";
@@ -322,6 +351,7 @@ import {
   createLineDraftPreviewPlugin,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
 } from "vue-maplibre-kit/plugins/line-draft-preview";
+import { createMapDxfExportPlugin } from "vue-maplibre-kit/plugins/map-dxf-export";
 import { createMapFeatureMultiSelectPlugin } from "vue-maplibre-kit/plugins/map-feature-multi-select";
 import { createMapFeatureSnapPlugin } from "vue-maplibre-kit/plugins/map-feature-snap";
 
@@ -450,6 +480,41 @@ const MEASURE_PROPERTY_PANEL_NOTE =
  * 按钮逻辑则统一复用这个常量，避免多处散落字符串。
  */
 const DEMO_STYLE_STATE_KEY = "demoStyled";
+
+/**
+ * DXF 导出示例默认源坐标系。
+ * 当前页面的 mock 数据是常见的经纬度坐标，因此这里先按 WGS84 作为默认来源。
+ * 如果后续真实业务源不是这个坐标系，可以在封装层统一改默认值。
+ */
+const DXF_DEFAULT_SOURCE_CRS = "EPSG:4326";
+
+/**
+ * DXF 导出示例默认目标坐标系。
+ * 这里示例性转成 Web Mercator，主要是为了演示插件会在导出前统一走 proj4 做坐标转换。
+ * 真实业务如果希望保留原坐标，直接把 sourceCrs / targetCrs 配成一致，或都不传即可。
+ */
+const DXF_DEFAULT_TARGET_CRS = "EPSG:3857";
+
+/** DXF 插件默认导出的文件名。 */
+const DXF_DEFAULT_FILE_NAME = "nggi00-business-all.dxf";
+
+/** 业务层局部覆写时的文件名。 */
+const DXF_PRIMARY_ONLY_FILE_NAME = "nggi00-primary-only.dxf";
+
+/**
+ * 默认坐标转换说明文本。
+ * 模板直接展示这行文字，让业务开发者一眼就能看到封装层默认值。
+ */
+const dxfDefaultCrsText = `${DXF_DEFAULT_SOURCE_CRS} -> ${DXF_DEFAULT_TARGET_CRS}`;
+
+/**
+ * DXF 局部覆写示例说明。
+ * 这里强调两层职责边界：
+ * 1. 插件 defaults 负责“封装层的稳定默认值”
+ * 2. `downloadDxf(overrides)` 负责“业务层本次任务的局部覆写”
+ */
+const DXF_OVERRIDE_GUIDE_TEXT =
+  "右上角插件自带的“导出DXF”按钮会按 defaults 导出全部业务 source；当前页面额外提供的“导出主业务DXF”按钮，只在本次任务里覆写 sourceIds、fileName 和 layerNameResolver。后续如果业务要按单次任务覆写 sourceCrs / targetCrs，也继续通过 downloadDxf(overrides) 传入即可。";
 
 import sendIcon from "./assets/send.svg";
 // import segment_stretch_test from './assets/segment-stretch.svg';
@@ -668,10 +733,37 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
   },
 });
 
+// 4. DXF 导出插件：第一版只面向业务 source，不包含 TerraDraw / Measure / 手绘要素。
+const mapDxfExportPlugin = createMapDxfExportPlugin({
+  enabled: true,
+  sourceRegistry: businessSourceRegistry,
+
+  // defaults 代表封装层默认值。
+  // 插件内置按钮会直接复用这组配置，适合沉淀成“整页统一的默认导出行为”。
+  defaults: {
+    fileName: DXF_DEFAULT_FILE_NAME,
+    sourceCrs: DXF_DEFAULT_SOURCE_CRS,
+    targetCrs: DXF_DEFAULT_TARGET_CRS,
+  },
+
+  // 这里把默认值显式写出来，是为了让业务示例更直观。
+  // 真实业务如果接受默认行为，也可以省略整个 control 配置。
+  control: {
+    enabled: true,
+    position: "top-right",
+    label: "导出DXF",
+  },
+});
+
 /**
  * 集中注册当前页面需要启用的地图能力扩展。
  */
-const mapPlugins = [mapFeatureSnapPlugin, lineDraftPreviewPlugin, mapFeatureMultiSelectPlugin];
+const mapPlugins = [
+  mapFeatureSnapPlugin,
+  lineDraftPreviewPlugin,
+  mapFeatureMultiSelectPlugin,
+  mapDxfExportPlugin,
+];
 
 /**
  * 当前页面统一使用的业务聚合门面。
@@ -1962,6 +2054,137 @@ const lineDraftStatusText = computed(() => {
     ? `线草稿能力门面当前已有临时结果（共 ${lineDraftPreview.featureCount.value} 个）；如果不需要，直接点击这里的“清空线草稿”即可。`
     : "当前没有线草稿。选中线并点击“创建线草稿”后，这里会通过 businessMap.draft 自动刷新状态。";
 });
+
+/**
+ * 统一格式化 DXF 导出的 source 范围文本。
+ * @param sourceIds 最终生效的 sourceId 列表
+ * @returns 适合示例面板直接展示的中文文本
+ */
+const formatDxfSourceIdsText = (sourceIds: string[] | null): string => {
+  if (!sourceIds || sourceIds.length === 0) {
+    return "全部业务 source";
+  }
+
+  return sourceIds.join("、");
+};
+
+/**
+ * 统一格式化 DXF 导出的坐标转换文本。
+ * @param sourceCrs 源坐标系
+ * @param targetCrs 目标坐标系
+ * @returns 适合示例面板直接展示的中文文本
+ */
+const formatDxfCrsText = (sourceCrs?: string, targetCrs?: string): string => {
+  if (!sourceCrs || !targetCrs) {
+    return "未完整配置 CRS，将按原坐标导出";
+  }
+
+  if (sourceCrs === targetCrs) {
+    return `${sourceCrs}（无需转换）`;
+  }
+
+  return `${sourceCrs} -> ${targetCrs}`;
+};
+
+/**
+ * 提取用户可读的错误消息。
+ * @param error 任意异常对象
+ * @returns 适合直接提示给用户的错误文本
+ */
+const getReadableErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "DXF 导出失败，请查看控制台日志";
+};
+
+/**
+ * 读取当前地图实例上的 DXF 导出插件 API。
+ * 业务层只通过 mapInitRef + 公开解析门面取能力，不感知插件宿主内部实现。
+ * @returns 当前地图上的 DXF 导出插件 API；尚未挂载时返回 null
+ */
+const getMapDxfExportApi = () => {
+  return resolveMapDxfExportApi(mapInitRef.value);
+};
+
+/**
+ * 业务层局部覆写的图层名解析器。
+ * 当前示例只导出主业务源，因此额外把 `mark` 拼进图层名里，
+ * 用来演示“业务层可以在单次任务里覆写 DXF 图层命名规则”。
+ * @param feature 当前业务要素
+ * @param sourceId 当前业务 sourceId
+ * @returns 当前要素在 DXF 中使用的图层名
+ */
+const resolvePrimaryBusinessDxfLayerName = (
+  feature: MapCommonFeature,
+  sourceId: string,
+): string => {
+  const featureMark =
+    typeof feature.properties?.mark === "string" && feature.properties.mark.length > 0
+      ? feature.properties.mark
+      : "default";
+
+  return `${sourceId}_${featureMark}`;
+};
+
+/**
+ * 当前示例面板展示的 DXF 默认配置说明。
+ * 这里直接读取插件 API 的 getResolvedOptions()，确保页面展示的是最终生效值，而不是手写猜测。
+ */
+const dxfResolvedOptionsText = computed(() => {
+  const api = getMapDxfExportApi();
+  if (!api) {
+    return "DXF 导出插件尚未挂载到地图实例。地图初始化完成后，这里会显示 defaults 和业务层覆写后的最终配置。";
+  }
+
+  // 不传 overrides，读取的是“插件 defaults 最终落地后的默认导出配置”。
+  const defaultOptions = api.getResolvedOptions();
+
+  // 传入与按钮一致的 overrides，展示“业务层本次任务局部覆写后”的最终配置。
+  const primaryOnlyOptions = api.getResolvedOptions({
+    sourceIds: [SOURCE_IDS.primary],
+    fileName: DXF_PRIMARY_ONLY_FILE_NAME,
+    layerNameResolver: resolvePrimaryBusinessDxfLayerName,
+  });
+
+  return [
+    `插件默认导出：范围 = ${formatDxfSourceIdsText(defaultOptions.sourceIds)}；文件 = ${defaultOptions.fileName}；坐标转换 = ${formatDxfCrsText(defaultOptions.sourceCrs, defaultOptions.targetCrs)}。`,
+    `业务层局部覆写后：范围 = ${formatDxfSourceIdsText(primaryOnlyOptions.sourceIds)}；文件 = ${primaryOnlyOptions.fileName}；图层名 = 按 sourceId + mark 生成。`,
+  ].join("\n");
+});
+
+/**
+ * 只导出主业务 source 的 DXF 文件。
+ * 这个按钮专门演示业务层如何在“不改插件 defaults”的前提下，
+ * 通过 `downloadDxf(overrides)` 为某一次导出任务临时覆写参数。
+ */
+const downloadPrimaryBusinessSourceDxf = async (): Promise<void> => {
+  const dxfExportApi = getMapDxfExportApi();
+  if (!dxfExportApi) {
+    ElMessage.warning("DXF 导出插件尚未初始化完成");
+    return;
+  }
+
+  try {
+    const result = await dxfExportApi.downloadDxf({
+      sourceIds: [SOURCE_IDS.primary],
+      fileName: DXF_PRIMARY_ONLY_FILE_NAME,
+      layerNameResolver: resolvePrimaryBusinessDxfLayerName,
+    });
+
+    if (result.warnings.length > 0) {
+      console.warn("[NGGI00 DXF 示例] 本次导出包含警告", result.warnings);
+    }
+
+    ElMessage.success(
+      `已导出主业务 DXF：共处理 ${result.featureCount} 个要素，写入 ${result.entityCount} 个实体`,
+    );
+  } catch (error) {
+    console.error("[NGGI00 DXF 示例] 导出失败", error);
+    ElMessage.error(getReadableErrorMessage(error));
+  }
+};
 
 /**
  * 根据最新的选中集变化上下文更新示例面板文案。

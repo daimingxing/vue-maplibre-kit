@@ -380,6 +380,9 @@ export { useLineDraftPreview } from './MapLibre/facades/useLineDraftPreview';
 /** 线草稿门面返回类型。约束 `useLineDraftPreview` 结果时使用。 */
 export type { UseLineDraftPreviewResult } from './MapLibre/facades/useLineDraftPreview';
 
+/** DXF 导出插件 API 解析工具。需要主动读取 DXF 插件能力时使用。 */
+export { resolveMapDxfExportApi } from './MapLibre/facades/mapPluginResolver';
+
 /** 高层业务聚合门面。业务页想少记低层入口时优先从这里开始。 */
 export { useBusinessMap } from './MapLibre/facades/useBusinessMap';
 
