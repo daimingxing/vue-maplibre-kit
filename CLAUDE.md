@@ -4,87 +4,81 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`vue-maplibre-kit` is a Vue 3 component library that wraps MapLibre GL JS with a plugin-based architecture. It provides a unified map container (`MapLibreInit`) that manages map controls, drawing/measurement tools (via TerraDraw), layer interactions, and extensible plugins. The library is published as an ES module with multiple entry points.
+Vue 3 组件库，封装 MapLibre GL JS，提供插件化架构的地图容器 `MapLibreInit`，集成 TerraDraw 绘图工具。以 ES 模块多入口方式发布。
+
+## 维护原则
+
+### npm 库优先
+
+- 本项目是 **npm 组件库**，不是业务项目
+- 所有设计服务于"外部项目消费"目标
+- 判断标准：**真实项目安装后，能否仅依赖公开出口完成接入**
+
+### 门面模式
+
+- 对外能力必须通过门面出口暴露：`src/index.ts`、`src/geometry.ts`、`src/plugins/*.ts`
+- 业务层、示例层、`views/` 禁止直接依赖 `src/MapLibre/**` 内部实现
+- 示例需要底层能力时，先导出到门面入口，再通过门面消费
+- `@/` 别名仅用于库内部实现，业务模拟层使用门面路径
+
+### NGGI 业务模拟规则
+
+- `src/views/NG/GI/**` 是业务层模拟页面，演示真实项目如何消费 npm 包
+- 引用库能力使用包名或公开子路径：`vue-maplibre-kit`、`vue-maplibre-kit/geometry`、`vue-maplibre-kit/plugins/...`
+- mock 数据、示例资源放在页面邻近目录，不污染库核心目录
+- 禁止直接 import 库内部私有模块
+
+### 新增能力执行规则
+
+新增能力时同步检查：
+- `src` 门面导出是否完整
+- `package.json` 的 `exports` 是否需要补充
+- Vite / TypeScript 别名是否需要同步
+- 示例页是否已改用公开出口
+
+### 示例与核心边界
+
+- `src/MapLibre/**`：库核心实现区，避免被业务模拟层直接引用
+- `src/views/**`：开发演示区，不属于库发布物，不决定核心实现耦合方式
 
 ## Commands
 
-- **Dev server**: `npm run dev` (Vite dev server)
-- **Build**: `npm run build` (runs `vue-tsc -b && vite build` — type-checks then builds library)
-- **Preview**: `npm run preview`
-- No test runner or linter is configured.
+- `npm run dev` — 开发服务器
+- `npm run build` — 类型检查 + 构建库
+- `npm run preview` — 预览构建结果
 
 ## Build Configuration
 
-Vite library mode with multiple entry points:
-- `src/index.ts` → main entry (MapLibreInit component + core types)
-- `src/geometry.ts` → geometry utilities (line extension, corridor, measurement tools)
-- `src/plugins/map-feature-snap.ts` → snap plugin (re-exports from `src/MapLibre/plugins/map-feature-snap/`)
-- `src/plugins/line-draft-preview.ts` → line draft preview plugin (re-exports from `src/MapLibre/plugins/line-draft-preview/`)
+Vite 库模式多入口：
+- `src/index.ts` → 主入口（MapLibreInit + 核心类型）
+- `src/geometry.ts` → 几何工具
+- `src/plugins/*.ts` → 插件入口（tree-shaking）
 
-External dependencies (not bundled): vue, maplibre-gl, vue-maplibre-gl, terra-draw, @watergis/maplibre-gl-terradraw, element-plus, geojson, mitt, lodash-es.
-
-Path alias: `@/` → `./src/`
+外部依赖（不打包）：vue, maplibre-gl, vue-maplibre-gl, terra-draw, @watergis/maplibre-gl-terradraw, element-plus, geojson, mitt, lodash-es
 
 ## Architecture
 
-### Core Container — `src/MapLibre/core/mapLibre-init.vue`
+### 核心容器 `src/MapLibre/core/mapLibre-init.vue`
 
-The central component. It:
-1. Mounts the MapLibre GL map via `vue-maplibre-gl`'s `MglMap`
-2. Manages standard map controls (navigation, fullscreen, scale, etc.) via `controls` prop
-3. Hosts TerraDraw drawing and measurement controls (`MaplibreTerradrawControl`, `MaplibreMeasureControl`)
-4. Manages line decoration layers for draw/measure tools
-5. Delegates to the **plugin host** for extensible capabilities
+挂载 MapLibre 地图，管理控件、TerraDraw 绘图/测量工具、图层交互、插件系统。
 
-Props: `mapKey`, `mapOptions`, `controls`, `mapInteractive`, `plugins`
+### 插件系统 `src/MapLibre/plugins/`
 
-### Plugin System — `src/MapLibre/plugins/types.ts` + `src/MapLibre/core/useMapPluginHost.ts`
+- 通过 `defineMapPlugin()` 定义，`plugins` prop 注册
+- 插件接收 `MapPluginContext`，返回 `MapPluginInstance`（可贡献渲染项、交互补丁、snap 服务、API）
+- 内置插件：`map-feature-snap`（捕捉）、`line-draft-preview`（线预览）
 
-Plugins are defined with `defineMapPlugin()` and registered via the `plugins` prop on `MapLibreInit`. Each plugin:
-- Has a `type` string and `createInstance(context)` factory
-- Receives a `MapPluginContext` with access to map instance, options, and interaction state
-- Returns a `MapPluginInstance` that can contribute: render items (Vue components injected into the map), map interactive patches, snap services, API, and reactive state
+### 关键模式
 
-The plugin host (`useMapPluginHost`) manages plugin lifecycle (create/reuse/destroy), aggregates render items and interaction patches, and exposes a query interface (`MapPluginHostExpose`).
+- 中文注释和 JSDoc
+- Composable 模式（`use*`、`create*`）
+- `shallowRef` 避免深度响应
+- 描述符数组注册插件，支持动态增删和实例复用
+- 门面优先导出，示例消费门面而非内部路径
 
-Built-in plugins:
-- **map-feature-snap** (`src/MapLibre/plugins/map-feature-snap/`): Provides snap-to-feature capability for map layers and TerraDraw tools. Contributes a `mapSnap` service.
-- **line-draft-preview** (`src/MapLibre/plugins/line-draft-preview/`): Manages temporary line/corridor draft previews with their own data source and rendering.
+## 开发决策检查清单
 
-### Layer Interaction — `src/MapLibre/composables/useMapInteractive.ts`
-
-Unified hover/click/select management for regular map layers. Handles feature-state hover/selected, cursor changes, snap integration, and event delegation with priority ordering.
-
-### Key Patterns
-
-- **Chinese comments**: All code comments and JSDoc are written in Chinese (Simplified).
-- **Composable pattern**: Business logic is extracted into `use*` composables and `create*` factory functions.
-- **ShallowRef for instances**: Control refs and plugin records use `shallowRef` to avoid deep reactivity on complex objects.
-- **Descriptor-based plugin registration**: Plugins are passed as descriptor arrays, enabling dynamic add/remove with instance reuse when type+definition unchanged.
-- **TerraDraw mode instantiation**: Mode config objects are deep-merged then manually instantiated into TerraDraw mode classes (TerraDrawLineStringMode, etc.).
-
-## TypeScript
-
-- Solution-style tsconfig: `tsconfig.json` references `tsconfig.app.json` (source) and `tsconfig.node.json` (vite config)
-- Strict unused checks enabled (`noUnusedLocals`, `noUnusedParameters`)
-- Uses `@vue/tsconfig/tsconfig.dom.json` as base for app config
-
-## File Organization
-
-```
-src/
-  index.ts                    # Main library entry
-  geometry.ts                 # Geometry utilities entry
-  plugins/                    # Thin re-export entry points for tree-shaking
-  MapLibre/
-    core/                     # MapLibreInit component + plugin host
-    plugins/                  # Plugin implementations (each in own directory)
-      types.ts                # Core plugin type system
-      map-feature-snap/       # Snap plugin
-      line-draft-preview/     # Line draft preview plugin
-    composables/              # Shared composables (useMapInteractive, useMapEffect, useMapDataUpdate)
-    shared/                   # Shared types and utilities
-    terradraw/                # TerraDraw integration (config, interaction, line decoration)
-  views/                      # Demo/dev views (not part of library build)
-docs/                         # Knowledge base references for MapLibre, TerraDraw, vue-maplibre-gl
-```
+1. 改动是否符合"npm 库优先"目标？
+2. 业务模拟层是否只依赖门面出口？
+3. 示例页需要新能力时，是否已先补齐公共门面？
+4. mock 数据、示例资源是否留在业务模拟层？

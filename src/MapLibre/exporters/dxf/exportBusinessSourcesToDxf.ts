@@ -18,8 +18,11 @@ import {
   type ResolvedMapDxfExportTaskOptions,
 } from './types';
 
-/** 坐标转换函数。 */
-type CoordinateTransform = (position: Position) => Position;
+/**
+ * 坐标转换函数。
+ * 返回 null 表示当前坐标转换失败，需要由上层跳过该坐标。
+ */
+type CoordinateTransform = (position: Position) => Position | null;
 
 /**
  * 判断对象是否显式包含指定字段。
@@ -170,7 +173,7 @@ function resolveTargetSources(
  * 预编译 proj4 投影对象以避免重复解析投影定义字符串。
  * @param taskOptions 导出任务配置
  * @param warnings 警告列表
- * @returns 最终生效的坐标转换函数
+ * @returns 最终生效的坐标转换函数；单个坐标转换失败时返回 null
  */
 function createCoordinateTransform(
   taskOptions: ResolvedMapDxfExportTaskOptions,
@@ -209,10 +212,10 @@ function createCoordinateTransform(
       }
       return [x, y] as Position;
     } catch (error) {
-      // 单个坐标转换失败时，记录警告并返回原坐标副本
+      // 单个坐标转换失败时，返回 null 标记该顶点无效，由上层跳过该顶点或整个几何
       const errorMessage = error instanceof Error ? error.message : String(error);
-      warnings.push(`坐标转换失败 [${position.join(', ')}]：${errorMessage}`);
-      return [...position] as Position;
+      warnings.push(`坐标转换失败 [${position.join(', ')}]：${errorMessage}，该顶点将被跳过`);
+      return null;
     }
   };
 }
@@ -231,18 +234,33 @@ function createPolylineVertices(
   transform: CoordinateTransform,
   warnings: string[],
   featureLabel: string
-): LWPolylineVertex[] {
+): LWPolylineVertex[] | null {
   let hasZCoordinate = false;
 
-  const vertices = positions.map((position) => {
+  const vertices: LWPolylineVertex[] = [];
+
+  for (const position of positions) {
     const transformedPosition = transform(position);
+
+    // 如果坐标转换失败（返回 null），跳过该顶点
+    if (transformedPosition === null) {
+      continue;
+    }
+
     if (transformedPosition.length > 2 && transformedPosition[2] !== undefined) {
       hasZCoordinate = true;
     }
-    return {
+
+    vertices.push({
       point: point2d(transformedPosition[0], transformedPosition[1]),
-    };
-  });
+    });
+  }
+
+  // 如果所有顶点都转换失败，返回 null
+  if (vertices.length === 0) {
+    warnings.push(`要素 '${featureLabel}' 的所有顶点坐标转换均失败，该几何部分将被跳过`);
+    return null;
+  }
 
   if (hasZCoordinate) {
     warnings.push(
@@ -314,10 +332,20 @@ function addPointEntities(
   writer: DxfWriter,
   positions: Position[],
   layerName: string,
-  transform: CoordinateTransform
+  transform: CoordinateTransform,
+  warnings: string[],
+  featureLabel: string
 ): number {
+  let addedCount = 0;
+
   positions.forEach((position) => {
     const transformedPosition = transform(position);
+
+    // 如果坐标转换失败（返回 null），跳过该点
+    if (transformedPosition === null) {
+      return;
+    }
+
     writer.addPoint(
       transformedPosition[0],
       transformedPosition[1],
@@ -326,9 +354,15 @@ function addPointEntities(
         layerName,
       }
     );
+    addedCount += 1;
   });
 
-  return positions.length;
+  // 如果所有点都转换失败，记录警告
+  if (addedCount === 0 && positions.length > 0) {
+    warnings.push(`要素 '${featureLabel}' 的所有点坐标转换均失败，该要素将被跳过`);
+  }
+
+  return addedCount;
 }
 
 /**
@@ -364,13 +398,25 @@ function addPolylineEntities(
       return;
     }
 
-    writer.addLWPolyline(
-      createPolylineVertices(lineCoordinates, transform, warnings, featureLabel),
-      {
-        layerName,
-        flags: closed ? LWPolylineFlags.Closed : LWPolylineFlags.None,
-      }
-    );
+    const vertices = createPolylineVertices(lineCoordinates, transform, warnings, featureLabel);
+
+    // 如果所有顶点都转换失败，跳过该几何部分
+    if (vertices === null) {
+      return;
+    }
+
+    // 转换后的有效顶点数可能少于原始顶点数，需要重新检查最小点数要求
+    if (vertices.length < minPoints) {
+      warnings.push(
+        `要素 '${featureLabel}' 的第 ${index + 1} 个几何部分在坐标转换后有效点数不足（需要至少 ${minPoints} 个点，实际 ${vertices.length} 个），已跳过`
+      );
+      return;
+    }
+
+    writer.addLWPolyline(vertices, {
+      layerName,
+      flags: closed ? LWPolylineFlags.Closed : LWPolylineFlags.None,
+    });
     entityCount += 1;
   });
 
@@ -399,9 +445,9 @@ function addFeatureGeometryToDxf(
 
   switch (feature.geometry.type) {
     case 'Point':
-      return addPointEntities(writer, [feature.geometry.coordinates], layerName, transform);
+      return addPointEntities(writer, [feature.geometry.coordinates], layerName, transform, warnings, featureLabel);
     case 'MultiPoint':
-      return addPointEntities(writer, feature.geometry.coordinates, layerName, transform);
+      return addPointEntities(writer, feature.geometry.coordinates, layerName, transform, warnings, featureLabel);
     case 'LineString':
       return addPolylineEntities(
         writer,
