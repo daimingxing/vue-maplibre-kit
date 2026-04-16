@@ -30,6 +30,9 @@ export { default as MapLibreInit } from './MapLibre/core/mapLibre-init.vue';
 /** 地图弹窗组件。展示业务要素详情或临时操作面板时使用。 */
 export { default as MglPopup } from './MapLibre/core/mgl-popup.vue';
 
+/** 自定义控件组件门面。业务层需要插槽挂自定义按钮时使用。 */
+export { MglCustomControl } from 'vue-maplibre-gl';
+
 /** 业务 source + 业务图层渲染组件。业务页面声明图层时优先使用。 */
 export { default as MapBusinessSourceLayers } from './MapLibre/facades/MapBusinessSourceLayers.vue';
 
@@ -144,6 +147,9 @@ export type { TerradrawLineDecorationStyle } from './MapLibre/shared/mapLibre-co
 
 /** 地图根组件公开实例类型。 */
 export type { MapLibreInitExpose } from './MapLibre/core/mapLibre-init.types';
+
+/** 地图初始化配置类型。业务层声明 mapOptions 时优先使用。 */
+export type { MapOptions } from 'maplibre-gl';
 
 /** feature-state 目标类型。 */
 export type { MapFeatureStateTarget } from './MapLibre/core/mapLibre-init.types';

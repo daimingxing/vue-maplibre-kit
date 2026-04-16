@@ -295,6 +295,7 @@
 import {
   MapBusinessSourceLayers,
   MapLibreInit,
+  MglCustomControl,
   MglPopup,
   businessLayers,
   businessSources,
@@ -302,11 +303,10 @@ import {
   mapExpressions,
   useBusinessMap,
   useMapPopupState,
+  type MapOptions,
 } from "vue-maplibre-kit/business";
 import type * as BusinessKit from "vue-maplibre-kit/business";
 import FeaturePropertyEditor from "./components/FeaturePropertyEditor.vue";
-import type { MapOptions } from "maplibre-gl";
-import { MglCustomControl } from "vue-maplibre-gl";
 import { computed, ref, reactive } from "vue";
 import mapGeojson from "./mock/map.geojson";
 import mapGeojson2 from "./mock/map2.geojson";
