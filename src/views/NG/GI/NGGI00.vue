@@ -1,4 +1,5 @@
 <template>
+  <div class="page">
     <!-- 需要一个地图容器，设置地图容器宽高 -->
     <div class="maplibre-area">
       <map-libre-init
@@ -7,7 +8,6 @@
         :controls="mapControls"
         :mapInteractive="mapInteractive"
         :plugins="mapPlugins"
-        @pluginStateChange="handlePluginStateChange"
       >
         <!-- 自定义控件插槽 -->
         <template #MglCustomControl>
@@ -22,121 +22,183 @@
             >
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="changeStyle"
-              >改变图层样式</ElButton
-            >
+            <ElButton style="background: white; width: 120px" @click="changeStyle">
+              切换样式
+            </ElButton>
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="changeFeatureStyle"
-              >改变特定要素样式</ElButton
-            >
+            <ElButton style="background: white; width: 120px" @click="toggleFlash">
+              {{ flashButtonText }}
+            </ElButton>
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="toggleFlash"
-              >切换要素闪烁</ElButton
-            >
+            <ElButton style="background: white; width: 140px" @click="downloadPrimaryBusinessSourceDxf">
+              导出主业务DXF
+            </ElButton>
           </mgl-custom-control>
         </template>
         <template #dataSource>
-          <!-- 这里给 source 加上 promoteId="id"，这非常重要！
-               它的作用是把 properties 里的 'id' 字段提升为 Feature 顶层的原生 id，
-               因为 Feature State 必须依赖顶层原生 id 才能工作。 -->
-          <mgl-geo-json-source :sourceId="PRIMARY_SOURCE_ID" :data="test_geojson" promoteId="id">
-            <!-- 1. 渲染点数据 (Point / MultiPoint) -->
-            <!-- 过滤条件：几何类型必须是 Point，且属性(properties)中的 mark 字段必须等于 'hole' -->
-            <mgl-circle-layer
-              layer-id="circleLayer"
-              :layout="circleLayout"
-              :paint="circlePaint"
-              :filter="['all', ['==', '$type', 'Point'], ['==', 'mark', 'hole']]"
-            />
-            <!-- 2. 渲染点数据 根据属性匹配 (多条件过滤示例) -->
-            <!-- 过滤条件：几何类型必须是 Point，且属性(properties)中的 mark 字段必须等于 'dec' -->
-            <mgl-circle-layer
-              layer-id="circleLayerDec"
-              :layout="circleLayout"
-              :paint="circlePaint"
-              :filter="['all', ['==', '$type', 'Point'], ['==', 'mark', 'dec']]"
-            />
-            <!-- 3. 渲染线数据 (LineString / MultiLineString) -->
-            <mgl-line-layer
-              :layer-id="PRIMARY_LINE_LAYER_ID"
-              :layout="lineLayout"
-              :paint="linePaint"
-              :filter="['==', '$type', 'LineString']"
-            />
-            <!-- 4. 渲染面数据 (Polygon / MultiPolygon) -->
-            <mgl-fill-layer
-              layer-id="fillLayer"
-              :layout="fillLayout"
-              :paint="fillPaint"
-              :filter="['==', '$type', 'Polygon']"
-              :interactive="false"
-            />
-            <!-- 5. 渲染标签图层 (Symbol) -->
-            <!-- 
-              这里用点数据做演示，展示每个点的 id
-            -->
-            <mgl-symbol-layer
-              layer-id="symbolLayer"
-              :layout="symbolLayout"
-              :paint="symbolPaint"
-              :filter="['==', '$type', 'Point']"
-            />
-          </mgl-geo-json-source>
-          <mgl-geo-json-source
-            :sourceId="SECONDARY_SOURCE_ID"
-            :data="test_geojson_secondary"
-            promoteId="id"
-          >
-            <mgl-line-layer
-              :layer-id="SECONDARY_LINE_LAYER_ID"
-              :layout="lineLayout"
-              :paint="linePaint"
-              :filter="['==', '$type', 'LineString']"
-            />
-            <mgl-fill-layer
-              :layer-id="SECONDARY_FILL_LAYER_ID"
-              :layout="fillLayout"
-              :paint="fillPaint"
-              :filter="['==', '$type', 'Polygon']"
-              :interactive="false"
-            />
-          </mgl-geo-json-source>
+          <!--
+            业务层现在优先通过 MapBusinessSourceLayers 声明高频图层。
+            如果 geometryTypes / where / filter 仍然不够表达业务规则，再回退到原始 Mgl 图层写法。
+          -->
+          <map-business-source-layers
+            :source="primaryBusinessSource"
+            :layers="primaryBusinessLayers"
+          />
+          <map-business-source-layers
+            :source="secondaryBusinessSource"
+            :layers="secondaryBusinessLayers"
+          />
         </template>
       </map-libre-init>
     </div>
+    <!-- 业务层示例面板：每一块只演示一种推荐写法，方便按功能阅读 -->
+    <div class="demo-panel-board">
+      <section class="demo-panel-card">
+        <div class="demo-panel-head">
+          <h3>当前选中态面板</h3>
+          <p>直接使用 `useBusinessMap(...).selection` 驱动 UI。</p>
+        </div>
+        <div class="demo-panel-actions">
+          <el-button type="primary" plain :disabled="isSelectionActive" @click="activateSelection">
+            进入多选
+          </el-button>
+          <el-button plain :disabled="!hasSelection" @click="clearSelection">清空选中</el-button>
+          <el-button plain :disabled="!isSelectionActive" @click="deactivateSelection">
+            退出多选
+          </el-button>
+        </div>
+        <div class="demo-panel-kv-list">
+          <div class="demo-panel-kv">
+            <span>当前模式</span>
+            <strong>{{ selectionModeText }}</strong>
+          </div>
+          <div class="demo-panel-kv">
+            <span>选中数量</span>
+            <strong>{{ selectedCount }} 个</strong>
+          </div>
+          <div class="demo-panel-kv">
+            <span>要素 ID</span>
+            <strong>{{ selectedFeatureIdsText }}</strong>
+          </div>
+          <div class="demo-panel-kv">
+            <span>circleLayer 业务 ID</span>
+            <strong>{{ selectedCircleLayerIdsText }}</strong>
+          </div>
+          <div class="demo-panel-kv">
+            <span>图层分布</span>
+            <strong>{{ selectedLayerDistributionText }}</strong>
+          </div>
+        </div>
+        <p class="demo-panel-note">{{ selectionGuideText }}</p>
+      </section>
+
+      <section class="demo-panel-card">
+        <div class="demo-panel-head">
+          <h3>选中集变化日志</h3>
+          <p>这里只演示 `onSelectionChange` 的快捷提取方法。</p>
+        </div>
+        <p class="demo-panel-summary">
+          {{ selectionPanelState.lastChangeSummary }}
+        </p>
+      </section>
+
+      <section class="demo-panel-card">
+        <div class="demo-panel-head">
+          <h3>多选右键摘要</h3>
+          <p>右键时直接复用 helper，快速生成业务摘要。</p>
+        </div>
+        <p class="demo-panel-summary">
+          {{ selectionPanelState.contextMenuSummary }}
+        </p>
+      </section>
+
+      <section class="demo-panel-card">
+        <div class="demo-panel-head">
+          <h3>线操作入口</h3>
+          <p>线弹窗、线廊生成和线草稿都只走本地要素查询门面。</p>
+        </div>
+        <p class="demo-panel-summary">{{ selectedLineOperationText }}</p>
+      </section>
+
+      <section class="demo-panel-card">
+        <div class="demo-panel-head">
+          <h3>线草稿状态</h3>
+          <p>线草稿状态现在直接通过 `useBusinessMap(...).draft` 读取。</p>
+        </div>
+        <div class="demo-panel-kv-list">
+          <div class="demo-panel-kv">
+            <span>当前状态</span>
+            <strong>{{ hasLineDraftFeatures ? "已有草稿" : "暂无草稿" }}</strong>
+          </div>
+        </div>
+        <p class="demo-panel-summary">{{ lineDraftStatusText }}</p>
+        <div class="demo-panel-actions">
+          <el-button
+            type="warning"
+            plain
+            :disabled="!hasLineDraftFeatures"
+            @click="handleClearLineDraftFeatures"
+          >
+            清空线草稿
+          </el-button>
+        </div>
+      </section>
+
+      <section class="demo-panel-card">
+        <div class="demo-panel-head">
+          <h3>DXF 导出插件</h3>
+          <p>这个示例同时演示“插件默认导出全部业务源”和“业务层局部覆写导出”。</p>
+        </div>
+        <div class="demo-panel-kv-list">
+          <div class="demo-panel-kv">
+            <span>插件默认文件</span>
+            <strong>{{ DXF_DEFAULT_FILE_NAME }}</strong>
+          </div>
+          <div class="demo-panel-kv">
+            <span>默认坐标转换</span>
+            <strong>{{ dxfDefaultCrsText }}</strong>
+          </div>
+          <div class="demo-panel-kv">
+            <span>局部覆写文件</span>
+            <strong>{{ DXF_PRIMARY_ONLY_FILE_NAME }}</strong>
+          </div>
+        </div>
+        <p class="demo-panel-note">{{ dxfResolvedOptionsText }}</p>
+        <p class="demo-panel-note">{{ DXF_OVERRIDE_GUIDE_TEXT }}</p>
+      </section>
+    </div>
     <!-- 引入自定义的 Vue Popup 组件 -->
     <mgl-popup
-      v-model:visible="popupState.visible"
-      :lngLat="popupState.lngLat"
+      v-model:visible="popupVisible"
+      :lngLat="popupLngLat"
       :options="{ closeButton: true, closeOnClick: true, maxWidth: '420px' }"
     >
       <!-- 动态判断内容：这个例子中使用了type属性来分辨要素 -->
-      <div
-        v-if="popupState.type === popupType.line"
-        class="my-popup-container"
-        style="min-width: 320px"
-      >
+      <div v-if="hasLinePopup" class="my-popup-container" style="min-width: 320px">
         <h3 style="margin: 0 0 10px 0; color: #409eff">
-          <el-icon><InfoFilled /></el-icon> 线操作
+          <el-icon>
+            <InfoFilled />
+          </el-icon>
+          线操作
         </h3>
         <el-descriptions :column="1" border size="small">
           <el-descriptions-item label="编号">
-            <el-tag size="small">{{ popupState.featureProps.id }}</el-tag>
+            <el-tag size="small">{{ popupLineFeatureProps.id }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="总长度">
-            {{ popupState.lineLengthMeters.toFixed(2) }} m
+            {{ popupLineLengthMeters.toFixed(2) }} m
           </el-descriptions-item>
           <el-descriptions-item label="选中线段">
             {{
-              popupState.selectedSegmentIndex >= 0
-                ? `第 ${popupState.selectedSegmentIndex + 1} 段`
-                : '未识别'
+              popupSelectedSegmentIndex >= 0
+                ? `第 ${popupSelectedSegmentIndex + 1} 段`
+                : "未识别"
             }}
           </el-descriptions-item>
           <el-descriptions-item label="当前段长">
-            {{ popupState.selectedSegmentLengthMeters.toFixed(2) }} m
+            {{ popupSelectedSegmentLengthMeters.toFixed(2) }} m
           </el-descriptions-item>
         </el-descriptions>
 
@@ -188,65 +250,70 @@
       </div>
 
       <!-- 动态判断内容：如果是点 -->
-      <div
-        v-else-if="popupState.type === popupType.point"
-        class="my-popup-container"
-        style="min-width: 200px"
-      >
+      <div v-else-if="hasPointPopup" class="my-popup-container" style="min-width: 200px">
         <h3 style="margin: 0 0 10px 0; color: #67c23a">
-          <el-icon><Location /></el-icon> 站点信息
+          <el-icon>
+            <Location />
+          </el-icon>
+          站点信息
         </h3>
-        <p><strong>名称：</strong> {{ popupState.featureProps.name || '未命名站点' }}</p>
+        <p>
+          <strong>名称：</strong>
+          {{ popupPointFeatureProps.name || "未命名站点" }}
+        </p>
         <p>
           <strong>状态：</strong>
-          <el-tag
-            :type="popupState.featureProps.status === 'normal' ? 'success' : 'danger'"
-            size="small"
-          >
-            {{ popupState.featureProps.status === 'normal' ? '正常' : '异常' }}
+          <el-tag :type="popupPointFeatureProps.status === 'normal' ? 'success' : 'danger'" size="small">
+            {{ popupPointFeatureProps.status === "normal" ? "正常" : "异常" }}
           </el-tag>
         </p>
         <el-button type="success" size="small" style="width: 100%" @click="handlePopupAction">
           进入站点视图
         </el-button>
       </div>
-      <div
-        v-else-if="popupState.type === popupType.terradraw"
-        class="my-popup-container"
-        style="min-width: 260px"
-      >
+      <div v-else-if="hasTerradrawPopup" class="my-popup-container" style="min-width: 260px">
         <h3 style="margin: 0 0 10px 0; color: #e6a23c">
-          <el-icon><InfoFilled /></el-icon> TerraDraw 要素
+          <el-icon>
+            <InfoFilled />
+          </el-icon>
+          TerraDraw 要素
         </h3>
         <el-descriptions :column="1" border size="small">
           <el-descriptions-item label="要素 ID">
             <el-tag size="small">
-              {{ popupState.featureId || popupState.featureProps.id || '无' }}
+              {{ popupTerradrawFeatureIdText }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="几何类型">
-            {{ popupState.geometryType || '未知' }}
+            {{ popupTerradrawGeometryType || "未知" }}
           </el-descriptions-item>
           <el-descriptions-item label="绘制模式">
-            {{ popupState.featureProps.mode || '未知' }}
+            {{ popupTerradrawFeatureProps.mode || "未知" }}
           </el-descriptions-item>
         </el-descriptions>
         <div style="margin-top: 10px">
           <div style="margin-bottom: 4px; font-weight: bold; color: #606266">属性快照</div>
           <pre class="terradraw-popup-json">{{
-            JSON.stringify(popupState.featureProps, null, 2)
+            JSON.stringify(popupTerradrawFeatureProps, null, 2)
           }}</pre>
         </div>
       </div>
     </mgl-popup>
-    <!-- 引入自定义的属性配置小窗口 -->
+    <!--
+      属性面板示例已切到“单键保存 / 显式删除”模式。
+      业务层不再整包覆盖属性对象，避免误删系统字段，也更贴近真实业务的增量修改场景。
+    -->
     <feature-property-editor
       v-model:visible="contextMenuState.visible"
       :position="contextMenuState.position"
-      :properties="contextMenuState.properties"
-      :forbiddenKeys="contextMenuState.targetType === 'map' ? [] : terraDrawReservedPropertyKeys"
-      @save="handleSaveProperty"
+      :panelState="contextMenuState.panelState"
+      :rawProperties="contextMenuState.rawProperties"
+      :summaryRows="contextMenuState.summaryRows"
+      :note="contextMenuState.note"
+      @save-item="handleSavePropertyItem"
+      @remove-item="handleRemovePropertyItem"
     />
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -254,149 +321,258 @@
  * 引入地图初始化组件，作为地图页面的容器。
  */
 import {
+  MapBusinessSourceLayers,
   MapLibreInit,
+  MglCustomControl,
   MglPopup,
-  TERRADRAW_RESERVED_PROPERTY_KEYS,
+  businessLayers,
+  businessSources,
+  layerStyles,
+  mapExpressions,
+  resolveMapDxfExportApi,
+  useBusinessMap,
+  useMapPopupState,
+} from "vue-maplibre-kit/business";
+import type * as BusinessKit from "vue-maplibre-kit/business";
+import FeaturePropertyEditor from "./components/FeaturePropertyEditor.vue";
+import { computed, ref, reactive } from "vue";
+import mapGeojson from "./mock/map.geojson";
+import mapGeojson2 from "./mock/map2.geojson";
+import { ElButton, ElInputNumber, ElMessage } from "element-plus";
+import { InfoFilled, Location } from "@element-plus/icons-vue";
+import {
+  MapLineMeasureTool,
+  MapLineExtensionTool,
+  type MapCommonFeatureCollection,
+  type MapCommonFeature,
+  type MapCommonLineFeature,
+} from "vue-maplibre-kit/geometry";
+import {
+  createLineDraftPreviewPlugin,
+  LINE_DRAFT_PREVIEW_SOURCE_ID,
+} from "vue-maplibre-kit/plugins/line-draft-preview";
+import { createMapDxfExportPlugin } from "vue-maplibre-kit/plugins/map-dxf-export";
+import { createMapFeatureMultiSelectPlugin } from "vue-maplibre-kit/plugins/map-feature-multi-select";
+import { createMapFeatureSnapPlugin } from "vue-maplibre-kit/plugins/map-feature-snap";
+
+// 业务 source 工厂统一从分组入口读取，避免业务页面在根入口平铺查找。
+const { createMapBusinessSource, createMapBusinessSourceRegistry } = businessSources;
+
+// 业务图层工厂同样按职责分组，方便业务开发者记忆“去哪里找什么”。
+const {
+  createCircleBusinessLayer,
+  createFillBusinessLayer,
+  createLineBusinessLayer,
+  createSymbolBusinessLayer,
+} = businessLayers;
+
+// 样式工厂统一放在 layerStyles 分组下，减少 import 列表长度。
+const {
   createCircleLayerStyle,
   createFillLayerStyle,
   createLineLayerStyle,
   createSymbolLayerStyle,
-  saveFeatureProperties,
-  useMapEffect,
-  withFlashColor,
-  type MapControlsConfig,
-  type MapLayerInteractiveContext,
-  type MapLayerInteractiveOptions,
-  type MapLibreInitExpose,
-  type MapPluginStateChangePayload,
-  type TerradrawControlType,
-  type TerradrawInteractiveContext,
-  type TerradrawLineDecorationStyle,
-} from 'vue-maplibre-kit';
-import FeaturePropertyEditor from './components/FeaturePropertyEditor.vue';
-import type { LngLatLike, MapOptions } from 'maplibre-gl';
-import {
-  useMap,
-  MglGeoJsonSource,
-  MglFillLayer,
-  MglLineLayer,
-  MglCircleLayer,
-  MglSymbolLayer,
-  MglCustomControl,
-} from 'vue-maplibre-gl';
-import { ref, reactive, type Ref } from 'vue';
-import mapGeojson from './mock/map.geojson';
-import mapGeojson2 from './mock/map2.geojson';
-import { ElButton, ElInputNumber, ElMessage } from 'element-plus';
-import { InfoFilled, Location } from '@element-plus/icons-vue';
-import {
-  MapLineMeasureTool,
-  MapLineCorridorTool,
-  MapLineExtensionTool,
-  createMapSourceFeatureRef,
-  type MapCommonFeatureCollection,
-  type MapCommonFeature,
-  type MapCommonLineFeature,
-  type MapSourceFeatureRef,
-} from 'vue-maplibre-kit/geometry';
-import {
-  createLineDraftPreviewPlugin,
-  LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
-  LINE_DRAFT_PREVIEW_SOURCE_ID,
-  type LineDraftPreviewPluginApi,
-  type LineDraftPreviewStateChangePayload,
-} from 'vue-maplibre-kit/plugins/line-draft-preview';
-import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature-snap';
+} = layerStyles;
 
-/** 主业务 GeoJSON source ID */
-const PRIMARY_SOURCE_ID = 'test_geojson_source';
-
-/** 第二业务 GeoJSON source ID */
-const SECONDARY_SOURCE_ID = 'test_geojson_source_secondary';
-
-/** 主业务线图层 ID */
-const PRIMARY_LINE_LAYER_ID = 'lineLayer';
-
-/** 第二业务线图层 ID */
-const SECONDARY_LINE_LAYER_ID = 'lineLayerSecondary';
-
-/** 第二业务面图层 ID */
-const SECONDARY_FILL_LAYER_ID = 'fillLayerSecondary';
-
-import sendIcon from './assets/send.svg';
-import segment_stretch_test from './assets/segment-stretch.svg';
-import texturelabsWater from './assets/Texturelabs_Water.jpg';
+// 表达式工具收敛到同一个分组，业务层只需要记住一个入口。
+const {
+  createFeatureStateExpression,
+  matchFeatureProperty,
+  whenFeaturePropertyEquals,
+  whenFeaturePropertyIn,
+} = mapExpressions;
 
 /**
- * 这里需要搞清楚两个概念：
+ * 当前页面统一使用的业务数据源 ID。
+ * 所有 source 相关逻辑只认这一组常量，避免页面里散落字符串。
+ */
+const SOURCE_IDS = {
+  primary: "test_geojson_source",
+  secondary: "test_geojson_source_secondary",
+} as const;
+
+/**
+ * 闪烁示例统一使用的目标要素集合。
+ * 业务层只维护这一份目标声明，避免 sourceId 和 featureId 在动作逻辑里散落。
+ */
+const FLASH_TARGETS = [
+  { source: SOURCE_IDS.primary, id: "point_1" },
+  { source: SOURCE_IDS.primary, id: "point_2" },
+  { source: SOURCE_IDS.primary, id: "line_1" },
+] as const satisfies readonly BusinessKit.MapFeatureStateTarget[];
+
+/**
+ * 当前页面统一使用的业务图层 ID。
+ * 模板、交互配置和摘要逻辑共用这一份常量，避免多处手写 layer-id。
+ */
+const LAYER_IDS = {
+  circle: "circleLayer",
+  circleDec: "circleLayerDec",
+  primaryLine: "lineLayer",
+  fill: "fillLayer",
+  symbol: "symbolLayer",
+  secondaryLine: "lineLayerSecondary",
+  secondaryFill: "fillLayerSecondary",
+} as const;
+
+/**
+ * 正式业务源的字段规则示例。
+ * 业务层只需要声明：
+ * 1. 哪些字段只读
+ * 2. 哪些字段属于稳定业务字段
+ * 3. 哪些字段不该进入业务属性面板
  *
- * 1. 正式数据 (Business Data)
- *    就是你自己在这个 Vue 页面里定义的 GeoJSON 数据。
- *    例如我们在 template 里写的：
- *    - PRIMARY_SOURCE_ID
- *    - SECONDARY_SOURCE_ID
- *    这些数据是要保存到数据库里的，代表真实的业务结果。
- *
- * 2. 临时预览数据 (Preview Data)
- *    就是 mapLibre-init 组件内部帮你代管的临时图形数据。
- *    比如你点击了"创建线草稿"，地图上出现的那条虚线就是临时预览数据。
- *    你不需要在 template 里去写这些临时图层，插件会自动帮你渲染。
- *
- * 为什么要在代码里区分它们？
- * 因为有些操作会产生不同的结果：
- * - 如果你点击的是一条"正式线"，点"生成区域"，生成的面应该存到你的正式数据里。
- * - 如果你点击的是一条"临时虚线"，点"生成区域"，生成的面只是个预览，应该存到临时预览池里。
- * 只有区分清楚了，点击"取消临时操作"时，才能准确地把那些虚线和预览面一起清空，而不影响你的正式数据。
+ * 面板态与保存/删除权限都会统一复用这份规则。
+ */
+const BUSINESS_SOURCE_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
+  readonlyKeys: ["id"],
+  fixedKeys: ["mark"],
+  hiddenKeys: ["marker-color", "marker-size", "marker-symbol"],
+};
+
+/**
+ * Draw 控件的字段规则示例。
+ * 绘制要素进入属性面板前，同样会先按这里的规则收口。
+ */
+const DRAW_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
+  fixedKeys: ["bizName"],
+  readonlyKeys: ["bizCode"],
+};
+
+/**
+ * Measure 控件的字段规则示例。
+ * 像距离、面积这类系统测量字段会被底层额外隐藏，
+ * 这里主要声明业务自己关心的字段规则。
+ */
+const MEASURE_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
+  fixedKeys: ["label"],
+  readonlyKeys: ["taskCode"],
+};
+
+/**
+ * 普通业务源右键面板提示文案。
+ */
+const MAP_PROPERTY_PANEL_NOTE =
+  "上方列表只展示业务可见字段。`id` 是只读字段不能修改，`mark` 被声明为稳定字段可改但不可删；像 marker-color 这类样式辅助字段会被隐藏到下方调试快照。新增的临时字段默认允许删除。";
+
+/**
+ * 线草稿右键面板提示文案。
+ */
+const LINE_DRAFT_PROPERTY_PANEL_NOTE =
+  "线草稿会继承正式来源的属性治理规则。业务层看不到内部来源字段，也不能修改 ID；如果新增了临时字段，仍然可以通过删除按钮显式移除。";
+
+/**
+ * TerraDraw 绘制控件右键面板提示文案。
+ */
+const DRAW_PROPERTY_PANEL_NOTE =
+  "这里展示的是绘制业务字段。TerraDraw 内部状态字段已经被系统层隐藏；如果某个字段命中固定/只读规则，保存后会立即收紧为不可删或不可改。";
+
+/**
+ * Measure 控件右键面板提示文案。
+ */
+const MEASURE_PROPERTY_PANEL_NOTE =
+  "这里展示的是测量业务字段。像 distance、area、segments 这类测量结果由系统维护，不会出现在业务编辑列表里；如需排查，可查看下方原始属性调试快照。";
+
+/**
+ * 修改样式示例统一使用的 feature-state 键名。
+ * 这里故意使用 feature-state，而不是直接改 GeoJSON 数据。
+ * 样式配置里会直接把它写成 `demoStyled`，方便业务层照着示例抄；
+ * 按钮逻辑则统一复用这个常量，避免多处散落字符串。
+ */
+const DEMO_STYLE_STATE_KEY = "demoStyled";
+
+/**
+ * DXF 导出示例默认源坐标系。
+ * 当前页面的 mock 数据是常见的经纬度坐标，因此这里先按 WGS84 作为默认来源。
+ * 如果后续真实业务源不是这个坐标系，可以在封装层统一改默认值。
+ */
+const DXF_DEFAULT_SOURCE_CRS = "EPSG:4326";
+
+/**
+ * DXF 导出示例默认目标坐标系。
+ * 这里示例性转成 Web Mercator，主要是为了演示插件会在导出前统一走 proj4 做坐标转换。
+ * 真实业务如果希望保留原坐标，直接把 sourceCrs / targetCrs 配成一致，或都不传即可。
+ */
+const DXF_DEFAULT_TARGET_CRS = "EPSG:3857";
+
+/** DXF 插件默认导出的文件名。 */
+const DXF_DEFAULT_FILE_NAME = "nggi00-business-all.dxf";
+
+/** 业务层局部覆写时的文件名。 */
+const DXF_PRIMARY_ONLY_FILE_NAME = "nggi00-primary-only.dxf";
+
+/**
+ * 默认坐标转换说明文本。
+ * 模板直接展示这行文字，让业务开发者一眼就能看到封装层默认值。
+ */
+const dxfDefaultCrsText = `${DXF_DEFAULT_SOURCE_CRS} -> ${DXF_DEFAULT_TARGET_CRS}`;
+
+/**
+ * DXF 局部覆写示例说明。
+ * 这里强调两层职责边界：
+ * 1. 插件 defaults 负责“封装层的稳定默认值”
+ * 2. `downloadDxf(overrides)` 负责“业务层本次任务的局部覆写”
+ */
+const DXF_OVERRIDE_GUIDE_TEXT =
+  "右上角插件自带的“导出DXF”按钮会按 defaults 导出全部业务 source；当前页面额外提供的“导出主业务DXF”按钮，只在本次任务里覆写 sourceIds、fileName 和 layerNameResolver。后续如果业务要按单次任务覆写 sourceCrs / targetCrs，也继续通过 downloadDxf(overrides) 传入即可。";
+
+import sendIcon from "./assets/send.svg";
+// import segment_stretch_test from './assets/segment-stretch.svg';
+import texturelabsWater from "./assets/Texturelabs_Water.jpg";
+
+/**
+ * ==========================
+ * 业务数据源与图层常量定义
+ * ==========================
  */
 
-// 正式业务数据源。
-// 业务页面通常直接 import 各自的 GeoJSON / 接口返回数据，这里不再在页面内临时构造第二数据源。
+// 业务数据响应式引用 (通常来自接口请求或本地 mock)
 const test_geojson = ref<MapCommonFeatureCollection>(mapGeojson as MapCommonFeatureCollection);
 const test_geojson_secondary = ref<MapCommonFeatureCollection>(
-  mapGeojson2 as MapCommonFeatureCollection
+  mapGeojson2 as MapCommonFeatureCollection,
 );
 
-/**
- * 把页面里用到的 GeoJSON 数据源统一登记在这里。
- * 作用：当需要修改地图上的要素时（比如生成了新的区域面），通过这个表就能知道该更新哪个变量。
- */
-const mapSourceGeoJsonRefMap: Record<string, Ref<MapCommonFeatureCollection>> = {
-  [PRIMARY_SOURCE_ID]: test_geojson,
-  [SECONDARY_SOURCE_ID]: test_geojson_secondary,
-};
+// 1. 注册业务数据源 (Source)
+// 通过 createMapBusinessSource 将普通 GeoJSON 包装为带 ID 的规范化数据源
+const primaryBusinessSource = createMapBusinessSource({
+  sourceId: SOURCE_IDS.primary,
+  data: test_geojson,
+  promoteId: "id", // 指定用作要素唯一标识的属性名
+  // 业务层只声明“哪些字段可见、可改、可删”，具体过滤与保护交给底层统一完成。
+  propertyPolicy: BUSINESS_SOURCE_PROPERTY_POLICY,
+});
+
+const secondaryBusinessSource = createMapBusinessSource({
+  sourceId: SOURCE_IDS.secondary,
+  data: test_geojson_secondary,
+  promoteId: "id",
+  propertyPolicy: BUSINESS_SOURCE_PROPERTY_POLICY,
+});
+
+// 将所有业务源注册到管理中心，供查询与写入时使用
+const businessSourceRegistry = createMapBusinessSourceRegistry([
+  primaryBusinessSource,
+  secondaryBusinessSource,
+]);
 
 /**
- * 根据 sourceId 找到对应的 GeoJSON 变量。
- * 注意：这里只能找你自己在上面登记过的"正式数据源"，找不到那些临时预览用的数据。
- * @param sourceId 地图上的数据源 ID
- * @returns 对应的 ref 变量；找不到返回 null
+ * 当前页面持有的地图组件公开实例引用。
+ * 业务层所有地图操作都通过它与底层进行通信。
  */
-const getGeoJsonRefBySourceId = (
-  sourceId: string | null | undefined
-): Ref<MapCommonFeatureCollection> | null => {
-  if (!sourceId) {
-    return null;
-  }
-
-  return mapSourceGeoJsonRefMap[sourceId] || null;
-};
+const mapInitRef = ref<BusinessKit.MapLibreInitExpose | null>(null);
 
 /**
  * ==========================
  * 插件注册区
  * ==========================
  */
+
+// 1. 线草稿预览插件：提供线段临时延长和预览能力
 const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
-  // 是否启用线草稿预览。
-  // 设为 true 后，地图容器会通过插件自动挂载内部草稿 source / layer。
   enabled: true,
-
-  // 草稿线要“照着谁的交互行为来”。
-  // 当前配置表示：草稿线和 PRIMARY_LINE_LAYER_ID 一样，都会按同一套 hover / click / 右键规则处理。
-  inheritInteractiveFromLayerId: PRIMARY_LINE_LAYER_ID,
-
-  // 业务层可选的临时图层样式局部覆写示例。
-  // 这里只覆写当前页面关心的几项，其余样式继续使用 map-libre-init 的默认定义。
+  // 草稿线要继承哪个正式图层的交互行为（保持交互一致性）
+  inheritInteractiveFromLayerId: LAYER_IDS.primaryLine,
+  // 覆盖默认草稿样式
   styleOverrides: {
     // 线草稿图层样式覆写。
     line: {
@@ -410,20 +586,20 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
       paint: {
         // 线草稿颜色。
         // hover 时显示为更醒目的红色，默认态显示为橙红色。
-        'line-color': [
-          'case',
-          ['boolean', ['feature-state', 'hover'], false],
-          '#ff4d4f',
-          '#fa8c16',
-        ],
+        "line-color": createFeatureStateExpression({
+          hover: "white",
+          default: "#fa8c16",
+        }),
 
         // 线草稿宽度。
         // 这里略微调大，用于演示业务层如何只覆写单条样式。
-        'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 6, 5],
+        "line-width": createFeatureStateExpression({
+          hover: 6,
+          default: 5,
+        }),
 
         // 线草稿虚线样式。
-        // [实线段长度, 空白段长度]，用于强调“草稿态”而非正式业务线。
-        'line-dasharray': [2, 1.2],
+        "line-dasharray": [2, 1.2],
       },
     },
 
@@ -438,28 +614,46 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
       // 面图层 paint 局部覆写。
       paint: {
         // 线廊草稿填充颜色。
-        'fill-color': '#fa8c16',
+        "fill-color": "#fa8c16",
 
         // 线廊草稿透明度。
         // 透明度略低，避免遮挡底图与正式业务图层。
-        'fill-opacity': 0.18,
+        "fill-opacity": 0.18,
 
         // 线廊草稿轮廓颜色。
-        'fill-outline-color': '#ff7a00',
+        "fill-outline-color": "#ff7a00",
       },
     },
   },
 });
 
-/**
- * 统一吸附扩展配置示例。
- * 业务层在这里仅声明：
- * 1. 哪些普通图层允许参与吸附
- * 2. 希望采用的吸附方式（顶点 / 线段）
- * 3. 局部吸附范围与优先级
- *
- * 吸附算法、预览图层、TerraDraw / Measure 对接全部由容器层统一封装处理。
- */
+// 2. 要素多选插件：提供框选和点击多选能力
+const mapFeatureMultiSelectPlugin = createMapFeatureMultiSelectPlugin({
+  // 是否启用多选插件，默认为 true
+  enabled: true,
+  // 插件控件在地图上的显示位置，可选值如 'top-left', 'top-right', 'bottom-left', 'bottom-right'
+  position: "top-right",
+  // 退出多选模式时的行为策略：'clear'（清空选中集） 或 'retain'（保留选中集）
+  deactivateBehavior: "retain",
+  // 是否允许通过按下 Esc 快捷键退出多选模式，默认为 true
+  closeOnEscape: true,
+  // 不允许参与多选的图层 ID 集合，这里的点二图层中的要素将无法被多选
+  excludeLayerIds: [LAYER_IDS.circleDec],
+  // 也可以通过 targetLayerIds: ['layer1', 'layer2'] 显式指定允许参与多选的图层 ID 集合
+
+  // 自定义候选过滤函数，返回 true 表示允许选中，返回 false 表示禁止选中
+  canSelect: ({ layerId, properties }) => {
+    // 如果不是主点图层，则允许选中
+    if (layerId !== LAYER_IDS.circle) {
+      return true;
+    }
+
+    // 对于主点图层，拦截 id 为 'point_4' 的要素，使其无法被选中
+    return properties?.id !== "point_4";
+  },
+});
+
+// 3. 要素吸附插件：配置哪些图层允许作为测绘的吸附目标
 const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
   // 启用统一吸附扩展。
   enabled: true,
@@ -472,9 +666,9 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
   // 这里演示如何只关心效果层面的少数视觉参数。
   preview: {
     enabled: true,
-    pointColor: '#f56c6c',
+    pointColor: "#f56c6c",
     pointRadius: 6,
-    lineColor: '#f56c6c',
+    lineColor: "#f56c6c",
     lineWidth: 4,
   },
 
@@ -484,10 +678,10 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
     rules: [
       {
         // 主正式线图层：既允许吸附到顶点，也允许吸附到线段。
-        id: 'primary-line-snap',
-        layerIds: [PRIMARY_LINE_LAYER_ID],
+        id: "primary-line-snap",
+        layerIds: [LAYER_IDS.primaryLine],
         priority: 30,
-        snapTo: ['vertex', 'segment'],
+        snapTo: ["vertex", "segment"],
         // filter示例，高级定制规则，返回fasle表示当前吸附规则失效
         // filter: (context) => {
         //   console.log('context', context);
@@ -499,29 +693,29 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
       },
       {
         // 第二正式线图层：继续参与吸附，但优先级略低于主线图层。
-        id: 'secondary-line-snap',
-        layerIds: [SECONDARY_LINE_LAYER_ID],
+        id: "secondary-line-snap",
+        layerIds: [LAYER_IDS.secondaryLine],
         priority: 20,
-        snapTo: ['vertex', 'segment'],
+        snapTo: ["vertex", "segment"],
       },
       {
         // 点图层示例：点要素只参与顶点吸附。
-        id: 'point-hole-snap',
-        layerIds: ['circleLayer', 'circleLayerDec'],
+        id: "point-hole-snap",
+        layerIds: [LAYER_IDS.circle, LAYER_IDS.circleDec],
         priority: 10,
-        snapTo: ['vertex'],
+        snapTo: ["vertex"], // 点图层只能吸附到顶点
       },
       {
         // 特定条件要素示例：只允许吸附 mark === 'hole' 的点。
         // 用于演示“不是按点/线/面粗分，而是按具体业务条件筛选”的能力。
-        id: 'point-hole-filtered-snap',
-        layerIds: ['circleLayer', 'circleLayerDec'],
+        id: "point-hole-filtered-snap",
+        layerIds: [LAYER_IDS.circle, LAYER_IDS.circleDec],
         priority: 40,
         tolerancePx: 20,
-        geometryTypes: ['Point'],
-        snapTo: ['vertex'],
+        geometryTypes: ["Point"],
+        snapTo: ["vertex"],
         where: {
-          mark: 'hole',
+          mark: "hole",
         },
       },
     ],
@@ -539,262 +733,87 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
   },
 });
 
+// 4. DXF 导出插件：第一版只面向业务 source，不包含 TerraDraw / Measure / 手绘要素。
+const mapDxfExportPlugin = createMapDxfExportPlugin({
+  enabled: true,
+  sourceRegistry: businessSourceRegistry,
+
+  // defaults 代表封装层默认值。
+  // 插件内置按钮会直接复用这组配置，适合沉淀成“整页统一的默认导出行为”。
+  defaults: {
+    fileName: DXF_DEFAULT_FILE_NAME,
+    sourceCrs: DXF_DEFAULT_SOURCE_CRS,
+    targetCrs: DXF_DEFAULT_TARGET_CRS,
+  },
+
+  // 这里把默认值显式写出来，是为了让业务示例更直观。
+  // 真实业务如果接受默认行为，也可以省略整个 control 配置。
+  control: {
+    enabled: true,
+    position: "top-right",
+    label: "导出DXF",
+  },
+});
+
 /**
- * 当前页面注册到地图容器中的插件集合。
- * 业务层通过显式 import + 注册插件的方式启用能力，而不是继续给 map-libre-init 传专属 prop。
+ * 集中注册当前页面需要启用的地图能力扩展。
  */
-const mapPlugins = [mapFeatureSnapPlugin, lineDraftPreviewPlugin];
+const mapPlugins = [
+  mapFeatureSnapPlugin,
+  lineDraftPreviewPlugin,
+  mapFeatureMultiSelectPlugin,
+  mapDxfExportPlugin,
+];
+
+/**
+ * 当前页面统一使用的业务聚合门面。
+ *
+ * 作用：
+ * 1. 把选择态、要素查询、要素动作、属性编辑、线草稿、特效统一收口
+ * 2. 业务层不再自己分别拼装多个 `use*` 门面
+ * 3. 后续新增业务能力时，优先继续往这个高层入口下分组扩展
+ */
+const businessMap = useBusinessMap({
+  mapRef: mapInitRef,
+  sourceRegistry: businessSourceRegistry,
+});
+
+/**
+ * 统一的地图要素能力分组。
+ * 这里同时包含查询和动作能力，业务层统一走 `businessMap.feature` 即可。
+ */
+const featureQuery = businessMap.feature;
+
+/**
+ * 统一属性编辑分组。
+ * 业务层只需要维护当前编辑目标，再调用 editor 分组即可。
+ */
+const propertyEditor = businessMap.editor;
+
+/**
+ * 统一线草稿分组。
+ * 业务层通过 businessMap.draft 读取草稿状态与动作。
+ */
+const lineDraftPreview = businessMap.draft;
 
 /**
  * 当前页面是否存在线草稿要素。
- * 该状态只用于驱动“清空临时草稿”按钮显隐，不再从业务主数据源反推。
+ * 该状态直接来自线草稿能力门面，用于驱动示例面板与按钮显隐。
  */
-const hasLineDraftFeatures = ref(false);
+const hasLineDraftFeatures = computed(() => {
+  return lineDraftPreview.hasFeatures.value;
+});
 
 /**
- * 读取当前页面注册的线草稿插件 API。
- * 这里统一通过插件宿主查询 API，而不是写死 `mapInitRef.value.plugins.lineDraftPreview` 一类字段，
- * 这样页面只依赖“插件 ID + 插件公共契约”，不会与容器内部实现细节耦合。
- * @returns 当前线草稿插件 API；插件未注册或地图未初始化时返回 null
+ * 核心：初始化地图基础配置。
+ * @description
+ * 业务层无需关注 `container`，只需配置底图视角、操作限制即可。
+ * 例如：
+ * - center: 初始中心点 [lng, lat]
+ * - zoom: 初始缩放级别
+ * - style: 底图样式地址
  */
-const getLineDraftPreviewApi = (): LineDraftPreviewPluginApi | null => {
-  return (
-    mapInitRef.value?.plugins?.getApi<LineDraftPreviewPluginApi>(lineDraftPreviewPlugin.id) || null
-  );
-};
-
-/**
- * 获取 GeoJSON 要素的业务 ID。
- * @param feature 待提取业务 ID 的要素
- * @returns 业务 ID；不存在时返回 null
- */
-const getFeatureBusinessId = (
-  feature: MapCommonFeature | null | undefined
-): string | number | null => {
-  if (!feature) {
-    return null;
-  }
-
-  const propertyId = feature.properties?.id;
-  if (propertyId !== undefined && propertyId !== null) {
-    return propertyId;
-  }
-
-  return feature.id ?? null;
-};
-
-/**
- * 获取指定正式业务数据源中的要素列表。
- * @param sourceId 目标业务 source ID
- * @returns 当前响应式数据源中的全部要素
- */
-const getCurrentMapFeatures = (sourceId: string): MapCommonFeature[] => {
-  const geoJsonRef = getGeoJsonRefBySourceId(sourceId);
-  if (!geoJsonRef) {
-    return [];
-  }
-
-  const featureCollection = geoJsonRef.value as MapCommonFeatureCollection;
-  return (featureCollection.features || []) as MapCommonFeature[];
-};
-
-/**
- * 将新的 GeoJSON 要素数组整体写回指定正式业务数据源。
- * @param sourceId 目标业务 source ID
- * @param nextFeatures 写回后的完整要素列表
- */
-const commitMapFeatures = (sourceId: string, nextFeatures: MapCommonFeature[]): void => {
-  const geoJsonRef = getGeoJsonRefBySourceId(sourceId);
-  if (!geoJsonRef) {
-    return;
-  }
-
-  const currentFeatureCollection = geoJsonRef.value as MapCommonFeatureCollection;
-  geoJsonRef.value = {
-    ...currentFeatureCollection,
-    features: nextFeatures,
-  } as MapCommonFeatureCollection;
-};
-
-/**
- * 判断当前要素是否为业务线要素。
- * @param feature 待判断的 GeoJSON 要素
- * @returns 是否为 LineString 要素
- */
-const isDemoLineFeature = (
-  feature: MapCommonFeature | null | undefined
-): feature is MapCommonLineFeature => {
-  return feature?.geometry?.type === 'LineString';
-};
-
-/**
- * 根据正式要素来源引用查找正式业务数据源中的要素。
- * @param featureRef 正式业务要素来源引用
- * @returns 命中的 GeoJSON 要素；未命中返回 null
- */
-const findMapFeatureBySourceRef = (
-  featureRef: MapSourceFeatureRef | null
-): MapCommonFeature | null => {
-  if (!featureRef?.sourceId || featureRef.featureId === null) {
-    return null;
-  }
-
-  return (
-    getCurrentMapFeatures(featureRef.sourceId).find((feature) => {
-      const currentBusinessId = getFeatureBusinessId(feature);
-      return currentBusinessId === featureRef.featureId;
-    }) || null
-  );
-};
-
-/**
- * 拿着上面的"地址标签"，去数据源里把最新的完整数据找出来。
- * 它会根据 sourceId 自动判断：
- * - 如果这是个"正式数据"，它就去我们登记的 mapSourceGeoJsonRefMap 里找。
- * - 如果这是个"临时草稿数据"，它就去线草稿插件维护的内部池里找。
- * @param featureRef "地址标签"
- * @returns 最新的要素数据；找不到返回 null
- */
-const getFeatureByRef = (featureRef: MapSourceFeatureRef | null): MapCommonFeature | null => {
-  if (!featureRef?.sourceId || featureRef.featureId === null) {
-    return null;
-  }
-
-  if (featureRef.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID) {
-    return getLineDraftPreviewApi()?.getFeatureById?.(featureRef.featureId) || null;
-  }
-
-  return findMapFeatureBySourceRef(featureRef);
-};
-
-/**
- * 把当前点击的要素信息，简化成一个"地址标签"。
- * 这个标签只记录两件事：
- * 1. 它来自哪个 source (sourceId)
- * 2. 它的 id 是多少 (featureId)
- *
- * 后续不管是修改属性还是生成区域，只要拿着这个"地址标签"，就能精准找到这条数据。
- * @param context 点击事件返回的上下文
- * @returns 包含 sourceId 和 featureId 的地址标签
- */
-const getFeatureRef = (
-  context:
-    | Pick<MapLayerInteractiveContext, 'sourceId' | 'featureId'>
-    | {
-        sourceId?: string | null;
-        featureId?: string | number | null;
-      }
-    | null
-    | undefined
-): MapSourceFeatureRef | null => {
-  return createMapSourceFeatureRef(context?.sourceId || null, context?.featureId ?? null);
-};
-
-/**
- * 统一处理地图插件状态变更事件。
- * 当前页面只消费线草稿插件的状态，但事件机制已经支持多个插件共存。
- * @param payload 地图插件状态变更事件载荷
- */
-const handlePluginStateChange = (payload: MapPluginStateChangePayload): void => {
-  // 当前页面只关心线草稿插件，其余插件状态变更直接忽略。
-  if (
-    payload.pluginType !== LINE_DRAFT_PREVIEW_PLUGIN_TYPE ||
-    payload.pluginId !== lineDraftPreviewPlugin.id
-  ) {
-    return;
-  }
-
-  const previewState = payload.state as LineDraftPreviewStateChangePayload;
-
-  // 同时参考 hasFeatures 与 featureCount，
-  // 是为了让页面态与容器层返回的数据保持一致，避免只依赖单个字段造成误判。
-  hasLineDraftFeatures.value = previewState.hasFeatures && previewState.featureCount > 0;
-  console.log('previewState', payload);
-};
-
-/**
- * 获取当前用户选中的那条线（准备进行草稿生成或线廊生成操作）。
- * 不管用户点的是"正式线"还是"线草稿"，只要是一条线，都能拿到。
- * @returns 当前选中的线要素数据；如果没选中或者选中的不是线，返回 null
- */
-const getSelectedLine = (): MapCommonLineFeature | null => {
-  // 先从统一交互层读取当前选中的对象。
-  const selectedFeatureContext = mapInitRef.value?.getSelectedMapFeatureContext?.() || null;
-  const selectedFeatureRef = getFeatureRef(selectedFeatureContext);
-
-  // 优先按 sourceId + featureId 去正式源或预览池里取最新数据。
-  // 如果没取到，再退回到容器层记录的当前选中要素。
-  const latestFeature =
-    getFeatureByRef(selectedFeatureRef) ||
-    mapInitRef.value?.getSelectedMapFeatureSnapshot?.() ||
-    null;
-
-  // 延长线与区域生成都只允许线要素参与。
-  // 如果当前选中的不是线，直接返回 null，让上层统一做提示。
-  if (!isDemoLineFeature(latestFeature)) {
-    return null;
-  }
-
-  // 返回当前可参与业务计算的最新线快照。
-  return latestFeature;
-};
-
-/**
- * 将线弹窗中展示的线要素摘要同步为最新状态。
- * @param lineFeature 当前线要素
- * @param segmentIndex 当前选中的线段索引
- */
-const syncLinePopupMetrics = (lineFeature: MapCommonLineFeature, segmentIndex: number): void => {
-  const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(
-    lineFeature.geometry.coordinates
-  );
-  if (normalizedCoordinates.length < 2) {
-    popupState.featureId = getFeatureBusinessId(lineFeature);
-    popupState.geometryType = lineFeature.geometry.type;
-    popupState.featureProps = JSON.parse(JSON.stringify(lineFeature.properties || {}));
-    popupState.selectedSegmentIndex = -1;
-    popupState.selectedSegmentLengthMeters = 0;
-    popupState.lineLengthMeters = 0;
-    return;
-  }
-
-  const currentSegmentIndex = Math.max(0, Math.min(segmentIndex, normalizedCoordinates.length - 2));
-
-  popupState.featureId = getFeatureBusinessId(lineFeature);
-  popupState.geometryType = lineFeature.geometry.type;
-  popupState.featureProps = JSON.parse(JSON.stringify(lineFeature.properties || {}));
-  popupState.selectedSegmentIndex = currentSegmentIndex;
-  popupState.selectedSegmentLengthMeters = MapLineMeasureTool.getDistanceInMeters(
-    normalizedCoordinates[currentSegmentIndex],
-    normalizedCoordinates[currentSegmentIndex + 1]
-  );
-  popupState.lineLengthMeters =
-    MapLineMeasureTool.getCoordinatesLengthInMeters(normalizedCoordinates);
-};
-
-/**
- * 在 NGGI00 示例页中演示“点击线后立即测长”的业务效果。
- * @param lineFeature 当前点击命中的线要素
- */
-const showClickedLineMeasureExample = (lineFeature: MapCommonLineFeature): void => {
-  const lineLengthMeters = MapLineMeasureTool.getFeatureLengthInMeters(lineFeature);
-  if (lineLengthMeters === null) {
-    return;
-  }
-
-  const featureId = getFeatureBusinessId(lineFeature) ?? '未命名线';
-  console.log('[NGGI00 示例] 点击线后测得线总长度', {
-    featureId,
-    lineLengthMeters,
-  });
-  ElMessage.success(`示例：线 ${String(featureId)} 总长度为 ${lineLengthMeters.toFixed(2)} m`);
-};
-
-/**
- * 地图初始化配置
- * 注意：container 属性无需手动设置，vue-maplibre-gl 会自动挂载到组件实例上
- */
-const mapOptions: Omit<MapOptions, 'container'> = {
+const mapOptions: Omit<BusinessKit.MapOptions, "container"> = {
   // 无需 container 属性，因为 vue-maplibre-gl 组件内部会自动挂载和管理容器
 
   // === 以下为 MapOptions 核心 API 示例 (按需取消注释使用) ===
@@ -836,13 +855,12 @@ const mapOptions: Omit<MapOptions, 'container'> = {
 };
 
 /**
- * 控件配置对象，以控件组件名为 key
- * isUse 属性控制是否渲染该控件 (默认为 false)，其他属性作为组件的 props 传入
- *
- * 这是一个完整的控件配置示例，展示了所有可用控件及其常用参数的配置方法。
- * 开发者可根据实际需求将不需要的控件的 isUse 设为 false，或删除该控件的配置块。
+ * 核心：注册并配置地图控件。
+ * @description
+ * 以组件名为 key，控制各种原生控件与测绘控件的显隐及初始化参数。
+ * 未在此处显式声明的控件默认不渲染。
  */
-const mapControls: MapControlsConfig = {
+const mapControls: BusinessKit.MapControlsConfig = {
   // 导航控件：提供缩放按钮和罗盘(指南针)
   // MglNavigationControl: {
   //     isUse: true,
@@ -855,7 +873,7 @@ const mapControls: MapControlsConfig = {
   // 全屏控件：允许用户将地图放大到全屏
   MglFullscreenControl: {
     isUse: true,
-    position: 'bottom-left',
+    position: "bottom-left",
     container: null, // 指定要全屏的容器，如果为 null 则全屏整个 document.body
   },
 
@@ -923,7 +941,7 @@ const mapControls: MapControlsConfig = {
   // 绘图控件：提供点、线、面等绘制工具
   MaplibreTerradrawControl: {
     isUse: false,
-    position: 'top-left',
+    position: "top-left",
     // 默认是否展开工具栏
     open: false,
     // 启用绘图控件吸附。
@@ -956,16 +974,8 @@ const mapControls: MapControlsConfig = {
     }, */
 
     // ==========================================
-    // 绘图控件线装饰示例 (Segment Stretch 模式)
+    // 绘图控件线装饰示例
     // ==========================================
-    // 适用场景：需要让一张 SVG 沿每个线段“从起点拉到终点”铺开显示。
-    // 如果一条折线有多个拐点，则会按“相邻点 -> 相邻点”拆成多个独立的拉伸段。
-    // 使用说明：
-    // 1. 业务层只需要在这里声明 `lineDecoration` 配置即可，极简接入。
-    // 2. 底层会自动把每条线拆成多个 segment-stretch 图层，并在缩放/平移时同步更新四角坐标。
-    // 3. 如果传入的是 SVG，底层会先自动光栅化为 PNG，再交给 MapLibre 的 image source 渲染。
-    // 4. 底层已自动处理 TerraDraw 的各种绘制和编辑事件同步。
-    // 5. svg 属性支持：inline SVG 字符串、import 导入的静态资源 URL、data URI。
     lineDecoration: {
       enabled: true,
       // defaultStyle: {
@@ -976,32 +986,31 @@ const mapControls: MapControlsConfig = {
       // } as TerradrawLineDecorationStyle,
       // 如果你仍然想使用沿线重复图标的模式，可以切回下面这组配置：
       defaultStyle: {
-        mode: 'symbol-repeat',
+        mode: "symbol-repeat",
         svg: sendIcon,
         spacing: 1,
         size: 0.2,
         opacity: 0.95,
         iconRotate: 0,
         keepUpright: true,
-      } as TerradrawLineDecorationStyle,
+      } as BusinessKit.TerradrawLineDecorationStyle,
     },
 
-    // ==========================================
-    // TerraDraw 业务交互封装示例
-    // 说明：
-    // 1. 下面这些回调全部由 mapLibre-init 内部统一接管并触发，屏蔽了原生事件的复杂性。
-    // 2. 业务层只需要在这里声明需要响应的动作，即可获取规范化的 context 数据。
-    // ==========================================
+    // TerraDraw 业务属性治理示例。
+    // 业务层只需要在控件配置里声明稳定字段或只读字段，不需要自己过滤引擎系统字段。
+    propertyPolicy: DRAW_PROPERTY_POLICY,
+
+    // 统一封装的业务交互入口
     interactive: {
       // 是否启用交互事件监听，设为 false 则完全不响应下面配置的回调
       enabled: true,
 
       // 鼠标移动到绘制要素上时光标的样式
-      cursor: 'pointer',
+      cursor: "pointer",
 
       // 交互管理器准备完成时触发，适合做初始化日志或状态检查
       onReady: () => {
-        console.log('[TerraDraw 示例] 业务交互管理器已初始化完成');
+        console.log("[TerraDraw 示例] 业务交互管理器已初始化完成");
       },
 
       // 绘图模式发生切换时触发（如从画点切换到画线），适合同步更新外部 UI 状态
@@ -1012,30 +1021,30 @@ const mapControls: MapControlsConfig = {
       // 某个要素完成绘制（或编辑结束）时触发，适合在这里执行保存到后端或计算逻辑
       onFeatureFinish: (context) => {
         console.log(
-          '[TerraDraw 示例] 要素完成绘制/编辑:',
+          "[TerraDraw 示例] 要素完成绘制/编辑:",
           context.featureId,
-          context.finishContext
+          context.finishContext,
         );
       },
 
       // 要素形状或属性发生任何变化时触发，可用于实时同步数据
       onFeatureChange: (context) => {
-        console.log('[TerraDraw 示例] 要素发生变化:', context.featureIds, context.changeType);
+        console.log("[TerraDraw 示例] 要素发生变化:", context.featureIds, context.changeType);
       },
 
       // 在 select 模式下，要素被选中时触发，适合联动显示右侧属性面板
       onFeatureSelect: (context) => {
-        console.log('[TerraDraw 示例] 要素被选中:', context.featureId);
+        console.log("[TerraDraw 示例] 要素被选中:", context.featureId);
       },
 
       // 要素取消选中时触发，适合清空关联的属性面板
       onFeatureDeselect: (context) => {
-        console.log('[TerraDraw 示例] 要素取消选中:', context.featureId);
+        console.log("[TerraDraw 示例] 要素取消选中:", context.featureId);
       },
 
       // 要素被删除时触发，context.deletedIds 包含所有被删要素的 ID，适合在这里向后端发送删除请求
       onFeatureDelete: (context) => {
-        console.log('[TerraDraw 示例] 要素被删除:', context.deletedIds);
+        console.log("[TerraDraw 示例] 要素被删除:", context.deletedIds);
         closeBusinessPanels();
       },
 
@@ -1056,7 +1065,7 @@ const mapControls: MapControlsConfig = {
 
       // 双击要素时触发，适合将地图视角移动并放大到该要素 (flyTo)
       onDoubleClick: (context) => {
-        console.log('[TerraDraw 示例] 双击要素:', context.featureId);
+        console.log("[TerraDraw 示例] 双击要素:", context.featureId);
       },
 
       // 右键单击要素时触发，适合打开自定义的右键菜单或属性编辑表单
@@ -1071,10 +1080,10 @@ const mapControls: MapControlsConfig = {
     },
   },
 
-  // 测量控件：提供测距、测面积等功能
+  // 测量控件：提供测距、测面积等高级绘制能力
   MaplibreMeasureControl: {
     isUse: true,
-    position: 'top-left',
+    position: "top-left",
     // 如果不全选，就不要为false，会导致不显示
     open: false,
     // 启用测量控件吸附。
@@ -1144,11 +1153,11 @@ const mapControls: MapControlsConfig = {
     lineDecoration: {
       enabled: true,
       defaultStyle: {
-        mode: 'line-pattern',
+        mode: "line-pattern",
         svg: texturelabsWater, // 推荐使用可以无缝首尾相接的 SVG 资源
         lineWidth: 20, // 纹理线段的宽度（这决定了图片平铺时的拉伸高度）
         opacity: 0.85, // 纹理线段的透明度
-      } as TerradrawLineDecorationStyle,
+      } as BusinessKit.TerradrawLineDecorationStyle,
       // (可选) 动态样式解析：根据线要素的属性，决定使用哪种装饰。
       // 这里演示：如果要素属性里配置了特定的装饰模式，则优先使用该配置。
       // resolveStyle: (context) => {
@@ -1175,6 +1184,10 @@ const mapControls: MapControlsConfig = {
       // },
     },
 
+    // Measure 业务属性治理示例。
+    // 测量系统字段会由底层自动隐藏，这里只补充业务字段规则。
+    propertyPolicy: MEASURE_PROPERTY_POLICY,
+
     // ==========================================
     // Measure 业务层调用示例
     // 说明：
@@ -1190,12 +1203,12 @@ const mapControls: MapControlsConfig = {
 
       // render 模式下鼠标命中测量要素时显示的光标。
       // 传 false 可关闭光标切换。
-      cursor: 'pointer',
+      cursor: "pointer",
 
       // 交互管理器准备完成时触发。
       // 适合在业务层做初始化日志、默认状态同步或首屏数据检查。
       onReady: (context) => {
-        console.log('[Measure 示例] 业务交互管理器已初始化:', context.controlType);
+        console.log("[Measure 示例] 业务交互管理器已初始化:", context.controlType);
       },
 
       // 测量模式变化时触发。
@@ -1208,39 +1221,39 @@ const mapControls: MapControlsConfig = {
       // 最适合在这里获取最终测量结果并同步到业务表单。
       onFeatureFinish: (context) => {
         console.log(
-          '[Measure 示例] 测量完成:',
+          "[Measure 示例] 测量完成:",
           context.featureId,
-          getMeasureFeatureSummaryText(context)
+          getMeasureFeatureSummaryText(context),
         );
       },
 
       // 测量要素几何或属性变化时触发。
       // 拖拽编辑节点、移动测量要素、业务层调用 updateFeatureProperties 后都会走这里。
-      onFeatureChange: (context) => {
-        console.log(
-          '[Measure 示例] 测量要素发生变化:',
-          context.featureIds,
-          context.changeType,
-          getMeasureFeatureSummaryText(context)
-        );
+      onFeatureChange: (_context) => {
+        // console.log(
+        //   "[Measure 示例] 测量要素发生变化:",
+        //   _context.featureIds,
+        //   _context.changeType,
+        //   getMeasureFeatureSummaryText(_context),
+        // );
       },
 
       // select 模式下选中某个测量要素时触发。
       // 可用于同步右侧属性面板、结果表格选中行等业务状态。
       onFeatureSelect: (context) => {
-        console.log('[Measure 示例] 选中了测量要素:', context.featureId);
+        console.log("[Measure 示例] 选中了测量要素:", context.featureId);
       },
 
       // select 模式下取消选中测量要素时触发。
       // 可用于清空详情面板或恢复默认提示。
       onFeatureDeselect: (context) => {
-        console.log('[Measure 示例] 取消选中测量要素:', context.featureId);
+        console.log("[Measure 示例] 取消选中测量要素:", context.featureId);
       },
 
       // 删除一个或多个测量要素后触发。
       // context.deletedIds 中可拿到本次删除的全部 ID。
       onFeatureDelete: (context) => {
-        console.log('[Measure 示例] 删除了测量要素:', context.deletedIds);
+        console.log("[Measure 示例] 删除了测量要素:", context.deletedIds);
         closeBusinessPanels();
       },
 
@@ -1249,7 +1262,7 @@ const mapControls: MapControlsConfig = {
       onHoverEnter: (context) => {
         console.log(
           `[Measure 示例] 鼠标移入测量要素: ${context.featureId}`,
-          getMeasureFeatureSummaryText(context)
+          getMeasureFeatureSummaryText(context),
         );
       },
 
@@ -1268,7 +1281,7 @@ const mapControls: MapControlsConfig = {
       // render 模式下双击测量要素时触发。
       // 常见用途是 flyTo、进入详情页或切换到 select 模式。
       onDoubleClick: (context) => {
-        console.log('[Measure 示例] 双击测量要素:', context.featureId);
+        console.log("[Measure 示例] 双击测量要素:", context.featureId);
       },
 
       // render 模式下右键测量要素时触发。
@@ -1286,17 +1299,13 @@ const mapControls: MapControlsConfig = {
   },
 };
 
-// 获得地图实例。如果只有一个地图实例，无需指定 mapKey，
-// 如果有多个地图实例，需要指定 mapKey，使用useMap(mapKey)获取对应的地图实例
-const map = useMap();
-
-// 如果从 mapLibre-init 组件引用获取绘制数据，需要确保 mapLibre-init 组件已经初始化完成
-const mapInitRef = ref<MapLibreInitExpose | null>(null);
-
 /**
- * 获取绘图控件当前快照。
- * 现已改为优先走 mapLibre-init 暴露的业务化方法，业务页无需再感知 TerraDraw 实例。
+ * ==========================
+ * 业务操作：获取测绘数据
+ * ==========================
  */
+
+/** 获取当前所有已绘制要素的数据快照 */
 const getDrawnData = () => {
   if (!mapInitRef.value) return;
 
@@ -1305,62 +1314,82 @@ const getDrawnData = () => {
   // 2. [] 代表绘图控件可用，但当前没有已绘制要素
   // 3. 非空数组即 TerraDraw 当前快照
   const features = mapInitRef.value.getDrawFeatures?.();
-
   if (features === null) {
-    ElMessage.warning('绘图控件尚未初始化或未启用');
+    ElMessage.warning("绘图控件尚未初始化或未启用");
     return;
   }
-
   if (features.length === 0) {
-    ElMessage.info('当前没有绘制任何图形');
+    ElMessage.info("当前没有绘制任何图形");
     return;
   }
 
-  // 将数据打印到控制台，这里的数据可以直接转成 JSON 字符串发送给后端
-  console.log('--- 绘制的 GeoJSON 数据 ---');
-  console.log(JSON.stringify(features, null, 2));
+  console.log("--- 绘制的 GeoJSON 数据 ---", JSON.stringify(features, null, 2));
   ElMessage.success(`成功获取 ${features.length} 个图形数据，请查看控制台`);
 };
 
-/**
- * 获取测量控件当前快照。
- * 与绘图控件保持同一套使用方式，业务页不再需要自己访问 TerraDraw 实例。
- */
+/** 获取当前所有测量要素的数据快照 */
 const getMeasureData = () => {
   if (!mapInitRef.value) return;
 
   const features = mapInitRef.value.getMeasureFeatures?.();
-
   if (features === null) {
-    ElMessage.warning('测量控件尚未初始化或未启用');
+    ElMessage.warning("测量控件尚未初始化或未启用");
     return;
   }
-
   if (features.length === 0) {
-    ElMessage.info('当前没有测量任何图形');
+    ElMessage.info("当前没有测量任何图形");
     return;
   }
 
-  console.log('--- 测量的 GeoJSON 数据 ---');
-  console.log(JSON.stringify(features, null, 2));
-
-  // 4. 演示如何提取其中的测量值
-  features.forEach((f: any) => {
-    if (f.geometry.type === 'LineString' && f.properties?.distance !== undefined) {
-      console.log(`[线段测距] 距离: ${f.properties.distance} ${f.properties.distanceUnit}`);
-    } else if (f.geometry.type === 'Polygon' && f.properties?.area !== undefined) {
-      console.log(`[多边形测面积] 面积: ${f.properties.area} ${f.properties.unit}`);
-    } else if (f.geometry.type === 'Polygon' && f.properties?.radiusKilometers !== undefined) {
-      console.log(`[圆测半径] 半径: ${f.properties.radiusKilometers} km`);
-    }
-  });
-
+  console.log("--- 测量的 GeoJSON 数据 ---", JSON.stringify(features, null, 2));
   ElMessage.success(`成功获取 ${features.length} 个测量图形数据，请查看控制台`);
 };
 
 // ==========================================
 // 图层样式配置实例 (Layer Configurations)
 // ==========================================
+
+/**
+ * 属性表达式 helper 示例区。
+ * 这 3 个 helper 都只负责读取 feature.properties，不处理 selected / hover / isFlashing。
+ * 推荐写法是：
+ * 1. 先用属性 helper 写“默认态按字段如何显示”
+ * 2. 再把它放进 createFeatureStateExpression({ default: ... })，继续叠加 feature-state 高亮
+ */
+
+/**
+ * matchFeatureProperty 适合“字段值 -> 样式值”可以直接写成映射表的场景。
+ * 这里表示：line.properties.id 为 line_1 时显示红色，其余线显示蓝色。
+ */
+const demoLineColorByIdExpression = matchFeatureProperty(
+  "id",
+  {
+    line_1: "#ff0000",
+  },
+  "#0000ff",
+);
+
+/**
+ * whenFeaturePropertyEquals 适合只判断单个值的场景。
+ * 这里表示：point.properties.mark === "hole" 时，默认描边显示蓝色；否则回退为白色。
+ */
+const demoPointStrokeColorByMarkExpression = whenFeaturePropertyEquals(
+  "mark",
+  "hole",
+  "#1d4ed8",
+  "#ffffff",
+);
+
+/**
+ * whenFeaturePropertyIn 适合“多个值共用同一套样式”的场景。
+ * 这里表示：point.properties.id 属于 point_1 / point_2 时，默认半径显示为 7；否则回退为 6。
+ */
+const demoPointRadiusByIdGroupExpression = whenFeaturePropertyIn(
+  "id",
+  ["point_1", "point_2"],
+  7,
+  6,
+);
 
 /**
  * 1. 面图层 (Fill Layer) 样式配置
@@ -1372,146 +1401,1062 @@ const { layout: fillLayout, paint: fillPaint } = createFillLayerStyle();
  * 2. 线图层 (Line Layer) 样式配置
  * 用于渲染 LineString / MultiLineString 数据
  *
- * 这里演示“业务层局部覆写公共样式”的典型写法：
- * 1. line-color 使用 MapLibre 表达式，根据 hover 状态、业务属性等动态返回颜色。
- * 2. 外层再包一层 withFlashColor，用于接入 useMapEffect 的闪烁能力。
+ * 这里演示“业务层局部覆写公共样式”的推荐写法：
+ * 1. 先用 createFeatureStateExpression 收敛 selected / hover / isFlashing 这类常见状态分支。
+ * 2. default 仍然允许继续传入原生 MapLibre 表达式；常见按属性分色场景优先用 helper 收敛。
+ * 3. 下面的 default 演示了 `matchFeatureProperty(...)` 的用法。
  *
  * line-color 当前规则说明：
- * 1. 如果 feature-state.hover === true，则当前线要素显示为绿色 `#00ff00`
- * 2. 否则如果当前要素 properties.id === 'line_1'，则显示为红色 `#ff0000`
- * 3. 否则显示为默认蓝色 `#0000ff`
- * 4. 如果当前要素被 startFlash('sourceId', featureId) 标记为闪烁，则最终颜色会被切换为黄色 `#ffff00`
+ * 1. 如果 feature-state.isFlashing === true，则当前线要素显示为黄色 `#ffff00`
+ * 2. 否则如果 feature-state.demoStyled === true，则显示为洋红色 `#ec4899`
+ * 3. 否则如果 feature-state.selected === true，则显示为橙色 `#f97316`
+ * 4. 否则如果 feature-state.hover === true，则显示为绿色 `#00ff00`
+ * 5. 否则继续走 default 中的属性匹配 helper：line_1 为红色，其余线为蓝色
  */
 const { layout: lineLayout, paint: linePaint } = createLineLayerStyle({
   paint: {
-    'line-color': withFlashColor(
-      [
-        'case',
-        ['boolean', ['feature-state', 'hover'], false],
-        '#00ff00',
-        ['==', ['get', 'id'], 'line_1'],
-        '#ff0000',
-        '#0000ff',
-      ],
-      '#ffff00'
-    ),
-    'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 6, 3],
+    "line-color": createFeatureStateExpression({
+      isFlashing: "#ffff00",
+      states: {
+        // states 是“自定义 feature-state 键名 -> 命中后的样式值”映射表。
+        // 这里直接写 demoStyled，是为了让业务层一眼看出：
+        // 只要执行 setMapFeatureState(target, { demoStyled: true })，
+        // 当前线要素就会切换为更醒目的洋红色。
+        demoStyled: "#ec4899",
+      },
+      selected: "#f97316",
+      hover: "#00ff00",
+      // order 用来声明多个状态同时命中时谁优先。
+      // 这里表示：闪烁 > demoStyled > selected > hover。
+      order: ["isFlashing", "demoStyled", "selected", "hover"],
+      default: demoLineColorByIdExpression,
+    }),
+    "line-width": createFeatureStateExpression({
+      states: {
+        // 同一个 demoStyled 也可以同时控制其他样式属性。
+        // 这里让按钮切换后线宽变成 8，方便肉眼观察变化。
+        demoStyled: 8,
+      },
+      selected: 7,
+      hover: 6,
+      // order 只需要写当前这个表达式实际声明过的状态。
+      order: ["demoStyled", "selected", "hover"],
+      default: 3,
+    }),
   },
 });
 
 /**
  * 3. 点图层 (Circle Layer) 样式配置
  * 用于渲染 Point / MultiPoint 数据
- *
- * 这里演示点图层最常见的两类业务效果：
- * 1. circle-color: 点本体颜色支持闪烁
- * 2. circle-stroke-color: 点边框颜色支持闪烁
- *
- * withFlashColor(正常颜色, 闪烁颜色) 的含义：
- * 1. 平时显示第一个参数指定的颜色
- * 2. 当业务层调用 startFlash('sourceId', featureId) 后，颜色会在运行时切换为第二个参数
- *
- * 如果后续需要 hover 效果，也可以参考线图层写法，把第一个参数改成 MapLibre 表达式，例如：
- * ['case', ['boolean', ['feature-state', 'hover'], false], '#00ff00', '#0000ff']
  */
 const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
   paint: {
-    'circle-color': withFlashColor('#0000ff', '#ff0000'),
-    'circle-stroke-color': withFlashColor('#ffffff', '#ffff00'),
+    "circle-color": createFeatureStateExpression({
+      isFlashing: "#ff0000",
+      states: {
+        // 点击按钮后，将当前选中点要素切换为更醒目的洋红色。
+        demoStyled: "#ec4899",
+      },
+      selected: "#f97316",
+      hover: "#22c55e",
+      order: ["isFlashing", "demoStyled", "selected", "hover"],
+      default: "#0000ff",
+    }),
+    "circle-stroke-color": createFeatureStateExpression({
+      isFlashing: "#ffff00",
+      // 自定义feature-state 键名 demoStyled，用于控制描边颜色。
+      states: {
+        // 即使 default 已经按 properties.mark 做判断，
+        // feature-state.demoStyled 仍然会在命中时覆盖默认描边结果。
+        demoStyled: "#831843",
+      },
+      selected: "#7c2d12",
+      order: ["isFlashing", "demoStyled", "selected"],
+      default: demoPointStrokeColorByMarkExpression,
+    }),
+    "circle-radius": createFeatureStateExpression({
+      states: {
+        demoStyled: 9,
+      },
+      selected: 8,
+      order: ["demoStyled", "selected"],
+      default: demoPointRadiusByIdGroupExpression,
+    }),
+    "circle-stroke-width": createFeatureStateExpression({
+      // 自定义feature-state 键名 demoStyled，用于控制描边宽度。
+      states: {
+        demoStyled: 4,
+      },
+      selected: 3,
+      order: ["demoStyled", "selected"],
+      default: 2,
+    }),
   },
 });
 
 /**
  * 4. 标签图层 (Symbol Layer) 样式配置
  * 用于渲染图标(Icon)和文字(Text)
+ *
+ * 这里演示如何在业务层配置显示的文本字段：
+ * 1. 默认 text-field 会显示要素的 id
+ * 2. 这里覆写为：优先显示 name 字段，如果没有 name 则显示“未知站点”
+ * 3. 也可以用 ['concat', ['get', 'name'], ' (', ['get', 'status'], ')'] 拼接多个字段
  */
-const { layout: symbolLayout, paint: symbolPaint } = createSymbolLayerStyle();
+const { layout: symbolLayout, paint: symbolPaint } = createSymbolLayerStyle({
+  layout: {
+    // 优先读取 properties.id，如果没有则显示备用文本
+    "text-field": ["coalesce", ["get", "id"], "未知站点"],
+    // 调整文字大小
+    "text-size": 14,
+    // 调整文字在图标上方的偏移量 [x, y]
+    "text-offset": [0, -1],
+  },
+  paint: {
+    // 设置文字颜色为深蓝色
+    "text-color": "#1e3a8a",
+    // 增加白色的文字描边，使其在复杂底图上更清晰
+    "text-halo-color": "#ffffff",
+    "text-halo-width": 2,
+  },
+});
 
 /**
- * 自定义控件点击事件：改变图层样式示例
+ * 主业务源的轻量图层描述对象。
+ * 这里把常规图层声明收口到 MapBusinessSourceLayers，减少模板里直接书写原始 Mgl 图层样板。
  */
-const changeStyle = () => {
-  if (!map.isLoaded || !map.map) return;
-  // vue-maplibre-gl 的 paint 和 layout 属性不支持响应式，需通过地图原生 API 修改
-
-  // 1. 修改 Circle Layer 的 Paint 属性 (改变圆点颜色为绿色)
-  map.map.setPaintProperty('circleLayer', 'circle-color', '#00ff00');
-
-  // 2. 修改 Circle Layer 的 Paint 属性 (改变圆点半径变大)
-  map.map.setPaintProperty('circleLayer', 'circle-radius', 12);
-
-  // 3. 修改 Line Layer 的 Paint 属性 (改变线宽和线透明度)
-  map.map.setPaintProperty('lineLayer', 'line-width', 6);
-  map.map.setPaintProperty('lineLayer', 'line-opacity', 1);
-
-  // 4. 修改 Fill Layer 的 Layout 属性 (隐藏面图层)
-  // 注意：显隐控制 (visibility) 属于 layout 属性
-  // 取值范围为 'visible' (可见) 或 'none' (隐藏)
-  const currentVisibility = map.map.getLayoutProperty('fillLayer', 'visibility');
-  const newVisibility = currentVisibility === 'none' ? 'visible' : 'none';
-  map.map.setLayoutProperty('fillLayer', 'visibility', newVisibility);
-};
+const primaryBusinessLayers = [
+  // 1. 创建业务点图层（通常用于展示设备节点、站点等点状数据）
+  createCircleBusinessLayer({
+    layerId: LAYER_IDS.circle,
+    // 样式配置：指定该图层的绘制表现（颜色、大小、显隐等）
+    // 如果不传 style，底层会自动回退使用 createCircleLayerStyle() 生成的默认样式
+    style: {
+      layout: circleLayout, // 复用前面解构出来的 circleLayout
+      paint: circlePaint, // 复用前面解构出来的 circlePaint
+    },
+    // 【语法糖】等价于 MapLibre 原生 filter: ['==', '$type', 'Point']
+    // 表示该图层只渲染 geometry.type 为 Point 或 MultiPoint 的要素
+    geometryTypes: ["Point"],
+    // 【语法糖】等价于 MapLibre 原生 filter: ['==', 'mark', 'hole']
+    // 表示该图层只渲染 properties 中 mark 字段值为 'hole' 的要素
+    where: {
+      mark: "hole",
+    },
+    // 💡 提示：如果配置了多个条件，底层会自动用 ['all', ...] 把 geometryTypes 和 where 组合起来
+  }),
+  // 2. 创建另一个业务点图层（展示另一类点状数据，通过 where 条件区分）
+  createCircleBusinessLayer({
+    layerId: LAYER_IDS.circleDec,
+    // 样式配置：指定该图层的绘制表现（颜色、大小、显隐等）
+    // 如果不传 style，底层会自动回退使用 createCircleLayerStyle() 生成的默认样式
+    style: {
+      layout: circleLayout, // 图层布局属性（如 visibility, sort-key）
+      paint: circlePaint, // 图层绘制属性（如 circle-color, circle-radius）
+    },
+    geometryTypes: ["Point"],
+    where: {
+      mark: "dec",
+    },
+    // 仍然支持原生过滤表达式
+    // filter: [">", ["get", "level"], 5],
+  }),
+  // 3. 创建业务线图层（通常用于展示管道、道路等线状数据）
+  createLineBusinessLayer({
+    layerId: LAYER_IDS.primaryLine,
+    style: {
+      layout: lineLayout,
+      paint: linePaint,
+    },
+    geometryTypes: ["LineString"],
+    // 如果你有更复杂的原生过滤需求（如大于、包含），可以使用 filter 字段：
+    // filter: ['>', 'length', 100]
+  }),
+  // 4. 创建业务面图层（通常用于展示片区、建筑轮廓等面状数据）
+  createFillBusinessLayer({
+    layerId: LAYER_IDS.fill,
+    style: {
+      layout: fillLayout,
+      paint: fillPaint,
+    },
+    geometryTypes: ["Polygon"],
+    // 是否允许该图层响应鼠标事件（如 hover、click），默认为 true。
+    // 这里设为 false，意味着面图层仅做展示，鼠标穿透，点击时不会触发任何事件。
+    interactive: false,
+  }),
+  // 5. 创建业务符号图层（通常用于展示图标 icon 或文字标签 text）
+  createSymbolBusinessLayer({
+    layerId: LAYER_IDS.symbol,
+    style: {
+      layout: symbolLayout,
+      paint: symbolPaint,
+    },
+    geometryTypes: ["Point"],
+  }),
+];
 
 /**
- * 自定义控件点击事件：改变特定要素样式示例
+ * 第二业务源的轻量图层描述对象。
+ * 当前示例继续保留“多 source 共用同一套样式”的场景，只是把模板样板收口到描述对象里。
  */
-const changeFeatureStyle = () => {
-  if (!map.isLoaded || !map.map) return;
-
-  // 使用 setPaintProperty 动态更新整个 fill-color 的表达式
-  // 将 id 为 fill_1 的要素颜色修改为显眼的紫色 (#ff00ff)
-  map.map.setPaintProperty('fillLayer', 'fill-color', [
-    'case',
-    ['==', ['get', 'id'], 'fill_1'],
-    '#ff00ff', // 改变特定 id 要素的颜色
-    '#888888', // 其他要素保持默认颜色
-  ]);
-};
+const secondaryBusinessLayers = [
+  createLineBusinessLayer({
+    layerId: LAYER_IDS.secondaryLine,
+    style: {
+      layout: lineLayout, // 复用前面解构出来的 lineLayout
+      paint: linePaint, // 复用前面解构出来的 linePaint
+    },
+    geometryTypes: ["LineString"],
+  }),
+  createFillBusinessLayer({
+    layerId: LAYER_IDS.secondaryFill,
+    style: {
+      layout: fillLayout, // 复用前面解构出来的 fillLayout
+      paint: fillPaint, // 复用前面解构出来的 fillPaint
+    },
+    geometryTypes: ["Polygon"],
+    interactive: false,
+  }),
+];
 
 // ==========================================
 // 闪烁特效逻辑示例
 // ==========================================
-// startFlash 和 stopFlash 方法，用于控制地图要素的闪烁特效
-// 闪烁频率默认500ms，可以通过第二个参数 intervalMs 来调整闪烁速度 例：useMapEffect(map, 1000)
-const { startFlash, stopFlash } = useMapEffect(map);
-let isFlashing = false;
+// feature-state 特效也统一从业务聚合门面读取。
+// 业务层无需再额外持有 useMap() 的底层实例。
+const { isFeatureFlashing, startFlash, stopFlash } = businessMap.effect;
 
-const toggleFlash = () => {
-  isFlashing = !isFlashing;
-  // 假设需要闪烁的数据源为 test_geojson_source，要素原生 ID 为 'point_1'、'point_2' 和 'line_1'
-  if (isFlashing) {
-    startFlash('test_geojson_source', 'point_1');
-    startFlash('test_geojson_source', 'point_2');
-    startFlash('test_geojson_source', 'line_1');
-    ElMessage.success('已开启 point_1, point_2 和 line_1 闪烁');
-  } else {
-    stopFlash('test_geojson_source', 'point_1');
-    stopFlash('test_geojson_source', 'point_2');
-    stopFlash('test_geojson_source', 'line_1');
-    ElMessage.warning('已停止闪烁');
+/**
+ * 当前示例目标集合是否全部处于闪烁状态。
+ * 用它来驱动按钮文案和切换逻辑，避免维护额外的本地布尔变量。
+ */
+const isDemoFlashing = computed(() => {
+  return FLASH_TARGETS.every((target) => isFeatureFlashing(target));
+});
+
+/** 当前闪烁按钮文案。 */
+const flashButtonText = computed(() => {
+  return isDemoFlashing.value ? "停止要素闪烁" : "开始要素闪烁";
+});
+
+/**
+ * 切换当前示例要素的闪烁状态。
+ */
+const toggleFlash = (): void => {
+  const nextFlashing = !isDemoFlashing.value;
+
+  FLASH_TARGETS.forEach((target) => {
+    if (nextFlashing) {
+      if (target.id === "line_1") {
+        // line_1 用更快的闪烁频率，作为“单个目标独立频率”的最小示例。
+        // 其他目标不传频率时，继续走 useMapEffect 默认的 500ms。
+        startFlash(target, 300);
+        return;
+      }
+
+      startFlash(target);
+      return;
+    }
+
+    stopFlash(target);
+  });
+
+  if (nextFlashing) {
+    ElMessage.success("已开启 point_1、point_2 和 line_1 闪烁，line_1 使用 300ms 频率");
+    return;
   }
+
+  ElMessage.warning("已停止闪烁");
 };
 
 // ==========================================
-// 响应式 Popup 状态管理
+// 选择态展示逻辑示例
 // ==========================================
 
-// 定义 Popup 类型枚举
-enum popupType {
-  point = 'point',
-  line = 'line',
-  terradraw = 'terradraw',
+/** 右键摘要行。 */
+interface SelectionSummaryRow {
+  label: string;
+  value: string;
 }
-const popupState = reactive({
-  visible: false,
-  lngLat: [0, 0] as LngLatLike,
-  featureProps: {} as any,
-  type: '' as popupType | '', // 新增字段：用于标识当前点击的是什么类型的要素
-  featureId: null as string | number | null,
-  geometryType: '',
-  selectedSegmentIndex: -1,
-  selectedSegmentLengthMeters: 0,
-  lineLengthMeters: 0,
+
+/** 属性编辑器单键保存载荷。 */
+interface FeaturePropertyEditorSavePayload {
+  key: string;
+  value: any;
+}
+
+/** 属性编辑器单键删除载荷。 */
+interface FeaturePropertyEditorRemovePayload {
+  key: string;
+}
+
+/**
+ * 创建空的属性面板态。
+ * @returns 空的业务属性面板态
+ */
+const createEmptyPropertyPanelState = (): BusinessKit.MapFeaturePropertyPanelState => {
+  return {
+    properties: {},
+    items: [],
+  };
+};
+
+/**
+ * 克隆一份原始属性快照，避免 UI 直接持有底层引用。
+ * @param properties 原始属性对象
+ * @returns 深拷贝后的属性快照
+ */
+const clonePropertySnapshot = (
+  properties: Record<string, any> | null | undefined,
+): Record<string, any> => {
+  return JSON.parse(JSON.stringify(properties || {}));
+};
+
+/**
+ * 当前页面的选择态展示文案。
+ * 这里不再保存底层模式与数量，只保留示例面板里真正需要展示的摘要文本。
+ */
+const selectionPanelState = reactive({
+  lastChangeSummary: "当前还没有发生选中集变化",
+  contextMenuSummary: "当前未展示选中集摘要",
+});
+
+const {
+  isActive: isSelectionActive,
+  selectionMode,
+  selectedCount,
+  selectedFeatures,
+  selectedFeatureIds,
+  hasSelection,
+  activate: activateSelection,
+  deactivate: deactivateSelection,
+  clear: clearSelection,
+  getSelectedPropertyValues: getSelectionPropertyValues,
+  groupSelectedFeaturesByLayer: getSelectionGroups,
+} = businessMap.selection;
+
+/**
+ * 当前已切换到示例样式的要素键集合。
+ * 这里只做页面级演示，因此直接用内存集合记录当前状态即可。
+ */
+const demoStyledFeatureKeys = new Set<string>();
+
+/**
+ * 生成示例样式状态的唯一键。
+ * @param target 要素状态目标
+ * @returns 稳定唯一键；参数不足时返回空字符串
+ */
+const getDemoStyleTargetKey = (target: {
+  sourceId: string | null;
+  sourceLayer?: string | null;
+  featureId: string | number | null;
+}): string => {
+  if (!target.sourceId || target.featureId === null) {
+    return "";
+  }
+
+  return `${target.sourceId}::${target.sourceLayer || ""}::${String(target.featureId)}`;
+};
+
+/**
+ * 将选中要素快照转换为可写入 feature-state 的目标描述。
+ * @param selectedFeature 当前选中要素快照
+ * @returns 标准化后的 feature-state 目标；不可写时返回 null
+ */
+const getDemoStyleStateTarget = (
+  selectedFeature: BusinessKit.MapLayerSelectedFeature,
+): BusinessKit.MapFeatureStateTarget | null => {
+  if (!selectedFeature.sourceId || selectedFeature.featureId === null) {
+    return null;
+  }
+
+  return {
+    source: selectedFeature.sourceId,
+    id: selectedFeature.featureId,
+    // 这里顺手兼容 source-layer，保证后续切换矢量源时也能直接复用。
+    sourceLayer: selectedFeature.sourceLayer || undefined,
+  };
+};
+
+/**
+ * 判断当前选中要素是否已经启用了示例样式。
+ * @param selectedFeature 当前选中要素快照
+ * @returns 是否已处于示例样式态
+ */
+const isDemoStyleEnabled = (selectedFeature: BusinessKit.MapLayerSelectedFeature): boolean => {
+  const targetKey = getDemoStyleTargetKey({
+    sourceId: selectedFeature.sourceId,
+    sourceLayer: selectedFeature.sourceLayer,
+    featureId: selectedFeature.featureId,
+  });
+
+  return targetKey ? demoStyledFeatureKeys.has(targetKey) : false;
+};
+
+/**
+ * 将当前选中要素切换为示例样式或恢复默认样式。
+ * 这是一个最小可运行示例：只演示“按钮 + 当前选中集 + feature-state 样式覆写”。
+ */
+const changeStyle = (): void => {
+  if (!mapInitRef.value) {
+    ElMessage.warning("地图组件尚未初始化完成");
+    return;
+  }
+
+  const styleTargetMap = new Map<
+    string,
+    {
+      target: BusinessKit.MapFeatureStateTarget;
+      selectedFeature: BusinessKit.MapLayerSelectedFeature;
+    }
+  >();
+
+  selectedFeatures.value.forEach((selectedFeature) => {
+    const target = getDemoStyleStateTarget(selectedFeature);
+    if (!target) {
+      return;
+    }
+
+    const targetKey = getDemoStyleTargetKey({
+      sourceId: target.source,
+      sourceLayer: target.sourceLayer || null,
+      featureId: target.id,
+    });
+    if (!targetKey) {
+      return;
+    }
+
+    // 这里做一次去重，避免同一个要素因多图层命中被重复写入。
+    styleTargetMap.set(targetKey, {
+      target,
+      selectedFeature,
+    });
+  });
+
+  if (styleTargetMap.size === 0) {
+    ElMessage.info("请先选中至少一个点或线要素，再点击切换样式");
+    return;
+  }
+
+  const shouldEnableDemoStyle = [...styleTargetMap.values()].some(({ selectedFeature }) => {
+    return !isDemoStyleEnabled(selectedFeature);
+  });
+
+  let changedCount = 0;
+  styleTargetMap.forEach(({ target }, targetKey) => {
+    const success = mapInitRef.value?.setMapFeatureState(target, {
+      [DEMO_STYLE_STATE_KEY]: shouldEnableDemoStyle,
+    });
+    if (!success) {
+      return;
+    }
+
+    // 写入成功后，再同步页面本地状态集合。
+    if (shouldEnableDemoStyle) {
+      demoStyledFeatureKeys.add(targetKey);
+    } else {
+      demoStyledFeatureKeys.delete(targetKey);
+    }
+    changedCount += 1;
+  });
+
+  if (changedCount === 0) {
+    ElMessage.warning("当前选中要素样式切换失败");
+    return;
+  }
+
+  ElMessage.success(
+    shouldEnableDemoStyle
+      ? `已为 ${changedCount} 个选中要素切换示例样式`
+      : `已为 ${changedCount} 个选中要素恢复默认样式`,
+  );
+};
+
+/**
+ * 获取 GeoJSON 要素的业务 ID。
+ * @param feature 待提取业务 ID 的要素
+ * @returns 业务 ID；不存在时返回 null
+ */
+const getFeatureBusinessId = (
+  feature: MapCommonFeature | null | undefined,
+): string | number | null => {
+  if (!feature) {
+    return null;
+  }
+
+  const propertyId = feature.properties?.id;
+  if (propertyId !== undefined && propertyId !== null) {
+    return propertyId;
+  }
+
+  return feature.id ?? null;
+};
+
+/**
+ * 将选择模式转换为便于示例展示的中文文本。
+ * @param mode 当前选择模式
+ * @returns 中文模式文本
+ */
+const getSelectionModeText = (mode: BusinessKit.MapSelectionMode): string => {
+  return mode === "multiple" ? "多选" : "单选";
+};
+
+/**
+ * 将值列表格式化为易读文本。
+ * @param values 需要展示的值列表
+ * @returns 单行展示文本
+ */
+const formatValueList = (values: Array<string | number>): string => {
+  return values.length > 0 ? values.map((value) => String(value)).join("、") : "无";
+};
+
+/**
+ * 将按图层分组后的结果压缩成单行摘要。
+ * @param layerGroups 图层分组结果
+ * @returns 图层分布摘要文本
+ */
+const formatLayerDistribution = (layerGroups: BusinessKit.MapSelectionLayerGroup[]): string => {
+  if (layerGroups.length === 0) {
+    return "无";
+  }
+
+  return layerGroups
+    .map((layerGroup) => {
+      return `${layerGroup.layerId || "未知图层"} x${layerGroup.features.length}`;
+    })
+    .join("，");
+};
+
+/**
+ * 将当前选中集转换为右键面板摘要行。
+ * @param currentSelectionMode 当前选择模式
+ * @returns 适合直接传给属性面板的摘要行
+ */
+const buildSelectionSummaryRows = (
+  currentSelectionMode: BusinessKit.MapSelectionMode,
+): SelectionSummaryRow[] => {
+  const currentSelectedFeatures = selectedFeatures.value;
+
+  return [
+    {
+      label: "当前模式",
+      value: getSelectionModeText(currentSelectionMode),
+    },
+    {
+      label: "选中数量",
+      value: `${currentSelectedFeatures.length} 个`,
+    },
+    {
+      label: "要素 ID",
+      value: formatValueList(selectedFeatureIds.value),
+    },
+    {
+      label: "图层分布",
+      value: formatLayerDistribution(getSelectionGroups()),
+    },
+  ];
+};
+
+/**
+ * 将摘要行压缩为单行文本，便于日志和示例面板展示。
+ * @param summaryRows 当前摘要行
+ * @returns 压缩后的单行文本
+ */
+const buildSelectionSummaryText = (summaryRows: SelectionSummaryRow[]): string => {
+  if (summaryRows.length === 0) {
+    return "当前没有可展示的选中集摘要";
+  }
+
+  return summaryRows.map((summaryRow) => `${summaryRow.label}：${summaryRow.value}`).join(" | ");
+};
+
+/**
+ * 当前选中集的图层分布文本。
+ * 这里直接演示 composable + helper 的组合用法。
+ */
+const selectedLayerDistributionText = computed(() => {
+  return formatLayerDistribution(getSelectionGroups());
+});
+
+/**
+ * 当前 circleLayer 图层中的业务 ID 摘要。
+ * 这里演示 businessMap.selection 暴露的快捷属性提取方法。
+ */
+const selectedCircleLayerIdsText = computed(() => {
+  return formatValueList(
+    getSelectionPropertyValues<string | number>("id", {
+      layerId: LAYER_IDS.circle,
+    }),
+  );
+});
+
+/**
+ * 当前完整选中集的要素 ID 摘要。
+ * 这里直接复用 businessMap.selection 已经暴露好的计算结果。
+ */
+const selectedFeatureIdsText = computed(() => {
+  return formatValueList(selectedFeatureIds.value);
+});
+
+/**
+ * 当前选择模式的中文文本。
+ * 这里让模板只负责展示，不再自己写判断。
+ */
+const selectionModeText = computed(() => {
+  return getSelectionModeText(selectionMode.value);
+});
+
+/**
+ * 当前选中态面板的说明文本。
+ * 通过一句话告诉业务开发者：现在不需要再手动同步底层状态。
+ */
+const selectionGuideText = computed(() => {
+  if (!hasSelection.value) {
+    return "当前没有选中要素。点右上角的多选按钮后，就可以直接用这个面板观察数量和操作入口。";
+  }
+
+  if (isSelectionActive.value) {
+    return "现在 UI 直接绑定选择态门面，不再手动同步数量、选中集和清空/退出按钮。";
+  }
+
+  return "当前展示的是已有选中结果；如果要批量处理，可以先进入多选模式。";
+});
+
+/**
+ * 当前线操作入口的说明文本。
+ * 这里专门演示：业务层只调用 featureQuery.resolveSelectedLine() 取最新线要素。
+ */
+const selectedLineOperationText = computed(() => {
+  const selectionSignature = selectedFeatureIds.value.join("|");
+  const selectedLineFeature = featureQuery.resolveSelectedLine();
+
+  if (!selectedLineFeature) {
+    return selectionSignature
+      ? "当前选中的不是线要素。请改为点选线，再去试“生成线廊”或“创建线草稿”。"
+      : "当前未选中线要素。先点一条线，再去试“生成线廊”或“创建线草稿”。";
+  }
+
+  const featureId = getFeatureBusinessId(selectedLineFeature);
+  const selectedFeatureRef = featureQuery.getSelectedFeatureRef();
+  const sourceText =
+    selectedFeatureRef?.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID ? "线草稿源" : "正式业务源";
+
+  return `当前线操作会读取 ${sourceText} 的最新线要素：${String(featureId ?? "未命名线")}`;
+});
+
+/**
+ * 当前线草稿状态的说明文本。
+ * 用来强调业务层现在直接通过 businessMap.draft 读取线草稿状态。
+ */
+const lineDraftStatusText = computed(() => {
+  return hasLineDraftFeatures.value
+    ? `线草稿能力门面当前已有临时结果（共 ${lineDraftPreview.featureCount.value} 个）；如果不需要，直接点击这里的“清空线草稿”即可。`
+    : "当前没有线草稿。选中线并点击“创建线草稿”后，这里会通过 businessMap.draft 自动刷新状态。";
+});
+
+/**
+ * 统一格式化 DXF 导出的 source 范围文本。
+ * @param sourceIds 最终生效的 sourceId 列表
+ * @returns 适合示例面板直接展示的中文文本
+ */
+const formatDxfSourceIdsText = (sourceIds: string[] | null): string => {
+  if (!sourceIds || sourceIds.length === 0) {
+    return "全部业务 source";
+  }
+
+  return sourceIds.join("、");
+};
+
+/**
+ * 统一格式化 DXF 导出的坐标转换文本。
+ * @param sourceCrs 源坐标系
+ * @param targetCrs 目标坐标系
+ * @returns 适合示例面板直接展示的中文文本
+ */
+const formatDxfCrsText = (sourceCrs?: string, targetCrs?: string): string => {
+  if (!sourceCrs || !targetCrs) {
+    return "未完整配置 CRS，将按原坐标导出";
+  }
+
+  if (sourceCrs === targetCrs) {
+    return `${sourceCrs}（无需转换）`;
+  }
+
+  return `${sourceCrs} -> ${targetCrs}`;
+};
+
+/**
+ * 提取用户可读的错误消息。
+ * @param error 任意异常对象
+ * @returns 适合直接提示给用户的错误文本
+ */
+const getReadableErrorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "DXF 导出失败，请查看控制台日志";
+};
+
+/**
+ * 读取当前地图实例上的 DXF 导出插件 API。
+ * 业务层只通过 mapInitRef + 公开解析门面取能力，不感知插件宿主内部实现。
+ * @returns 当前地图上的 DXF 导出插件 API；尚未挂载时返回 null
+ */
+const getMapDxfExportApi = () => {
+  return resolveMapDxfExportApi(mapInitRef.value);
+};
+
+/**
+ * 业务层局部覆写的图层名解析器。
+ * 当前示例只导出主业务源，因此额外把 `mark` 拼进图层名里，
+ * 用来演示“业务层可以在单次任务里覆写 DXF 图层命名规则”。
+ * @param feature 当前业务要素
+ * @param sourceId 当前业务 sourceId
+ * @returns 当前要素在 DXF 中使用的图层名
+ */
+const resolvePrimaryBusinessDxfLayerName = (
+  feature: MapCommonFeature,
+  sourceId: string,
+): string => {
+  const featureMark =
+    typeof feature.properties?.mark === "string" && feature.properties.mark.length > 0
+      ? feature.properties.mark
+      : "default";
+
+  return `${sourceId}_${featureMark}`;
+};
+
+/**
+ * 当前示例面板展示的 DXF 默认配置说明。
+ * 这里直接读取插件 API 的 getResolvedOptions()，确保页面展示的是最终生效值，而不是手写猜测。
+ */
+const dxfResolvedOptionsText = computed(() => {
+  const api = getMapDxfExportApi();
+  if (!api) {
+    return "DXF 导出插件尚未挂载到地图实例。地图初始化完成后，这里会显示 defaults 和业务层覆写后的最终配置。";
+  }
+
+  // 不传 overrides，读取的是“插件 defaults 最终落地后的默认导出配置”。
+  const defaultOptions = api.getResolvedOptions();
+
+  // 传入与按钮一致的 overrides，展示“业务层本次任务局部覆写后”的最终配置。
+  const primaryOnlyOptions = api.getResolvedOptions({
+    sourceIds: [SOURCE_IDS.primary],
+    fileName: DXF_PRIMARY_ONLY_FILE_NAME,
+    layerNameResolver: resolvePrimaryBusinessDxfLayerName,
+  });
+
+  return [
+    `插件默认导出：范围 = ${formatDxfSourceIdsText(defaultOptions.sourceIds)}；文件 = ${defaultOptions.fileName}；坐标转换 = ${formatDxfCrsText(defaultOptions.sourceCrs, defaultOptions.targetCrs)}。`,
+    `业务层局部覆写后：范围 = ${formatDxfSourceIdsText(primaryOnlyOptions.sourceIds)}；文件 = ${primaryOnlyOptions.fileName}；图层名 = 按 sourceId + mark 生成。`,
+  ].join("\n");
+});
+
+/**
+ * 只导出主业务 source 的 DXF 文件。
+ * 这个按钮专门演示业务层如何在“不改插件 defaults”的前提下，
+ * 通过 `downloadDxf(overrides)` 为某一次导出任务临时覆写参数。
+ */
+const downloadPrimaryBusinessSourceDxf = async (): Promise<void> => {
+  const dxfExportApi = getMapDxfExportApi();
+  if (!dxfExportApi) {
+    ElMessage.warning("DXF 导出插件尚未初始化完成");
+    return;
+  }
+
+  try {
+    const result = await dxfExportApi.downloadDxf({
+      sourceIds: [SOURCE_IDS.primary],
+      fileName: DXF_PRIMARY_ONLY_FILE_NAME,
+      layerNameResolver: resolvePrimaryBusinessDxfLayerName,
+    });
+
+    if (result.warnings.length > 0) {
+      console.warn("[NGGI00 DXF 示例] 本次导出包含警告", result.warnings);
+    }
+
+    ElMessage.success(
+      `已导出主业务 DXF：共处理 ${result.featureCount} 个要素，写入 ${result.entityCount} 个实体`,
+    );
+  } catch (error) {
+    console.error("[NGGI00 DXF 示例] 导出失败", error);
+    ElMessage.error(getReadableErrorMessage(error));
+  }
+};
+
+/**
+ * 根据最新的选中集变化上下文更新示例面板文案。
+ * @param context 选中集变化上下文
+ */
+const syncSelectionPanelFromChange = (context: BusinessKit.MapLayerSelectionChangeContext): void => {
+  // 将底层选中变化上下文转换为业务层更易消费的结构；集合字段与触发目标字段已分组。
+  const selectionContext = featureQuery.toSelectionBusinessContext(context);
+  const currentSelectionMode = context.selectionMode || selectionMode.value;
+  const addedIdsText = formatValueList(getSelectionItemIds(selectionContext.added));
+  const removedIdsText = formatValueList(getSelectionItemIds(selectionContext.removed));
+  const circleLayerIdsText = formatValueList(
+    getSelectionItemIds(
+      selectionContext.selected.filter((selectedItem) => selectedItem.layerId === LAYER_IDS.circle),
+    ),
+  );
+
+  /*
+   * 旧写法 / 逃生出口：
+   * const addedIdsText = formatValueList(context.getAddedFeatureIds());
+   * const removedIdsText = formatValueList(context.getRemovedFeatureIds());
+   * const circleLayerIdsText = formatValueList(
+   *   context.getSelectedPropertyValues<string | number>("id", { layerId: LAYER_IDS.circle }),
+   * );
+   * 适合需要直接处理底层 context / 自定义状态结构时使用。
+   */
+  selectionPanelState.lastChangeSummary =
+    `原因：${selectionContext.reason || "unknown"}；模式：${getSelectionModeText(currentSelectionMode)}；` +
+    `当前 ${selectionContext.selectedCount} 个；新增 ${addedIdsText}；移除 ${removedIdsText}；` +
+    `circleLayer 业务 ID：${circleLayerIdsText}`;
+};
+
+/**
+ * 从业务层选中项中提取适合展示的业务 ID 列表。
+ * @param items 当前选中项列表
+ * @returns 归一化后的业务 ID 列表
+ */
+const getSelectionItemIds = (
+  items: BusinessKit.MapBusinessSelectionItem[],
+): Array<string | number> => {
+  return items.flatMap((item) => {
+    const propertyId = item.properties?.id;
+    if (propertyId !== undefined && propertyId !== null) {
+      return [propertyId as string | number];
+    }
+
+    return item.featureId === null ? [] : [item.featureId];
+  });
+};
+
+/**
+ * 将地图经纬度对象转换为 Popup helper 需要的锚点格式。
+ * @param lngLat 当前地图经纬度
+ * @returns 可直接传给 Popup 的坐标数组
+ */
+const createPopupLngLat = (lngLat: { lng: number; lat: number }): [number, number] => {
+  return [lngLat.lng, lngLat.lat];
+};
+
+/**
+ * 当前页面 Popup 类型常量。
+ * 用常量对象而不是散落字符串，方便模板与业务逻辑共用。
+ */
+const POPUP_TYPE = {
+  point: "point",
+  line: "line",
+  terradraw: "terradraw",
+} as const;
+
+/** 当前页面支持的 Popup 类型。 */
+type NgPopupType = (typeof POPUP_TYPE)[keyof typeof POPUP_TYPE];
+
+/** Popup 统一基础载荷。 */
+interface NgPopupBasePayload {
+  type: NgPopupType;
+  featureId: string | number | null;
+  geometryType: string;
+  featureProps: Record<string, any>;
+}
+
+/** 点弹窗载荷。 */
+interface NgPointPopupPayload extends NgPopupBasePayload {
+  type: typeof POPUP_TYPE.point;
+}
+
+/** 线弹窗载荷。 */
+interface NgLinePopupPayload extends NgPopupBasePayload {
+  type: typeof POPUP_TYPE.line;
+  selectedSegmentIndex: number;
+  selectedSegmentLengthMeters: number;
+  lineLengthMeters: number;
+}
+
+/** TerraDraw 弹窗载荷。 */
+interface NgTerradrawPopupPayload extends NgPopupBasePayload {
+  type: typeof POPUP_TYPE.terradraw;
+}
+
+/** 当前页面 Popup 联合载荷。 */
+type NgPopupPayload = NgPointPopupPayload | NgLinePopupPayload | NgTerradrawPopupPayload;
+
+/**
+ * 创建点要素弹窗载荷。
+ * @param feature 当前点要素
+ * @param featureId 当前要素 ID
+ * @returns 点弹窗载荷
+ */
+const createPointPopupPayload = (
+  feature: MapCommonFeature,
+  featureId: string | number | null,
+): NgPointPopupPayload => {
+  return {
+    type: POPUP_TYPE.point,
+    featureId: featureId ?? getFeatureBusinessId(feature),
+    geometryType: feature.geometry?.type || "",
+    featureProps: clonePropertySnapshot(feature.properties || {}),
+  };
+};
+
+/**
+ * 创建线要素弹窗载荷。
+ * 该 helper 会顺手补齐总长度和命中线段长度，业务层后续只消费结果即可。
+ *
+ * @param lineFeature 当前线要素
+ * @param segmentIndex 当前线段索引；传负数表示当前未识别到具体线段
+ * @returns 线弹窗载荷
+ */
+const createLinePopupPayload = (
+  lineFeature: MapCommonLineFeature,
+  segmentIndex: number,
+): NgLinePopupPayload => {
+  const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(
+    lineFeature.geometry.coordinates,
+  );
+
+  const lineLengthMeters =
+    normalizedCoordinates.length >= 2
+      ? MapLineMeasureTool.getCoordinatesLengthInMeters(normalizedCoordinates)
+      : 0;
+
+  if (normalizedCoordinates.length < 2) {
+    return {
+      type: POPUP_TYPE.line,
+      featureId: getFeatureBusinessId(lineFeature),
+      geometryType: lineFeature.geometry.type,
+      featureProps: clonePropertySnapshot(lineFeature.properties || {}),
+      selectedSegmentIndex: -1,
+      selectedSegmentLengthMeters: 0,
+      lineLengthMeters,
+    };
+  }
+
+  const currentSegmentIndex =
+    segmentIndex >= 0 ? Math.max(0, Math.min(segmentIndex, normalizedCoordinates.length - 2)) : -1;
+  const selectedSegmentLengthMeters =
+    currentSegmentIndex >= 0
+      ? MapLineMeasureTool.getDistanceInMeters(
+          normalizedCoordinates[currentSegmentIndex],
+          normalizedCoordinates[currentSegmentIndex + 1],
+        )
+      : 0;
+
+  return {
+    type: POPUP_TYPE.line,
+    featureId: getFeatureBusinessId(lineFeature),
+    geometryType: lineFeature.geometry.type,
+    featureProps: clonePropertySnapshot(lineFeature.properties || {}),
+    selectedSegmentIndex: currentSegmentIndex,
+    selectedSegmentLengthMeters,
+    lineLengthMeters,
+  };
+};
+
+/**
+ * 在 NGGI00 示例页中演示“点击线后立即测长”的业务效果。
+ * @param lineFeature 当前点击命中的线要素
+ */
+const showClickedLineMeasureExample = (lineFeature: MapCommonLineFeature): void => {
+  const lineLengthMeters = MapLineMeasureTool.getFeatureLengthInMeters(lineFeature);
+  if (lineLengthMeters === null) {
+    return;
+  }
+
+  const featureId = getFeatureBusinessId(lineFeature) ?? "未命名线";
+  console.log("[NGGI00 示例] 点击线后测得线总长度", {
+    featureId,
+    lineLengthMeters,
+  });
+  ElMessage.success(`示例：线 ${String(featureId)} 总长度为 ${lineLengthMeters.toFixed(2)} m`);
+};
+
+// ==========================================
+// Popup 状态管理
+// ==========================================
+
+/**
+ * 当前页面的统一 Popup 状态管理实例。
+ * 泛型传入当前页面支持的全部弹窗载荷联合类型（NgPopupPayload），
+ * 确保后续在调用 popup.open / popup.setPayload 时具备严格的类型提示与校验。
+ */
+const popup = useMapPopupState<NgPopupPayload>();
+const { visible: popupVisible, lngLat: popupLngLat, payload: popupPayload } = popup;
+
+/**
+ * 当前是否为线弹窗。
+ * 模板只关心“当前该显示哪一块内容”，不直接处理联合类型分支。
+ */
+const popupLinePayload = computed<NgLinePopupPayload | null>(() => {
+  const currentPayload = popupPayload.value;
+  return currentPayload?.type === POPUP_TYPE.line ? currentPayload : null
+});
+
+/** 当前是否为点弹窗。 */
+const popupPointPayload = computed<NgPointPopupPayload | null>(() => {
+  const currentPayload = popupPayload.value;
+  return currentPayload?.type === POPUP_TYPE.point ? currentPayload : null;
+});
+
+/** 当前是否为 TerraDraw 弹窗。 */
+const popupTerradrawPayload = computed<NgTerradrawPopupPayload | null>(() => {
+  const currentPayload = popupPayload.value;
+  return currentPayload?.type === POPUP_TYPE.terradraw ? currentPayload : null;
+});
+
+/** 线弹窗是否开启。 */
+const hasLinePopup = computed(() => popupLinePayload.value !== null);
+
+/** 点弹窗是否开启。 */
+const hasPointPopup = computed(() => popupPointPayload.value !== null);
+
+/** TerraDraw 弹窗是否开启。 */
+const hasTerradrawPopup = computed(() => popupTerradrawPayload.value !== null);
+
+/** 线弹窗属性快照。 */
+const popupLineFeatureProps = computed<Record<string, any>>(() => {
+  return popupLinePayload.value?.featureProps || {};
+});
+
+/** 线弹窗总长度。 */
+const popupLineLengthMeters = computed(() => {
+  return popupLinePayload.value?.lineLengthMeters ?? 0;
+});
+
+/** 当前选中的线段索引。 */
+const popupSelectedSegmentIndex = computed(() => {
+  return popupLinePayload.value?.selectedSegmentIndex ?? -1;
+});
+
+/** 当前选中线段长度。 */
+const popupSelectedSegmentLengthMeters = computed(() => {
+  return popupLinePayload.value?.selectedSegmentLengthMeters ?? 0;
+});
+
+/** 点弹窗属性快照。 */
+const popupPointFeatureProps = computed<Record<string, any>>(() => {
+  return popupPointPayload.value?.featureProps || {};
+});
+
+/** TerraDraw 弹窗属性快照。 */
+const popupTerradrawFeatureProps = computed<Record<string, any>>(() => {
+  return popupTerradrawPayload.value?.featureProps || {};
+});
+
+/** TerraDraw 弹窗几何类型。 */
+const popupTerradrawGeometryType = computed(() => {
+  return popupTerradrawPayload.value?.geometryType || "";
+});
+
+/** TerraDraw 弹窗要素 ID 展示文本。 */
+const popupTerradrawFeatureIdText = computed(() => {
+  const currentPayload = popupTerradrawPayload.value;
+  return currentPayload?.featureId ?? currentPayload?.featureProps.id ?? "无";
 });
 
 const lineActionForm = reactive({
@@ -1522,14 +2467,26 @@ const lineActionForm = reactive({
 /**
  * 处理弹窗中的业务按钮点击动作。
  */
-const handlePopupAction = () => {
-  const msgMap = {
-    [popupType.line]: `查看线路详情：${popupState.featureProps.id}`,
-    [popupType.point]: `进入站点：${popupState.featureProps.name}`,
-    [popupType.terradraw]: `查看 TerraDraw 要素：${popupState.featureId || popupState.featureProps.id}`,
-  };
-  const msg = msgMap[popupState.type as popupType] || '未定义的弹窗动作';
-  ElMessage.success(msg);
+const handlePopupAction = (): void => {
+  const currentPayload = popupPayload.value;
+  if (!currentPayload) {
+    ElMessage.info("当前没有打开中的弹窗");
+    return;
+  }
+
+  if (currentPayload.type === POPUP_TYPE.line) {
+    ElMessage.success(`查看线路详情：${String(currentPayload.featureProps.id || currentPayload.featureId)}`);
+    return;
+  }
+
+  if (currentPayload.type === POPUP_TYPE.point) {
+    ElMessage.success(`进入站点：${String(currentPayload.featureProps.name || "未命名站点")}`);
+    return;
+  }
+
+  ElMessage.success(
+    `查看 TerraDraw 要素：${String(currentPayload.featureId || currentPayload.featureProps.id || "无")}`,
+  );
 };
 
 /**
@@ -1537,13 +2494,18 @@ const handlePopupAction = () => {
  */
 const handleClearLineDraftFeatures = (): void => {
   if (!hasLineDraftFeatures.value) {
-    ElMessage.info('当前没有可清理的线草稿');
+    ElMessage.info("当前没有可清理的线草稿");
     return;
   }
 
-  getLineDraftPreviewApi()?.clear?.();
+  const success = lineDraftPreview.clear();
+  if (!success) {
+    ElMessage.warning("当前未注册线草稿插件，无法清空草稿");
+    return;
+  }
+
   closeBusinessPanels();
-  ElMessage.success('已清空全部线草稿');
+  ElMessage.success("已通过 businessMap.draft 清空全部线草稿");
 };
 
 /**
@@ -1554,55 +2516,27 @@ const handleClearLineDraftFeatures = (): void => {
  * 3. 如果选中的是"正式线"，生成的结果就保存到"正式数据源"里
  */
 const handleGenerateLineCorridor = (): void => {
-  const selectedLineFeature = getSelectedLine();
-  const selectedFeatureContext = mapInitRef.value?.getSelectedMapFeatureContext?.() || null;
-  const lineDraftPreviewApi = getLineDraftPreviewApi();
+  const selectedLineFeature = featureQuery.resolveSelectedLine();
   if (!selectedLineFeature) {
-    ElMessage.warning('当前未选中可操作的线要素');
+    ElMessage.warning("当前未选中可操作的线要素");
     return;
   }
 
   if (lineActionForm.widthMeters <= 0) {
-    ElMessage.warning('请输入大于 0 的区域宽度');
+    ElMessage.warning("请输入大于 0 的区域宽度");
     return;
   }
 
-  if (lineDraftPreviewApi?.isSelectedFeature?.()) {
-    // 当前选中的是线草稿时，线廊也应该进入插件内部草稿源，
-    // 这样“清空临时草稿”才能一次性清掉整套临时结果。
-    const success = lineDraftPreviewApi.replacePreviewRegion?.({
-      lineFeature: selectedLineFeature,
-      widthMeters: lineActionForm.widthMeters,
-    });
-
-    if (!success) {
-      ElMessage.warning('区域生成失败，请检查线要素几何是否有效');
-      return;
-    }
-
-    syncLinePopupMetrics(selectedLineFeature, popupState.selectedSegmentIndex);
-    ElMessage.success('已按当前宽度替换线廊草稿');
+  const result = featureQuery.replaceSelectedLineCorridor({
+    widthMeters: lineActionForm.widthMeters,
+  });
+  if (!result.success) {
+    ElMessage.warning(result.message);
     return;
   }
 
-  if (!selectedFeatureContext?.sourceId) {
-    ElMessage.warning('当前正式线要素缺少来源数据源，无法生成区域');
-    return;
-  }
-
-  const nextFeatures = MapLineCorridorTool.replaceRegionFeatures(
-    getCurrentMapFeatures(selectedFeatureContext.sourceId),
-    selectedLineFeature,
-    lineActionForm.widthMeters
-  );
-  if (!nextFeatures) {
-    ElMessage.warning('区域生成失败，请检查线要素几何是否有效');
-    return;
-  }
-
-  commitMapFeatures(selectedFeatureContext.sourceId, nextFeatures);
-  syncLinePopupMetrics(selectedLineFeature, popupState.selectedSegmentIndex);
-  ElMessage.success('已按当前宽度替换生成区域');
+  popup.setPayload(createLinePopupPayload(selectedLineFeature, popupSelectedSegmentIndex.value));
+  ElMessage.success(result.message);
 };
 
 /**
@@ -1612,33 +2546,23 @@ const handleGenerateLineCorridor = (): void => {
  * 然后插件会自动在地图上画出一条【线草稿】（虚线）。
  */
 const handleCreateLineDraft = (): void => {
-  const selectedLineFeature = getSelectedLine();
-  const lineDraftPreviewApi = getLineDraftPreviewApi();
-  if (!selectedLineFeature) {
-    ElMessage.warning('当前未选中可操作的线要素');
-    return;
-  }
-
   if (lineActionForm.extendLengthMeters <= 0) {
-    ElMessage.warning('请输入大于 0 的延长长度');
+    ElMessage.warning("请输入大于 0 的延长长度");
     return;
   }
 
-  // 告诉插件：生成一条临时线草稿。
-  // 旧草稿怎么清理、多数据源怎么隔离，这些工作都由插件内部负责。
-  const nextLineFeature = lineDraftPreviewApi?.previewLine?.({
-    lineFeature: selectedLineFeature,
-    segmentIndex: popupState.selectedSegmentIndex,
+  const result = featureQuery.previewSelectedLine({
+    segmentIndex: popupSelectedSegmentIndex.value,
     extendLengthMeters: lineActionForm.extendLengthMeters,
   });
 
-  if (!nextLineFeature) {
-    ElMessage.warning('当前线段无法继续延长');
+  if (!result.success || !result.lineFeature) {
+    ElMessage.warning(result.message);
     return;
   }
 
-  syncLinePopupMetrics(nextLineFeature, 0);
-  ElMessage.success('已生成线草稿，可继续编辑或清理');
+  popup.setPayload(createLinePopupPayload(result.lineFeature, 0));
+  ElMessage.success(result.message);
 };
 
 /**
@@ -1648,73 +2572,100 @@ const handleCreateLineDraft = (): void => {
  * 这个"第几段"的数据会被后面的【创建线草稿】和【生成线廊】直接使用。
  * @param context 点击事件传过来的数据
  */
-const openMapFeaturePopup = (context: MapLayerInteractiveContext) => {
-  if (!context.feature || !context.lngLat) return;
+const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) => {
+  const businessContext = featureQuery.toBusinessContext(context);
+  if (!businessContext.feature || !businessContext.lngLat) return;
 
   contextMenuState.visible = false;
-  popupState.type =
-    context.feature.geometry?.type === 'LineString' ? popupType.line : popupType.point;
-  popupState.geometryType = context.feature.geometry?.type || '';
-  popupState.lngLat = [context.lngLat.lng, context.lngLat.lat];
-  popupState.visible = true;
+  contextMenuState.summaryRows = [];
+  selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
 
-  if (context.feature.geometry?.type === 'LineString') {
+  /*
+   * 旧写法 / 逃生出口：
+   * const featureRef = featureQuery.getFeatureRef(context);
+   * const latestFeature =
+   *   featureQuery.resolveFeature(featureRef) || (context.feature as unknown as MapCommonFeature);
+   * 适合需要直接处理底层 context / 自定义状态结构时使用。
+   */
+  if (businessContext.isLine) {
     // 注意：
-    // 这里优先使用 context.lngLat，而不是直接使用原始鼠标坐标。
+    // 这里优先使用 businessContext.lngLat，而不是直接使用原始鼠标坐标。
     // 一旦当前点击命中了吸附结果，lngLat 已经是“吸附后的有效坐标”，
     // 这样后续线段识别、弹窗摘要、线草稿生成等业务计算就都会自动跟随吸附点工作。
+    // resolveLineInteractionSnapshot获取未被引擎裁剪的完整线数据，并计算当前点击命中了第几段线段。
+    // （MapLibre 渲染时长线会被裁剪，导致坐标缺失，必须回源取完整数据才能算准）
     const lineInteractionSnapshot = MapLineExtensionTool.resolveLineInteractionSnapshot({
-      feature: context.feature as unknown as MapCommonFeature,
-      featureRef: getFeatureRef(context),
-      lngLat: context.lngLat,
-      resolveLatestFeature: getFeatureByRef,
+      feature: businessContext.feature,
+      featureRef: businessContext.featureRef,
+      lngLat: businessContext.lngLat,
+      resolveLatestFeature: featureQuery.resolveFeature,
     });
 
     if (!lineInteractionSnapshot) {
-      popupState.featureId = context.featureId;
-      popupState.featureProps = JSON.parse(JSON.stringify(context.feature.properties || {}));
-      popupState.selectedSegmentIndex = -1;
-      popupState.selectedSegmentLengthMeters = 0;
-      popupState.lineLengthMeters = 0;
+      popup.open({
+        lngLat: createPopupLngLat(businessContext.lngLat),
+        payload: createLinePopupPayload(
+          businessContext.feature as MapCommonLineFeature,
+          -1,
+        ),
+      });
       return;
     }
 
-    syncLinePopupMetrics(
-      lineInteractionSnapshot.lineFeature,
-      lineInteractionSnapshot.segmentSelection?.index ?? 0
-    );
+    popup.open({
+      lngLat: createPopupLngLat(businessContext.lngLat),
+      payload: createLinePopupPayload(
+        lineInteractionSnapshot.lineFeature,
+        lineInteractionSnapshot.segmentSelection?.index ?? 0,
+      ),
+    });
     showClickedLineMeasureExample(lineInteractionSnapshot.lineFeature);
     return;
   }
 
-  popupState.featureId = context.featureId;
-  popupState.featureProps = JSON.parse(JSON.stringify(context.feature.properties || {}));
-  popupState.selectedSegmentIndex = -1;
-  popupState.selectedSegmentLengthMeters = 0;
-  popupState.lineLengthMeters = 0;
+  popup.open({
+    lngLat: createPopupLngLat(businessContext.lngLat),
+    payload: createPointPopupPayload(businessContext.feature, businessContext.featureId),
+  });
 };
 
 /**
  * 打开普通 GeoJSON 图层要素右键属性配置窗口。
- * 该示例用于演示普通图层如何复用统一的 FeaturePropertyEditor。
+ * 该示例用于演示普通图层如何通过属性面板态门面复用统一的 FeaturePropertyEditor。
  * @param context 普通图层统一交互上下文
  */
-const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
-  if (!context.feature || !context.point || !context.originalEvent) return;
+const openMapFeatureContextMenu = (context: BusinessKit.MapLayerInteractiveContext) => {
+  const businessContext = featureQuery.toBusinessContext(context);
+  if (!businessContext.feature || !context.point || !context.originalEvent) return;
 
   context.originalEvent.preventDefault();
-  popupState.visible = false;
+  popup.close();
 
+  /*
+   * 旧写法 / 逃生出口：
+   * const featureRef = featureQuery.getFeatureRef(context);
+   * const latestFeature = featureQuery.resolveFeature(featureRef);
+   * 适合需要直接处理底层 context / 自定义状态结构时使用。
+   */
+  const currentSelectionMode = context.selectionMode || selectionMode.value;
+  const summaryRows =
+    currentSelectionMode === "multiple" ? buildSelectionSummaryRows(currentSelectionMode) : [];
+  const editorTarget: BusinessKit.MapFeaturePropertyEditorTarget = {
+    type: "map",
+    featureRef: businessContext.featureRef,
+  };
+  const editorState = propertyEditor.resolveEditorState(editorTarget);
   contextMenuState.position = { x: context.point.x, y: context.point.y };
-  contextMenuState.properties = JSON.parse(JSON.stringify(context.feature.properties || {}));
-  contextMenuState.featureId = context.featureId;
-  contextMenuState.targetType = 'map';
-  contextMenuState.sourceId = context.sourceId || '';
-  contextMenuState.layerId = context.layerId || '';
-  contextMenuState.isLineDraftFeature =
-    getLineDraftPreviewApi()?.isFeatureById?.(context.featureId) || false;
-  contextMenuState.controlType = '';
+  contextMenuState.panelState = editorState.panelState;
+  contextMenuState.rawProperties = clonePropertySnapshot(editorState.rawProperties);
+  contextMenuState.summaryRows = summaryRows;
+  contextMenuState.editorTarget = editorTarget;
+  contextMenuState.note = resolvePropertyPanelNote(editorTarget);
   contextMenuState.visible = true;
+  selectionPanelState.contextMenuSummary =
+    summaryRows.length > 0
+      ? buildSelectionSummaryText(summaryRows)
+      : "单选右键现在只展示业务可见字段；系统隐藏字段请看调试快照";
 };
 
 /**
@@ -1722,9 +2673,12 @@ const openMapFeatureContextMenu = (context: MapLayerInteractiveContext) => {
  * @param label 日志标题
  * @param context 普通图层统一交互上下文
  */
-const logMapInteractiveEvent = (label: string, context: MapLayerInteractiveContext) => {
+const logMapInteractiveEvent = (label: string, context: BusinessKit.MapLayerInteractiveContext) => {
   console.log(`[Map 图层示例] ${label}`, {
     eventType: context.eventType, // 当前回调对应的交互事件类型
+    selectionMode: context.selectionMode, // 当前交互层生效的选择模式
+    isMultiSelectActive: context.isMultiSelectActive, // 当前是否处于多选模式
+    selectedCount: context.selectedCount, // 当前选中项数量
     layerId: context.layerId, // 当前命中的图层 ID
     featureId: context.featureId, // 当前主目标要素 ID
     properties: context.properties, // 当前主目标要素的业务属性对象
@@ -1738,65 +2692,38 @@ const logMapInteractiveEvent = (label: string, context: MapLayerInteractiveConte
 };
 
 /**
- * 普通图层业务交互配置。
- * 由 map-libre-init 内部托管 useMapInteractive 的实例化和销毁。
- *
- * 可用顶层属性：
- * 1. enabled: 是否启用普通图层交互封装，默认 true。
- * 2. onReady: 交互管理器初始化完成时触发，适合做首屏日志、默认状态检查。
- * 3. onHoverEnter / onHoverLeave: 鼠标进入或离开任意已声明图层要素时触发。
- * 4. onClick / onDoubleClick / onContextMenu: 地图统一事件入口；命中要素时会附带命中上下文。
- * 5. onBlankClick: 单击地图空白区域时触发，适合统一关闭 popup / 面板 / 摘要浮层。
- * 6. layers: 参与交互的图层配置集合，可选；key 必须是业务图层的 layer-id。
- *
- * 单图层可用属性：
- * 1. cursor: 鼠标命中该图层要素时的光标样式，默认 'pointer'，传 false 则不处理光标。
- * 2. enableFeatureStateHover: 是否自动维护 feature-state.hover，默认 true。
- * 3. onHoverEnter: 鼠标首次移入要素时触发。
- * 4. onHoverLeave: 鼠标移出当前要素时触发。
- * 5. onClick: 单击命中要素时触发。
- * 6. onDoubleClick: 双击命中要素时触发。
- * 7. onContextMenu: 右键命中要素时触发。
- *
- * 所有回调拿到的 context 都包含以下常用字段：
- * 1. feature: 当前命中的完整 MapLibre 要素。
- * 2. featureId: 当前要素顶层原生 ID；如果 source 配了 promoteId，一般就是业务 id。
- * 3. eventType: 当前交互事件类型，如 click / blankclick / hoverenter 等。
- * 4. layerId: 当前命中的业务图层 ID。
- * 5. sourceId: 当前命中的数据源 ID。
- * 6. sourceLayer: 当前命中的矢量 source-layer；GeoJSON 数据源通常为 null。
- * 7. map: 当前 MapLibre 地图实例。
- * 8. point: 鼠标事件对应的屏幕像素坐标。
- * 9. lngLat: 鼠标事件对应的经纬度坐标。
- * 10. originalEvent: 原始 DOM 鼠标事件，可用于 preventDefault() 等操作。
+ * 核心：统一注册并分发地图图层交互事件。
+ * @description
+ * 将所有业务图层的 hover、click、选中等事件收口，避免在模板中散落事件绑定。
+ * `layers` 配置块中的键必须与图层 `layer-id` 完全一致。
  */
-const mapInteractive: MapLayerInteractiveOptions = {
+const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
   // 是否启用普通图层交互封装。
   // 设为 false 时，map-libre-init 不会为普通业务图层挂载任何交互事件。
   enabled: true,
 
   // 普通图层交互管理器初始化完成时触发。
   // 适合做首屏联调日志、默认状态同步或图层可用性检查。
-  onReady: (context: MapLayerInteractiveContext) => {
-    console.log('[Map 图层示例] 初始化完成，可直接使用普通图层交互能力', context.map);
+  onReady: (context: BusinessKit.MapLayerInteractiveContext) => {
+    console.log("[Map 图层示例] 初始化完成，可直接使用普通图层交互能力", context.map);
   },
 
   // 普通图层统一 hover 入口。
   // 所有已声明图层的悬浮逻辑都可以先在这里做公共处理。
-  onHoverEnter: (context: MapLayerInteractiveContext) => {
-    logMapInteractiveEvent('顶层鼠标移入要素', context);
+  onHoverEnter: (context: BusinessKit.MapLayerInteractiveContext) => {
+    logMapInteractiveEvent("顶层鼠标移入要素", context);
   },
 
   // 普通图层统一 hover leave 入口。
   // 适合统一清理 tooltip、状态栏摘要等公共 UI。
-  onHoverLeave: (context: MapLayerInteractiveContext) => {
-    logMapInteractiveEvent('顶层鼠标移出要素', context);
+  onHoverLeave: (context: BusinessKit.MapLayerInteractiveContext) => {
+    logMapInteractiveEvent("顶层鼠标移出要素", context);
   },
 
   // 普通图层统一 click 入口。
   // 点击地图一定会触发；若命中已声明图层要素，则会附带 feature / layerId 等信息。
-  onClick: (context: MapLayerInteractiveContext) => {
-    logMapInteractiveEvent('顶层单击地图', context);
+  onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
+    logMapInteractiveEvent("顶层单击地图", context);
 
     if (!context.feature) {
       return;
@@ -1805,19 +2732,57 @@ const mapInteractive: MapLayerInteractiveOptions = {
     openMapFeaturePopup(context);
   },
 
+  // 普通图层选中集变化入口。
+  // 业务层可在这里统一处理多图层批量选择，而不需要分别给每个 layer 写回调。
+  onSelectionChange: (context: BusinessKit.MapLayerSelectionChangeContext) => {
+    // 将底层选中变化上下文转换为业务层更易消费的结构；集合字段与触发目标字段已分组。
+    const selectionContext = featureQuery.toSelectionBusinessContext(context);
+    syncSelectionPanelFromChange(context);
+    console.log("[NGGI00 示例] 选中集变化示例", {
+      reason: selectionContext.reason,
+      selectionMode: context.selectionMode,
+      selectedCount: selectionContext.selectedCount,
+      addedFeatureIds: getSelectionItemIds(selectionContext.added),
+      removedFeatureIds: getSelectionItemIds(selectionContext.removed),
+      circleLayerIds: getSelectionItemIds(
+        selectionContext.selected.filter((selectedItem) => selectedItem.layerId === LAYER_IDS.circle),
+      ),
+      summary: selectionPanelState.lastChangeSummary,
+    });
+  },
+
   // 普通图层统一 double click 入口。
   // 适合做 flyTo、进入详情页、切换侧边栏等通用行为。
-  onDoubleClick: (context: MapLayerInteractiveContext) => {
-    logMapInteractiveEvent('顶层双击地图', context);
+  onDoubleClick: (context: BusinessKit.MapLayerInteractiveContext) => {
+    logMapInteractiveEvent("顶层双击地图", context);
+
+    if (context.selectionMode === "multiple") {
+      console.log("[NGGI00 示例] 多选模式下双击事件由业务层自行分发", {
+        selectedCount: context.selectedCount,
+        featureId: context.featureId,
+      });
+      return;
+    }
+
+    console.log("[NGGI00 示例] 单选模式下双击事件示例逻辑", {
+      featureId: context.featureId,
+    });
   },
 
   // 普通图层统一右键入口。
   // 命中要素时可以直接在这里打开公共右键菜单。
-  onContextMenu: (context: MapLayerInteractiveContext) => {
-    logMapInteractiveEvent('顶层右键地图', context);
+  onContextMenu: (context: BusinessKit.MapLayerInteractiveContext) => {
+    logMapInteractiveEvent("顶层右键地图", context);
 
     if (!context.feature) {
       return;
+    }
+
+    if (context.selectionMode === "multiple") {
+      console.log("[NGGI00 示例] 多选模式右键摘要", {
+        selectedCount: context.selectedCount,
+        selectedFeatures: context.selectedFeatures,
+      });
     }
 
     openMapFeatureContextMenu(context);
@@ -1825,59 +2790,53 @@ const mapInteractive: MapLayerInteractiveOptions = {
 
   // 单击地图空白区域时触发。
   // 常见用途：关闭 popup、右键菜单、悬浮信息卡片等业务 UI。
-  onBlankClick: (context: MapLayerInteractiveContext) => {
-    console.log('[Map 图层示例] 点击了空白区域', context.point, context.lngLat);
+  onBlankClick: (context: BusinessKit.MapLayerInteractiveContext) => {
+    console.log("[Map 图层示例] 点击了空白区域", context.point, context.lngLat);
     closeBusinessPanels();
   },
 
-  // 参与交互的图层集合。
-  // key 必须与模板里实际声明的 layer-id 完全一致。
+  // 声明需要响应交互的业务图层及其专属配置
   // 多个图层同时命中时，会按这里的声明顺序决定优先级。
   layers: {
-    // 点图层示例：圆点图层一。
-    // 这里演示“纯统一事件模式”：仅声明图层参与交互与 hover 样式，
-    // 实际 hover / click / contextmenu 逻辑全部交给顶层统一事件处理。
-    circleLayer: {
+    // 主点图层：只需声明 cursor 和 hover 即可，点击事件会走上面的统一 onClick
+    [LAYER_IDS.circle]: {
       // 鼠标命中当前图层要素时的光标。
-      cursor: 'pointer',
+      cursor: "pointer",
 
       // 是否自动维护 feature-state.hover。
       // 设为 true 后，业务层只管写样式表达式，不需要手动 setFeatureState。
       enableFeatureStateHover: true,
     },
-
-    // 点图层示例：圆点图层二。
-    // 继续复用顶层统一事件，不再为单个 layer 重复绑定相同回调。
-    circleLayerDec: {
-      cursor: 'pointer',
+    // 次点图层
+    [LAYER_IDS.circleDec]: {
+      cursor: "pointer",
 
       // 当前图层如果不希望自动维护 hover 状态，也可以显式传 false。
-      // 这里继续保持 true，演示最常见用法。
       enableFeatureStateHover: true,
     },
 
     // 线图层示例。
     // 这里演示“统一事件 + 局部覆盖模式”：
     // 公共 popup 与右键菜单由顶层处理，线图层仍可补充专属 click 逻辑。
-    lineLayer: {
-      cursor: 'pointer',
+    [LAYER_IDS.primaryLine]: {
+      cursor: "pointer",
 
       // 线图层同样可以自动维护 hover feature-state，
       // 配合 line-width / line-color 表达式即可直接实现悬浮高亮。
       enableFeatureStateHover: true,
 
-      onClick: (context: MapLayerInteractiveContext) => {
-        console.log('[Map 图层示例] 正式线图层额外 onClick，可在这里补充专属业务逻辑', context);
+  onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
+        console.log("[Map 图层示例] 正式线图层额外 onClick，可在这里补充专属业务逻辑", context);
       },
     },
 
     // 第二正式线图层示例。
     // 这里故意复用与主线图层完全相同的交互协议，用于验证“多 source 共用一套交互协议”。
-    lineLayerSecondary: {
-      cursor: 'pointer',
+    [LAYER_IDS.secondaryLine]: {
+      cursor: "pointer",
       enableFeatureStateHover: true,
-      onClick: (context: MapLayerInteractiveContext) => {
-        console.log('[Map 图层示例] 第二正式线图层额外 onClick，可在这里补充专属业务逻辑', context);
+  onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
+        console.log("[Map 图层示例] 第二正式线图层额外 onClick，可在这里补充专属业务逻辑", context);
       },
     },
   },
@@ -1889,61 +2848,80 @@ const mapInteractive: MapLayerInteractiveOptions = {
 const contextMenuState = reactive({
   visible: false,
   position: { x: 0, y: 0 },
-  properties: {} as Record<string, any>,
-  featureId: null as string | number | null,
-  targetType: '' as 'map' | 'terradraw' | '',
-  sourceId: '',
-  layerId: '',
-  isLineDraftFeature: false,
-  controlType: '' as TerradrawControlType | '',
+  panelState: createEmptyPropertyPanelState(),
+  rawProperties: {} as Record<string, any>,
+  summaryRows: [] as SelectionSummaryRow[],
+  editorTarget: null as BusinessKit.MapFeaturePropertyEditorTarget | null,
+  note: "",
 });
 
 /**
- * TerraDraw 内部保留属性名集合。
- * 这些字段由引擎内部维护，业务层不能通过 updateFeatureProperties 主动覆写。
+ * 根据当前右键目标解析面板提示文案。
+ * @param editorTarget 当前编辑目标
+ * @returns 适合直接展示的说明文本
  */
-const terraDrawReservedPropertyKeys = [...TERRADRAW_RESERVED_PROPERTY_KEYS];
+const resolvePropertyPanelNote = (
+  editorTarget: BusinessKit.MapFeaturePropertyEditorTarget | null,
+): string => {
+  if (!editorTarget) {
+    return "";
+  }
+  if (editorTarget.type === "map") {
+    return editorTarget.featureRef?.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID
+      ? LINE_DRAFT_PROPERTY_PANEL_NOTE
+      : MAP_PROPERTY_PANEL_NOTE;
+  }
+
+  return editorTarget.controlType === "measure"
+    ? MEASURE_PROPERTY_PANEL_NOTE
+    : DRAW_PROPERTY_PANEL_NOTE;
+};
 
 /**
- * 根据上下文中记录的控件类型，解析当前应该操作的 TerraDraw 控件实例。
- * @returns 绘图或测量控件实例；若未初始化则返回 null
+ * 获取当前右键面板指向的目标要素 ID。
+ * @returns 当前目标要素 ID；不存在时返回 null
  */
-const resolveTerradrawControlByContext = () => {
-  if (!mapInitRef.value) {
+const getContextMenuFeatureId = (): string | number | null => {
+  if (!contextMenuState.editorTarget) {
     return null;
   }
 
-  if (contextMenuState.controlType === 'measure') {
-    return mapInitRef.value.getMeasureControl?.() || null;
+  return contextMenuState.editorTarget.type === "map"
+    ? (contextMenuState.editorTarget.featureRef?.featureId ?? null)
+    : contextMenuState.editorTarget.featureId;
+};
+
+/**
+ * 按当前右键目标重新解析属性面板态与原始快照。
+ * @param nextEditorState 最新属性编辑器状态
+ */
+const syncContextMenuPanelState = (
+  nextEditorState?: BusinessKit.MapFeaturePropertyEditorState,
+): void => {
+  if (!contextMenuState.editorTarget) {
+    contextMenuState.panelState = createEmptyPropertyPanelState();
+    contextMenuState.rawProperties = {};
+    return;
   }
 
-  if (contextMenuState.controlType === 'draw') {
-    return mapInitRef.value.getDrawControl?.() || null;
-  }
-
-  return null;
+  const editorState =
+    nextEditorState || propertyEditor.resolveEditorState(contextMenuState.editorTarget);
+  contextMenuState.panelState = editorState.panelState;
+  contextMenuState.rawProperties = clonePropertySnapshot(editorState.rawProperties);
 };
 
 /**
  * 统一关闭业务弹窗与右键属性窗口。
  */
 const closeBusinessPanels = () => {
-  popupState.visible = false;
-  popupState.type = '';
-  popupState.featureId = null;
-  popupState.geometryType = '';
-  popupState.featureProps = {};
-  popupState.selectedSegmentIndex = -1;
-  popupState.selectedSegmentLengthMeters = 0;
-  popupState.lineLengthMeters = 0;
+  popup.close();
   contextMenuState.visible = false;
-  contextMenuState.properties = {};
-  contextMenuState.featureId = null;
-  contextMenuState.targetType = '';
-  contextMenuState.sourceId = '';
-  contextMenuState.layerId = '';
-  contextMenuState.isLineDraftFeature = false;
-  contextMenuState.controlType = '';
+  contextMenuState.panelState = createEmptyPropertyPanelState();
+  contextMenuState.rawProperties = {};
+  contextMenuState.summaryRows = [];
+  contextMenuState.editorTarget = null;
+  contextMenuState.note = "";
+  selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
 };
 
 /**
@@ -1951,15 +2929,15 @@ const closeBusinessPanels = () => {
  * @param context TerraDraw / Measure 统一交互上下文
  * @returns 适合业务层直接展示的测量摘要文本
  */
-const getMeasureFeatureSummaryText = (context: TerradrawInteractiveContext) => {
+const getMeasureFeatureSummaryText = (context: BusinessKit.TerradrawInteractiveContext) => {
   const properties = context.feature?.properties || {};
 
   if (properties.distance !== undefined) {
-    return `距离：${properties.distance} ${properties.unit || properties.distanceUnit || ''}`.trim();
+    return `距离：${properties.distance} ${properties.unit || properties.distanceUnit || ""}`.trim();
   }
 
   if (properties.area !== undefined) {
-    return `面积：${properties.area} ${properties.unit || ''}`.trim();
+    return `面积：${properties.area} ${properties.unit || ""}`.trim();
   }
 
   if (properties.radiusKilometers !== undefined) {
@@ -1967,170 +2945,221 @@ const getMeasureFeatureSummaryText = (context: TerradrawInteractiveContext) => {
   }
 
   if (properties.elevation !== undefined) {
-    return `高程：${properties.elevation} ${properties.elevationUnit || ''}`.trim();
+    return `高程：${properties.elevation} ${properties.elevationUnit || ""}`.trim();
   }
 
-  return '当前要素暂无可提取的测量摘要';
+  return "当前要素暂无可提取的测量摘要";
 };
 
 /**
  * 打开 TerraDraw 要素详情弹窗。
  * @param context TerraDraw 统一交互上下文
  */
-const openTerradrawPopup = (context: TerradrawInteractiveContext) => {
+const openTerradrawPopup = (context: BusinessKit.TerradrawInteractiveContext) => {
   if (!context.feature || !context.lngLat) return;
 
   contextMenuState.visible = false;
-  popupState.type = popupType.terradraw;
-  popupState.featureId = (context.feature.id as string | number | null) ?? null;
-  popupState.geometryType = context.feature.geometry?.type || '';
-  popupState.featureProps = JSON.parse(JSON.stringify(context.feature.properties || {}));
-  popupState.lngLat = [context.lngLat.lng, context.lngLat.lat];
-  popupState.visible = true;
+  contextMenuState.summaryRows = [];
+  selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
+  popup.open({
+    lngLat: createPopupLngLat(context.lngLat),
+    payload: {
+      type: POPUP_TYPE.terradraw,
+      featureId: (context.feature.id as string | number | null) ?? null,
+      geometryType: context.feature.geometry?.type || "",
+      featureProps: clonePropertySnapshot(context.feature.properties || {}),
+    },
+  });
 };
 
 /**
  * 打开 TerraDraw 要素右键属性配置窗口。
+ * 这里同样先走属性面板态查询，让系统字段在进入业务编辑器前就被收口。
  * @param context TerraDraw 统一交互上下文
  */
-const openTerradrawContextMenu = (context: TerradrawInteractiveContext) => {
+const openTerradrawContextMenu = (context: BusinessKit.TerradrawInteractiveContext) => {
   if (!context.feature || !context.point || !context.originalEvent) return;
 
   context.originalEvent.preventDefault();
-  popupState.visible = false;
+  popup.close();
+
+  const featureId =
+    context.featureId ?? (context.feature.id as string | number | null | undefined) ?? null;
+  const rawProperties = clonePropertySnapshot(context.feature.properties || {});
+  const editorTarget =
+    featureId === null
+      ? null
+      : ({
+          type: "terradraw",
+          controlType: context.controlType,
+          featureId,
+          currentProperties: rawProperties,
+        } satisfies BusinessKit.MapFeaturePropertyEditorTarget);
+  const editorState = propertyEditor.resolveEditorState(editorTarget);
 
   contextMenuState.position = { x: context.point.x, y: context.point.y };
-  contextMenuState.properties = JSON.parse(JSON.stringify(context.feature.properties || {}));
-  contextMenuState.featureId = (context.feature.id as string | number | null) ?? null;
-  contextMenuState.targetType = 'terradraw';
-  contextMenuState.sourceId = '';
-  contextMenuState.layerId = '';
-  contextMenuState.isLineDraftFeature = false;
-  contextMenuState.controlType = context.controlType;
+  contextMenuState.panelState = editorState.panelState;
+  contextMenuState.rawProperties = clonePropertySnapshot(editorState.rawProperties);
+  contextMenuState.summaryRows = [];
+  contextMenuState.editorTarget = editorTarget;
+  contextMenuState.note = resolvePropertyPanelNote(editorTarget);
   contextMenuState.visible = true;
+  selectionPanelState.contextMenuSummary =
+    "TerraDraw 右键现在只展示业务可见字段；系统字段请在下方调试快照中查看";
 };
 
 /**
  * 将最新属性同步回右键面板和详情弹窗，保证页面态与底层数据一致。
- * @param nextProperties 最新保存完成后的属性快照
+ * @param nextEditorState 最新属性编辑器状态
  */
-const syncSavedPropertiesToPanels = (nextProperties: Record<string, any>) => {
-  contextMenuState.properties = JSON.parse(JSON.stringify(nextProperties));
+const syncSavedPropertiesToPanels = (nextEditorState: BusinessKit.MapFeaturePropertyEditorState) => {
+  syncContextMenuPanelState(nextEditorState);
 
-  if (popupState.visible && popupState.featureId === contextMenuState.featureId) {
-    popupState.featureProps = JSON.parse(JSON.stringify(nextProperties));
+  if (contextMenuState.editorTarget?.type === "terradraw") {
+    contextMenuState.editorTarget = {
+      ...contextMenuState.editorTarget,
+      currentProperties: clonePropertySnapshot(nextEditorState.rawProperties),
+    };
+  }
+
+  const currentPopupPayload = popupPayload.value;
+  if (popupVisible.value && currentPopupPayload?.featureId === getContextMenuFeatureId()) {
+    popup.setPayload({
+      ...currentPopupPayload,
+      featureProps: clonePropertySnapshot(nextEditorState.rawProperties),
+    });
   }
 };
 
 /**
- * 统一处理 FeaturePropertyEditor 的保存事件。
- * 根据当前右键目标类型，分发到普通图层或 TerraDraw 的属性写回逻辑。
- * @param updatedProperties 业务层最新编辑完成的属性对象
+ * 统一处理属性面板的“单键保存”。
+ * 业务层不再自己判断来源类型，只把当前 editorTarget 和本次字段改动交给 propertyEditor。
+ *
+ * @param payload 本次需要写回的单个属性载荷
  */
-const handleSaveProperty = (updatedProperties: Record<string, any>) => {
-  if (contextMenuState.featureId === null) {
-    ElMessage.warning('当前没有可写回的目标要素');
+const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
+  if (!contextMenuState.editorTarget) {
+    ElMessage.warning("当前没有可写回的目标要素");
     return;
   }
 
-  if (contextMenuState.targetType === 'map') {
-    if (contextMenuState.isLineDraftFeature) {
-      // 对业务层来说，这里仍然是“地图要素属性写回”；
-      // 只是具体落到正式业务源还是插件内部草稿源，由当前选中要素来源自动分流。
-      const result = getLineDraftPreviewApi()?.saveProperties?.({
-        featureId: contextMenuState.featureId,
-        newProperties: updatedProperties,
-        mode: 'replace',
-      });
-
-      if (!result?.success || !result.properties) {
-        ElMessage.warning(result?.message || '线草稿要素属性写回失败');
-        return;
-      }
-
-      syncSavedPropertiesToPanels(result.properties);
-      ElMessage.success('线草稿要素属性已写回（仅前端本地）');
-      return;
-    }
-
-    if (!contextMenuState.sourceId) {
-      ElMessage.warning('当前没有可写回的地图要素');
-      return;
-    }
-
-    const targetGeoJsonRef = getGeoJsonRefBySourceId(contextMenuState.sourceId);
-    if (!targetGeoJsonRef) {
-      ElMessage.warning(`未找到数据源 '${contextMenuState.sourceId}' 对应的本地数据引用`);
-      return;
-    }
-
-    const result = saveFeatureProperties({
-      target: 'map',
-      mapInstance: map,
-      sourceId: contextMenuState.sourceId,
-      featureId: contextMenuState.featureId,
-      newProperties: updatedProperties,
-      geoJsonRef: targetGeoJsonRef,
-      mode: 'replace',
-    });
-
-    if (!result.success || !result.properties) {
-      ElMessage.warning(result.message);
-      return;
-    }
-
-    syncSavedPropertiesToPanels(result.properties);
-    ElMessage.success('地图要素属性已写回（仅前端本地）');
+  const result = propertyEditor.saveItem(contextMenuState.editorTarget, payload);
+  if (!result.success) {
+    ElMessage.warning(result.message);
     return;
   }
 
-  if (contextMenuState.targetType === 'terradraw') {
-    if (!contextMenuState.controlType) {
-      ElMessage.warning('当前没有可写回的 TerraDraw 要素');
-      return;
-    }
+  syncSavedPropertiesToPanels(result.editorState);
+  ElMessage.success(result.message);
+};
 
-    const terradrawControl = resolveTerradrawControlByContext();
-    if (!terradrawControl) {
-      ElMessage.warning('TerraDraw 控件尚未初始化完成');
-      return;
-    }
-
-    const terradrawInstance = terradrawControl.getTerraDrawInstance?.();
-    if (!terradrawInstance) {
-      ElMessage.warning('TerraDraw 实例不存在，无法写回属性');
-      return;
-    }
-
-    const result = saveFeatureProperties({
-      target: 'terradraw',
-      terradraw: terradrawInstance,
-      featureId: contextMenuState.featureId,
-      newProperties: updatedProperties,
-      currentProperties: contextMenuState.properties,
-      reservedPropertyKeys: terraDrawReservedPropertyKeys,
-      mode: 'replace',
-    });
-
-    if (!result.success || !result.properties) {
-      ElMessage.warning(result.message);
-      return;
-    }
-
-    syncSavedPropertiesToPanels(result.properties);
-    ElMessage.success('TerraDraw 要素属性已写回（仅前端本地）');
+/**
+ * 统一处理属性面板的“单键删除”。
+ * 删除和保存走同一套门面，保证面板里显示可删的字段，底层也真的删得掉。
+ *
+ * @param payload 本次需要删除的单个属性键
+ */
+const handleRemovePropertyItem = (payload: FeaturePropertyEditorRemovePayload) => {
+  if (!contextMenuState.editorTarget) {
+    ElMessage.warning("当前没有可删除属性的目标要素");
     return;
   }
 
-  ElMessage.warning('当前没有可写回的目标要素');
+  const result = propertyEditor.removeItem(contextMenuState.editorTarget, payload.key);
+  if (!result.success) {
+    ElMessage.warning(result.message);
+    return;
+  }
+
+  syncSavedPropertiesToPanels(result.editorState);
+  ElMessage.success(result.message);
 };
 </script>
 
 <style scoped lang="scss">
 .maplibre-area {
-  // 地图容器的宽度和高度
-  width: 1500px;
+  // 地图容器宽度跟随页面收缩，但最大宽度仍保持示例阅读体验。
+  width: 100%;
+  max-width: 1500px;
   height: 800px;
+  margin: 0 auto;
+}
+
+.demo-panel-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  width: 100%;
+  max-width: 1500px;
+  margin: 16px auto 0;
+}
+
+.demo-panel-card {
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e4e7ed;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(31, 35, 41, 0.06);
+}
+
+.demo-panel-head {
+  margin-bottom: 12px;
+}
+
+.demo-panel-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #303133;
+}
+
+.demo-panel-head p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #606266;
+}
+
+.demo-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.demo-panel-kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.demo-panel-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #606266;
+  background: #f7f9fc;
+  border-radius: 8px;
+}
+
+.demo-panel-kv strong {
+  color: #303133;
+  text-align: right;
+}
+
+.demo-panel-note,
+.demo-panel-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #606266;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.demo-panel-note {
+  margin-top: 12px;
 }
 
 .terradraw-popup-json {

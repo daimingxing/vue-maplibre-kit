@@ -2,7 +2,7 @@ import type { Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'mapli
 import type {
   TerradrawControlType,
   TerradrawSnapSharedOptions,
-} from '../../shared/mapLibre-contols-types';
+} from '../../shared/mapLibre-controls-types';
 import type { MapFeatureSnapResult } from '../../shared/map-feature-snap-types';
 
 export type {

@@ -55,6 +55,7 @@ export const lineDraftPreviewPlugin = defineMapPlugin({
       replacePreviewRegion: pluginController.replacePreviewRegion,
       clear: pluginController.clear,
       saveProperties: pluginController.saveProperties,
+      removeProperties: pluginController.removeProperties,
     }));
 
     return {

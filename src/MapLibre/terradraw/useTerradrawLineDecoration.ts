@@ -19,7 +19,7 @@ import type {
   TerradrawLineDecorationResolveContext,
   TerradrawLineDecorationStyle,
   TerradrawManagedControl,
-} from '../shared/mapLibre-contols-types';
+} from '../shared/mapLibre-controls-types';
 import type { MapCommonFeatureCollection, MapCommonProperties } from '../shared/map-common-tools';
 import {
   createLineLayerStyle,

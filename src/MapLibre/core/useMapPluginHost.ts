@@ -10,7 +10,11 @@ import type {
   MapPluginServices,
   MapPluginStateChangePayload,
 } from '../plugins/types';
-import type { MapLayerInteractiveContext, MapLayerInteractiveOptions } from '../shared/mapLibre-contols-types';
+import type {
+  MapLayerInteractiveContext,
+  MapLayerInteractiveLayerOptions,
+  MapLayerInteractiveOptions,
+} from '../shared/mapLibre-controls-types';
 import type { MapCommonFeature } from '../shared/map-common-tools';
 
 interface UseMapPluginHostOptions {
@@ -55,7 +59,197 @@ interface MapPluginDescriptorDependency {
 }
 
 /**
+ * 校验插件描述对象是否满足宿主约束。
+ * 当前约束包括：
+ * 1. 同一个 map 实例内，插件 ID 必须唯一
+ * 2. 同一个 map 实例内，插件 type 必须唯一
+ * @param descriptorList 待校验的插件描述对象列表
+ */
+function validatePluginDescriptors(descriptorList: AnyMapPluginDescriptor[]): void {
+  const usedPluginIdSet = new Set<string>();
+  const pluginTypeMap = new Map<string, string[]>();
+
+  descriptorList.forEach((descriptor) => {
+    if (usedPluginIdSet.has(descriptor.id)) {
+      throw new Error(`[MapPluginHost] 检测到重复的插件 ID：${descriptor.id}`);
+    }
+
+    usedPluginIdSet.add(descriptor.id);
+
+    const currentPluginIds = pluginTypeMap.get(descriptor.type) || [];
+    currentPluginIds.push(descriptor.id);
+    pluginTypeMap.set(descriptor.type, currentPluginIds);
+  });
+
+  pluginTypeMap.forEach((pluginIds, pluginType) => {
+    if (pluginIds.length <= 1) {
+      return;
+    }
+
+    throw new Error(
+      `[MapPluginHost] 同一个 map 实例内，同类型插件只允许注册一个。检测到重复 type：${pluginType}；冲突插件 ID：${pluginIds.join(', ')}`
+    );
+  });
+}
+
+/**
+ * 合并两个同签名回调。
+ * 合并顺序固定为：基础回调先执行，补丁回调后执行。
+ * 若两个回调引用完全相同，则直接复用，避免重复触发。
+ * @param baseCallback 基础回调
+ * @param patchCallback 补丁回调
+ * @returns 合并后的回调
+ */
+function mergeInteractiveCallbacks<TArgs extends unknown[]>(
+  baseCallback: ((...args: TArgs) => void) | undefined,
+  patchCallback: ((...args: TArgs) => void) | undefined
+): ((...args: TArgs) => void) | undefined {
+  if (!baseCallback) {
+    return patchCallback;
+  }
+
+  if (!patchCallback) {
+    return baseCallback;
+  }
+
+  if (baseCallback === patchCallback) {
+    return baseCallback;
+  }
+
+  return (...args: TArgs) => {
+    baseCallback(...args);
+    patchCallback(...args);
+  };
+}
+
+/**
+ * 合并单个图层级交互配置。
+ * 合并规则：
+ * 1. 标量字段以后者覆盖前者为准
+ * 2. 回调字段按顺序串联
+ * @param baseLayerConfig 基础图层配置
+ * @param patchLayerConfig 补丁图层配置
+ * @returns 合并后的图层配置
+ */
+function mergeLayerInteractiveLayerOptions(
+  baseLayerConfig: MapLayerInteractiveLayerOptions | null | undefined,
+  patchLayerConfig: MapLayerInteractiveLayerOptions | null | undefined
+): MapLayerInteractiveLayerOptions | undefined {
+  if (!baseLayerConfig && !patchLayerConfig) {
+    return undefined;
+  }
+
+  if (!baseLayerConfig) {
+    return patchLayerConfig ? { ...patchLayerConfig } : undefined;
+  }
+
+  if (!patchLayerConfig) {
+    return { ...baseLayerConfig };
+  }
+
+  const mergedLayerConfig: MapLayerInteractiveLayerOptions = {
+    ...baseLayerConfig,
+    ...patchLayerConfig,
+  };
+
+  if (patchLayerConfig.cursor === undefined) {
+    mergedLayerConfig.cursor = baseLayerConfig.cursor;
+  }
+
+  if (patchLayerConfig.enableFeatureStateHover === undefined) {
+    mergedLayerConfig.enableFeatureStateHover = baseLayerConfig.enableFeatureStateHover;
+  }
+
+  if (patchLayerConfig.enableFeatureStateSelected === undefined) {
+    mergedLayerConfig.enableFeatureStateSelected = baseLayerConfig.enableFeatureStateSelected;
+  }
+
+  mergedLayerConfig.onHoverEnter = mergeInteractiveCallbacks(
+    baseLayerConfig.onHoverEnter,
+    patchLayerConfig.onHoverEnter
+  );
+  mergedLayerConfig.onHoverLeave = mergeInteractiveCallbacks(
+    baseLayerConfig.onHoverLeave,
+    patchLayerConfig.onHoverLeave
+  );
+  mergedLayerConfig.onFeatureSelect = mergeInteractiveCallbacks(
+    baseLayerConfig.onFeatureSelect,
+    patchLayerConfig.onFeatureSelect
+  );
+  mergedLayerConfig.onFeatureDeselect = mergeInteractiveCallbacks(
+    baseLayerConfig.onFeatureDeselect,
+    patchLayerConfig.onFeatureDeselect
+  );
+  mergedLayerConfig.onClick = mergeInteractiveCallbacks(
+    baseLayerConfig.onClick,
+    patchLayerConfig.onClick
+  );
+  mergedLayerConfig.onDoubleClick = mergeInteractiveCallbacks(
+    baseLayerConfig.onDoubleClick,
+    patchLayerConfig.onDoubleClick
+  );
+  mergedLayerConfig.onContextMenu = mergeInteractiveCallbacks(
+    baseLayerConfig.onContextMenu,
+    patchLayerConfig.onContextMenu
+  );
+
+  return mergedLayerConfig;
+}
+
+/**
+ * 合并图层级交互配置集合。
+ * 已有图层保留原始顺序，新图层按补丁出现顺序追加。
+ * @param baseLayers 基础图层配置集合
+ * @param patchLayers 补丁图层配置集合
+ * @returns 合并后的图层配置集合
+ */
+function mergeLayerInteractiveLayers(
+  baseLayers: Record<string, MapLayerInteractiveLayerOptions> | null | undefined,
+  patchLayers: Record<string, MapLayerInteractiveLayerOptions> | null | undefined
+): Record<string, MapLayerInteractiveLayerOptions> | undefined {
+  if (!baseLayers && !patchLayers) {
+    return undefined;
+  }
+
+  const orderedLayerIds: string[] = [];
+  const addedLayerIdSet = new Set<string>();
+  const appendLayerIds = (
+    layerConfigMap: Record<string, MapLayerInteractiveLayerOptions> | null | undefined
+  ): void => {
+    Object.keys(layerConfigMap || {}).forEach((layerId) => {
+      if (addedLayerIdSet.has(layerId)) {
+        return;
+      }
+
+      addedLayerIdSet.add(layerId);
+      orderedLayerIds.push(layerId);
+    });
+  };
+
+  appendLayerIds(baseLayers);
+  appendLayerIds(patchLayers);
+
+  const mergedLayers: Record<string, MapLayerInteractiveLayerOptions> = {};
+  orderedLayerIds.forEach((layerId) => {
+    const mergedLayerConfig = mergeLayerInteractiveLayerOptions(
+      baseLayers?.[layerId],
+      patchLayers?.[layerId]
+    );
+
+    if (mergedLayerConfig) {
+      mergedLayers[layerId] = mergedLayerConfig;
+    }
+  });
+
+  return mergedLayers;
+}
+
+/**
  * 合并普通图层交互配置。
+ * 合并规则：
+ * 1. 标量字段以后者覆盖前者为准
+ * 2. 回调字段按顺序串联
+ * 3. layers 按 layerId 深合并，且新图层只追加不重排
  * @param baseConfig 基础配置
  * @param patchConfig 插件补丁配置
  * @returns 合并后的交互配置
@@ -69,21 +263,59 @@ function mergeMapInteractiveOptions(
   }
 
   if (!baseConfig) {
-    return patchConfig ? { ...patchConfig, layers: { ...(patchConfig.layers || {}) } } : null;
+    return patchConfig
+      ? {
+          ...patchConfig,
+          layers: mergeLayerInteractiveLayers(undefined, patchConfig.layers),
+        }
+      : null;
   }
 
   if (!patchConfig) {
-    return { ...baseConfig, layers: { ...(baseConfig.layers || {}) } };
+    return {
+      ...baseConfig,
+      layers: mergeLayerInteractiveLayers(baseConfig.layers, undefined),
+    };
   }
 
-  return {
+  const mergedConfig: MapLayerInteractiveOptions = {
     ...baseConfig,
     ...patchConfig,
-    layers: {
-      ...(baseConfig.layers || {}),
-      ...(patchConfig.layers || {}),
-    },
   };
+
+  if (patchConfig.enabled === undefined) {
+    mergedConfig.enabled = baseConfig.enabled;
+  }
+
+  mergedConfig.onReady = mergeInteractiveCallbacks(baseConfig.onReady, patchConfig.onReady);
+  mergedConfig.onHoverEnter = mergeInteractiveCallbacks(
+    baseConfig.onHoverEnter,
+    patchConfig.onHoverEnter
+  );
+  mergedConfig.onHoverLeave = mergeInteractiveCallbacks(
+    baseConfig.onHoverLeave,
+    patchConfig.onHoverLeave
+  );
+  mergedConfig.onClick = mergeInteractiveCallbacks(baseConfig.onClick, patchConfig.onClick);
+  mergedConfig.onDoubleClick = mergeInteractiveCallbacks(
+    baseConfig.onDoubleClick,
+    patchConfig.onDoubleClick
+  );
+  mergedConfig.onContextMenu = mergeInteractiveCallbacks(
+    baseConfig.onContextMenu,
+    patchConfig.onContextMenu
+  );
+  mergedConfig.onBlankClick = mergeInteractiveCallbacks(
+    baseConfig.onBlankClick,
+    patchConfig.onBlankClick
+  );
+  mergedConfig.onSelectionChange = mergeInteractiveCallbacks(
+    baseConfig.onSelectionChange,
+    patchConfig.onSelectionChange
+  );
+  mergedConfig.layers = mergeLayerInteractiveLayers(baseConfig.layers, patchConfig.layers);
+
+  return mergedConfig;
 }
 
 /**
@@ -104,6 +336,40 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     onPluginStateChange,
   } = options;
   const pluginRecordMapRef = shallowRef<Map<string, MapPluginRecord>>(new Map());
+
+  /**
+   * 校验候选插件集合中的单例服务是否重复注册。
+   * 当前 mapSnap / mapSelection 都要求在同一时刻最多只存在一个提供者。
+   * @param pluginRecordMap 待校验的候选插件记录集合
+   */
+  function validateSingletonServices(pluginRecordMap: Map<string, MapPluginRecord>): void {
+    const serviceProviderMap = {
+      mapSnap: [] as string[],
+      mapSelection: [] as string[],
+    };
+
+    pluginRecordMap.forEach((pluginRecord, pluginId) => {
+      if (pluginRecord.instance.services?.mapSnap) {
+        serviceProviderMap.mapSnap.push(pluginId);
+      }
+
+      if (pluginRecord.instance.services?.mapSelection) {
+        serviceProviderMap.mapSelection.push(pluginId);
+      }
+    });
+
+    (Object.entries(serviceProviderMap) as Array<[keyof typeof serviceProviderMap, string[]]>).forEach(
+      ([serviceName, providerIds]) => {
+        if (providerIds.length <= 1) {
+          return;
+        }
+
+        throw new Error(
+          `[MapPluginHost] 当前仅允许注册一个 ${serviceName} 服务插件，检测到重复插件：${providerIds.join(', ')}`
+        );
+      }
+    );
+  }
 
   /**
    * 销毁单个插件记录。
@@ -213,38 +479,52 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     const descriptorList = getDescriptors() || [];
     const currentPluginRecordMap = pluginRecordMapRef.value;
     const nextPluginRecordMap = new Map<string, MapPluginRecord>();
-    const usedPluginIdSet = new Set<string>();
+    const createdPluginRecordList: MapPluginRecord[] = [];
+    const descriptorUpdateList: Array<{
+      pluginRecord: MapPluginRecord;
+      descriptor: AnyMapPluginDescriptor;
+    }> = [];
 
-    descriptorList.forEach((descriptor) => {
-      if (usedPluginIdSet.has(descriptor.id)) {
-        throw new Error(`[MapPluginHost] 检测到重复的插件 ID：${descriptor.id}`);
-      }
+    try {
+      // 先校验业务层传入的插件描述对象是否合法，避免创建一半实例后再回滚。
+      validatePluginDescriptors(descriptorList);
 
-      usedPluginIdSet.add(descriptor.id);
-      const currentPluginRecord = currentPluginRecordMap.get(descriptor.id);
+      descriptorList.forEach((descriptor) => {
+        const currentPluginRecord = currentPluginRecordMap.get(descriptor.id);
 
-      if (canReusePluginRecord(descriptor, currentPluginRecord)) {
-        currentPluginRecord!.descriptorRef.value = descriptor;
-        nextPluginRecordMap.set(descriptor.id, currentPluginRecord!);
-        return;
-      }
+        if (canReusePluginRecord(descriptor, currentPluginRecord)) {
+          descriptorUpdateList.push({
+            pluginRecord: currentPluginRecord as MapPluginRecord,
+            descriptor,
+          });
+          nextPluginRecordMap.set(descriptor.id, currentPluginRecord as MapPluginRecord);
+          return;
+        }
 
-      try {
         const nextPluginRecord = createPluginRecord(descriptor);
-        currentPluginRecord && destroyPluginRecord(currentPluginRecord);
+        createdPluginRecordList.push(nextPluginRecord);
         nextPluginRecordMap.set(descriptor.id, nextPluginRecord);
-      } catch {
-        currentPluginRecord && destroyPluginRecord(currentPluginRecord);
-      }
-    });
+      });
 
-    currentPluginRecordMap.forEach((pluginRecord, pluginId) => {
-      if (!nextPluginRecordMap.has(pluginId)) {
+      validateSingletonServices(nextPluginRecordMap);
+
+      descriptorUpdateList.forEach(({ pluginRecord, descriptor }) => {
+        pluginRecord.descriptorRef.value = descriptor;
+      });
+
+      currentPluginRecordMap.forEach((pluginRecord, pluginId) => {
+        if (nextPluginRecordMap.get(pluginId) !== pluginRecord) {
+          destroyPluginRecord(pluginRecord);
+        }
+      });
+
+      pluginRecordMapRef.value = nextPluginRecordMap;
+    } catch (error) {
+      createdPluginRecordList.forEach((pluginRecord) => {
         destroyPluginRecord(pluginRecord);
-      }
-    });
-
-    pluginRecordMapRef.value = nextPluginRecordMap;
+      });
+      throw error;
+    }
   }
 
   watch(
@@ -309,6 +589,26 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
       }
 
       resolvedService = currentService;
+    }
+
+    return resolvedService;
+  }
+
+  /**
+   * 解析当前唯一允许存在的地图选择服务。
+   * @returns 当前选择服务；未注册时返回 null
+   */
+  function getMapSelectionService(): MapPluginServices['mapSelection'] | null {
+    let resolvedService: MapPluginServices['mapSelection'] | null = null;
+
+    for (const pluginRecord of pluginRecordMapRef.value.values()) {
+      const currentService = pluginRecord.instance.services?.mapSelection || null;
+      if (!currentService) {
+        continue;
+      }
+
+      resolvedService = currentService;
+      break;
     }
 
     return resolvedService;
@@ -380,6 +680,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     renderItems,
     mergedMapInteractive,
     getMapSnapService,
+    getMapSelectionService,
     resolveSelectedFeatureSnapshot,
     hostExpose,
   };

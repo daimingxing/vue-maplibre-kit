@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import type { Map as MaplibreMap } from 'maplibre-gl';
 import { createCircleLayerStyle, createLineLayerStyle } from '../../shared/map-layer-style-config';
-import type { TerradrawControlType, TerradrawSnapSharedOptions } from '../../shared/mapLibre-contols-types';
+import type { TerradrawControlType, TerradrawSnapSharedOptions } from '../../shared/mapLibre-controls-types';
 import type { ResolvedTerradrawSnapOptions } from '../types';
 import { createEmptyMapFeatureSnapResult, createMapFeatureSnapBinding, type MapFeatureSnapBinding } from './useMapFeatureSnapBinding';
 import type { MapFeatureSnapOptions } from './types';

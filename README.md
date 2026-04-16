@@ -17,11 +17,15 @@ npm install vue-maplibre-kit
 ## 公共入口
 
 ```ts
-import { MapLibreInit, type MapLibreInitExpose } from 'vue-maplibre-kit';
+import {
+  MapLibreInit,
+  useBusinessMap,
+  type MapBusinessSourceRegistry,
+  type MapLibreInitExpose,
+} from 'vue-maplibre-kit';
 import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature-snap';
 import {
   createLineDraftPreviewPlugin,
-  type LineDraftPreviewPluginApi,
 } from 'vue-maplibre-kit/plugins/line-draft-preview';
 import { MapLineExtensionTool, MapLineCorridorTool } from 'vue-maplibre-kit/geometry';
 ```
@@ -42,16 +46,19 @@ import { MapLineExtensionTool, MapLineCorridorTool } from 'vue-maplibre-kit/geom
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { MapLibreInit, type MapLibreInitExpose } from 'vue-maplibre-kit';
+import {
+  MapLibreInit,
+  useBusinessMap,
+  type MapBusinessSourceRegistry,
+  type MapLibreInitExpose,
+} from 'vue-maplibre-kit';
 import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature-snap';
 import {
   createLineDraftPreviewPlugin,
-  LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
-  type LineDraftPreviewPluginApi,
 } from 'vue-maplibre-kit/plugins/line-draft-preview';
-import type { MapPluginStateChangePayload } from 'vue-maplibre-kit';
 
 const mapInitRef = ref<MapLibreInitExpose | null>(null);
+const sourceRegistry = {} as MapBusinessSourceRegistry;
 
 const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
   enabled: true,
@@ -72,28 +79,28 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
 });
 
 const mapPlugins = [mapFeatureSnapPlugin, lineDraftPreviewPlugin];
+const businessMap = useBusinessMap({
+  mapRef: mapInitRef,
+  sourceRegistry,
+});
 
 /**
- * 通过插件宿主读取线草稿插件 API。
- * 业务层不再访问固定字段，而是通过插件 ID 查询对应 API。
- * @returns 当前线草稿插件 API；未初始化时返回 null
+ * 业务层优先通过聚合门面读取高频能力。
+ * @returns 当前线草稿数量
  */
-function getLineDraftPreviewApi(): LineDraftPreviewPluginApi | null {
-  return (
-    mapInitRef.value?.plugins?.getApi<LineDraftPreviewPluginApi>(lineDraftPreviewPlugin.id) || null
-  );
+function getLineDraftCount(): number {
+  return businessMap.draft.featureCount.value;
 }
 
 /**
- * 统一处理插件状态变化。
- * @param payload 插件状态变化载荷
+ * 业务层直接通过统一 feature 分组保存当前选中要素的属性。
  */
-function handlePluginStateChange(payload: MapPluginStateChangePayload): void {
-  if (payload.pluginType !== LINE_DRAFT_PREVIEW_PLUGIN_TYPE) {
-    return;
-  }
-
-  console.log('lineDraftPreview state', payload.state);
+function saveSelectedFeatureName(): void {
+  businessMap.feature.saveSelectedMapFeatureProperties({
+    newProperties: {
+      name: '示例名称',
+    },
+  });
 }
 </script>
 ```
@@ -128,7 +135,7 @@ function handlePluginStateChange(payload: MapPluginStateChangePayload): void {
 该示例展示了以下内容：
 
 - 显式导入并注册插件
-- 通过宿主读取插件 API
+- 通过 `useBusinessMap` 统一读取业务能力分组
 - 正式业务数据与临时草稿数据分流
 - 普通图层交互、吸附、线草稿和 TerraDraw 的协同方式
 

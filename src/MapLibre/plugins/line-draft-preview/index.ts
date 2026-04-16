@@ -17,6 +17,7 @@ import type {
  * 创建线草稿预览插件描述对象。
  * @param options 线草稿预览插件配置
  * @param id 插件唯一标识；未传时默认使用 lineDraftPreview
+ * 同一个 map 实例内，当前 type 的插件只允许注册一个，id 不再用于同类型实例消歧。
  * @returns 标准化后的插件描述对象
  */
 export function createLineDraftPreviewPlugin(

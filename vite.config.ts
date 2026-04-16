@@ -27,12 +27,19 @@ function geojsonPlugin() {
 function resolveLibraryEntries() {
   return {
     index: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
+    business: fileURLToPath(new URL('./src/business.ts', import.meta.url)),
     geometry: fileURLToPath(new URL('./src/geometry.ts', import.meta.url)),
     'plugins/map-feature-snap': fileURLToPath(
       new URL('./src/plugins/map-feature-snap.ts', import.meta.url)
     ),
     'plugins/line-draft-preview': fileURLToPath(
       new URL('./src/plugins/line-draft-preview.ts', import.meta.url)
+    ),
+    'plugins/map-feature-multi-select': fileURLToPath(
+      new URL('./src/plugins/map-feature-multi-select.ts', import.meta.url)
+    ),
+    'plugins/map-dxf-export': fileURLToPath(
+      new URL('./src/plugins/map-dxf-export.ts', import.meta.url)
     ),
   };
 }
@@ -50,6 +57,10 @@ function resolveDevAliases() {
       replacement: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
     },
     {
+      find: /^vue-maplibre-kit\/business$/,
+      replacement: fileURLToPath(new URL('./src/business.ts', import.meta.url)),
+    },
+    {
       find: /^vue-maplibre-kit\/geometry$/,
       replacement: fileURLToPath(new URL('./src/geometry.ts', import.meta.url)),
     },
@@ -62,6 +73,16 @@ function resolveDevAliases() {
       replacement: fileURLToPath(
         new URL('./src/plugins/line-draft-preview.ts', import.meta.url)
       ),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins\/map-feature-multi-select$/,
+      replacement: fileURLToPath(
+        new URL('./src/plugins/map-feature-multi-select.ts', import.meta.url)
+      ),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins\/map-dxf-export$/,
+      replacement: fileURLToPath(new URL('./src/plugins/map-dxf-export.ts', import.meta.url)),
     },
     {
       find: '@',
@@ -78,6 +99,11 @@ export default defineConfig(({ command }) => {
     plugins: [vue(), geojsonPlugin()],
     resolve: {
       alias: resolveDevAliases(),
+    },
+    // 解决 localhost 解析错误
+    server: {
+      host: '127.0.0.1',
+      port: 5173
     },
     build: isBuildCommand
       ? {
