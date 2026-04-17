@@ -161,12 +161,26 @@
             <strong>{{ dxfDefaultCrsText }}</strong>
           </div>
           <div class="demo-panel-kv">
+            <span>默认 CRS 填写位置</span>
+            <strong>defaults.sourceCrs / defaults.targetCrs</strong>
+          </div>
+          <div class="demo-panel-kv">
             <span>局部覆写文件</span>
             <strong>{{ DXF_PRIMARY_ONLY_FILE_NAME }}</strong>
           </div>
         </div>
         <p class="demo-panel-note">{{ dxfResolvedOptionsText }}</p>
+        <p class="demo-panel-note">{{ DXF_DEFAULT_CRS_CONFIG_PATH_TEXT }}</p>
         <p class="demo-panel-note">{{ DXF_OVERRIDE_GUIDE_TEXT }}</p>
+      </section>
+
+      <section class="demo-panel-card">
+        <div class="demo-panel-head">
+          <h3>DXF 配置速查</h3>
+          <p>这里把插件壳、defaults 和两个常用回调的含义一次性写全，方便业务层直接照着配。</p>
+        </div>
+        <p class="demo-panel-note">{{ DXF_PLUGIN_OPTIONS_GUIDE_TEXT }}</p>
+        <p class="demo-panel-note">{{ DXF_CALLBACK_GUIDE_TEXT }}</p>
       </section>
     </div>
     <!-- 引入自定义的 Vue Popup 组件 -->
@@ -351,7 +365,13 @@ import {
   createLineDraftPreviewPlugin,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
 } from "vue-maplibre-kit/plugins/line-draft-preview";
-import { createMapDxfExportPlugin } from "vue-maplibre-kit/plugins/map-dxf-export";
+import {
+  createMapDxfExportPlugin,
+  type MapDxfExportOptions,
+  type MapDxfExportTaskOptions,
+  type MapDxfFeatureFilter,
+  type MapDxfLayerNameResolver,
+} from "vue-maplibre-kit/plugins/map-dxf-export";
 import { createMapFeatureMultiSelectPlugin } from "vue-maplibre-kit/plugins/map-feature-multi-select";
 import { createMapFeatureSnapPlugin } from "vue-maplibre-kit/plugins/map-feature-snap";
 
@@ -508,6 +528,12 @@ const DXF_PRIMARY_ONLY_FILE_NAME = "nggi00-primary-only.dxf";
 const dxfDefaultCrsText = `${DXF_DEFAULT_SOURCE_CRS} -> ${DXF_DEFAULT_TARGET_CRS}`;
 
 /**
+ * 默认 CRS 配置填写位置说明。
+ * 这里直接把“应该写在哪一层”明确展示给业务开发者。
+ */
+const DXF_DEFAULT_CRS_CONFIG_PATH_TEXT = "createMapDxfExportPlugin({ defaults: { sourceCrs, targetCrs } })";
+
+/**
  * DXF 局部覆写示例说明。
  * 这里强调两层职责边界：
  * 1. 插件 defaults 负责“封装层的稳定默认值”
@@ -515,6 +541,33 @@ const dxfDefaultCrsText = `${DXF_DEFAULT_SOURCE_CRS} -> ${DXF_DEFAULT_TARGET_CRS
  */
 const DXF_OVERRIDE_GUIDE_TEXT =
   "右上角插件自带的“导出DXF”按钮会按 defaults 导出全部业务 source；当前页面额外提供的“导出主业务DXF”按钮，只在本次任务里覆写 sourceIds、fileName 和 layerNameResolver。后续如果业务要按单次任务覆写 sourceCrs / targetCrs，也继续通过 downloadDxf(overrides) 传入即可。";
+
+/**
+ * DXF 插件根配置速查说明。
+ * 用来在示例面板里一次性展示插件壳的全部可配字段。
+ */
+const DXF_PLUGIN_OPTIONS_GUIDE_TEXT = [
+  "mapDxfExportPlugin 可配项：",
+  "1. enabled?: 是否启用整个 DXF 导出插件。",
+  "2. sourceRegistry: 必填，传当前页面的业务 sourceRegistry。",
+  "3. defaults?: 封装层默认导出配置。",
+  "   可配字段：sourceIds / fileName / sourceCrs / targetCrs / featureFilter / layerNameResolver。",
+  "4. control?: 内置按钮配置。",
+  "   可配字段：enabled / position / label。",
+].join("\n");
+
+/**
+ * DXF 回调用法速查说明。
+ * 重点解释业务层最容易疑惑的 featureFilter 和 layerNameResolver。
+ */
+const DXF_CALLBACK_GUIDE_TEXT = [
+  "featureFilter(feature, sourceId)：返回 true 表示保留当前要素，返回 false 表示本次导出跳过当前要素。",
+  "当前页面 defaults 里写的是 keepAllBusinessDxfFeatures，等价于“不过滤任何业务要素”。",
+  "如果业务只想导出主业务 source 里的线和面，可以改成：sourceId === SOURCE_IDS.primary && feature.geometry.type !== 'Point'。",
+  "layerNameResolver(feature, sourceId)：返回当前要素写入 DXF 的图层名。",
+  "当前页面 defaults 里写的是 resolveBusinessSourceDxfLayerName，等价于“按 sourceId 分层”；局部覆写按钮则演示了按 sourceId + mark 分层。",
+  "底层会自动清洗 DXF 非法字符；如果不同来源最终落到同一 DXF 图层，也会在 warnings 里给出同名合层提示。",
+].join("\n");
 
 import sendIcon from "./assets/send.svg";
 // import segment_stretch_test from './assets/segment-stretch.svg';
@@ -554,6 +607,78 @@ const businessSourceRegistry = createMapBusinessSourceRegistry([
   primaryBusinessSource,
   secondaryBusinessSource,
 ]);
+
+/**
+ * DXF 默认要素过滤器。
+ * 返回 true 表示保留当前要素，返回 false 表示本次导出跳过当前要素。
+ * 当前示例故意全部返回 true，用来表达“默认不过滤任何业务要素”。
+ * @param feature 当前业务要素
+ * @param sourceId 当前业务 sourceId
+ * @returns 是否保留当前要素
+ */
+const keepAllBusinessDxfFeatures: MapDxfFeatureFilter = (
+  feature: MapCommonFeature,
+  sourceId: string,
+): boolean => {
+  void feature;
+  void sourceId;
+  return true;
+};
+
+/**
+ * DXF 默认图层名解析器。
+ * 返回值就是当前要素写入 DXF 的原始图层名；底层仍会自动做非法字符清洗与同名合层 warning。
+ * 当前示例直接返回 sourceId，等价于按业务 source 分层。
+ * @param feature 当前业务要素
+ * @param sourceId 当前业务 sourceId
+ * @returns 当前要素写入 DXF 前的原始图层名
+ */
+const resolveBusinessSourceDxfLayerName: MapDxfLayerNameResolver = (
+  feature: MapCommonFeature,
+  sourceId: string,
+): string => {
+  void feature;
+  return sourceId;
+};
+
+/**
+ * NGGI00 页面使用的 DXF 插件完整配置对象。
+ * 这里故意把全部可配字段都显式写出来，方便业务开发者直接照着这份示例抄。
+ */
+const mapDxfExportPluginOptions: MapDxfExportOptions = {
+  // 是否启用整个 DXF 导出插件。
+  enabled: true,
+
+  // 必填：告诉插件“当前页面有哪些业务 source 可参与导出”。
+  sourceRegistry: businessSourceRegistry,
+
+  // defaults 代表封装层默认值。
+  // 插件内置按钮会直接复用这组配置，适合沉淀成“整页统一的默认导出行为”。
+  defaults: {
+    // null / 不传都表示“默认导出全部业务 source”。
+    sourceIds: null,
+
+    // 默认下载文件名。
+    fileName: DXF_DEFAULT_FILE_NAME,
+
+    // 默认 CRS 就写在这里。
+    sourceCrs: DXF_DEFAULT_SOURCE_CRS,
+    targetCrs: DXF_DEFAULT_TARGET_CRS,
+
+    // 要素过滤器：true 保留，false 排除。
+    featureFilter: keepAllBusinessDxfFeatures,
+
+    // 图层名解析器：决定当前要素写入 DXF 时落到哪个图层。
+    layerNameResolver: resolveBusinessSourceDxfLayerName,
+  },
+
+  // 内置控件配置。
+  control: {
+    enabled: true,
+    position: "top-right",
+    label: "导出DXF",
+  },
+};
 
 /**
  * 当前页面持有的地图组件公开实例引用。
@@ -734,26 +859,7 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
 });
 
 // 4. DXF 导出插件：第一版只面向业务 source，不包含 TerraDraw / Measure / 手绘要素。
-const mapDxfExportPlugin = createMapDxfExportPlugin({
-  enabled: true,
-  sourceRegistry: businessSourceRegistry,
-
-  // defaults 代表封装层默认值。
-  // 插件内置按钮会直接复用这组配置，适合沉淀成“整页统一的默认导出行为”。
-  defaults: {
-    fileName: DXF_DEFAULT_FILE_NAME,
-    sourceCrs: DXF_DEFAULT_SOURCE_CRS,
-    targetCrs: DXF_DEFAULT_TARGET_CRS,
-  },
-
-  // 这里把默认值显式写出来，是为了让业务示例更直观。
-  // 真实业务如果接受默认行为，也可以省略整个 control 配置。
-  control: {
-    enabled: true,
-    position: "top-right",
-    label: "导出DXF",
-  },
-});
+const mapDxfExportPlugin = createMapDxfExportPlugin(mapDxfExportPluginOptions);
 
 /**
  * 集中注册当前页面需要启用的地图能力扩展。
@@ -2116,7 +2222,7 @@ const getMapDxfExportApi = () => {
  * @param sourceId 当前业务 sourceId
  * @returns 当前要素在 DXF 中使用的图层名
  */
-const resolvePrimaryBusinessDxfLayerName = (
+const resolvePrimaryBusinessDxfLayerName: MapDxfLayerNameResolver = (
   feature: MapCommonFeature,
   sourceId: string,
 ): string => {
@@ -2126,6 +2232,19 @@ const resolvePrimaryBusinessDxfLayerName = (
       : "default";
 
   return `${sourceId}_${featureMark}`;
+};
+
+/**
+ * 当前页面“只导出主业务 DXF”按钮使用的局部覆写配置。
+ * 这里单独抽成函数，方便示例面板和点击事件共用同一套参数。
+ * @returns 单次任务局部覆写配置
+ */
+const createPrimaryBusinessDxfOverrides = (): MapDxfExportTaskOptions => {
+  return {
+    sourceIds: [SOURCE_IDS.primary],
+    fileName: DXF_PRIMARY_ONLY_FILE_NAME,
+    layerNameResolver: resolvePrimaryBusinessDxfLayerName,
+  };
 };
 
 /**
@@ -2142,14 +2261,11 @@ const dxfResolvedOptionsText = computed(() => {
   const defaultOptions = api.getResolvedOptions();
 
   // 传入与按钮一致的 overrides，展示“业务层本次任务局部覆写后”的最终配置。
-  const primaryOnlyOptions = api.getResolvedOptions({
-    sourceIds: [SOURCE_IDS.primary],
-    fileName: DXF_PRIMARY_ONLY_FILE_NAME,
-    layerNameResolver: resolvePrimaryBusinessDxfLayerName,
-  });
+  const primaryOnlyOptions = api.getResolvedOptions(createPrimaryBusinessDxfOverrides());
 
   return [
     `插件默认导出：范围 = ${formatDxfSourceIdsText(defaultOptions.sourceIds)}；文件 = ${defaultOptions.fileName}；坐标转换 = ${formatDxfCrsText(defaultOptions.sourceCrs, defaultOptions.targetCrs)}。`,
+    "插件默认回调：featureFilter = keepAllBusinessDxfFeatures（不过滤）；layerNameResolver = resolveBusinessSourceDxfLayerName（按 sourceId 分层）。",
     `业务层局部覆写后：范围 = ${formatDxfSourceIdsText(primaryOnlyOptions.sourceIds)}；文件 = ${primaryOnlyOptions.fileName}；图层名 = 按 sourceId + mark 生成。`,
   ].join("\n");
 });
@@ -2167,11 +2283,7 @@ const downloadPrimaryBusinessSourceDxf = async (): Promise<void> => {
   }
 
   try {
-    const result = await dxfExportApi.downloadDxf({
-      sourceIds: [SOURCE_IDS.primary],
-      fileName: DXF_PRIMARY_ONLY_FILE_NAME,
-      layerNameResolver: resolvePrimaryBusinessDxfLayerName,
-    });
+    const result = await dxfExportApi.downloadDxf(createPrimaryBusinessDxfOverrides());
 
     if (result.warnings.length > 0) {
       console.warn("[NGGI00 DXF 示例] 本次导出包含警告", result.warnings);

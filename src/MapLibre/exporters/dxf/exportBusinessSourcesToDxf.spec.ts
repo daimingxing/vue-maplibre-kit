@@ -127,6 +127,16 @@ function extractFirstPoint(content: string): [number, number, number] {
   ];
 }
 
+/**
+ * 判断 DXF 文本中是否存在指定图层名的实体引用。
+ * @param content DXF 文本
+ * @param layerName 图层名
+ * @returns 是否命中
+ */
+function hasEntityLayer(content: string, layerName: string): boolean {
+  return content.includes(`\n8\n${layerName}\n`);
+}
+
 describe('exportBusinessSourcesToDxf', () => {
   it('应支持导出全部 source 和按 sourceIds 局部导出', () => {
     const sourceA = createBusinessSource('source-a', [createPointFeature('point-a', [1, 2])]);
@@ -250,6 +260,113 @@ describe('exportBusinessSourcesToDxf', () => {
     expect(result.warnings).toEqual([
       '已跳过坐标转换：未完整配置 sourceCrs 和 targetCrs，将按原坐标导出',
     ]);
+  });
+
+  it('应在显式提供非法 CRS 时直接报错', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+
+    expect(() =>
+      exportBusinessSourcesToDxf({
+        sourceRegistry,
+        taskOptions: resolveMapDxfExportTaskOptions({
+          sourceCrs: 'BAD:VALUE',
+          targetCrs: 'EPSG:3857',
+        }),
+      })
+    ).toThrowError(
+      "DXF 导出坐标系配置无效：sourceCrs='BAD:VALUE'，targetCrs='EPSG:3857'。Could not parse to valid json: BAD:VALUE"
+    );
+  });
+
+  it('应清洗 layerNameResolver 返回的非法图层名', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+        layerNameResolver: () => 'layer/a:b?c*test',
+      }),
+    });
+
+    expect(hasEntityLayer(result.content, 'layer_a_b_c_test')).toBe(true);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('应在不同来源映射到同一最终 DXF 图层时只返回一条告警', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+      createBusinessSource('source-b', [createPointFeature('point-b', [2, 2])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+        layerNameResolver: (_, sourceId) => (sourceId === 'source-a' ? 'same/layer' : 'same:layer'),
+      }),
+    });
+
+    expect(result.entityCount).toBe(2);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("DXF 图层 'same_layer' 出现同名合层");
+    expect(result.warnings[0]).toContain("source 'source-a' / 原始图层名 'same/layer'");
+    expect(result.warnings[0]).toContain("source 'source-b' / 原始图层名 'same:layer'");
+    expect(result.warnings[0]).toContain('导出后将合并到同一 DXF layer');
+  });
+
+  it('应在同一来源重复命中同一最终 DXF 图层时不重复刷告警', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [
+        createPointFeature('point-a', [1, 1]),
+        createPointFeature('point-b', [2, 2]),
+        createPointFeature('point-c', [3, 3]),
+      ]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+        layerNameResolver: (feature) => {
+          if (feature.id === 'point-a') {
+            return 'same/layer';
+          }
+
+          if (feature.id === 'point-b') {
+            return 'same:layer';
+          }
+
+          return 'same?layer';
+        },
+      }),
+    });
+
+    expect(result.entityCount).toBe(3);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("DXF 图层 'same_layer' 出现同名合层");
+    expect(result.warnings[0]).toContain("source 'source-a' / 原始图层名 'same/layer'");
+    expect(result.warnings[0]).toContain("source 'source-a' / 原始图层名 'same:layer'");
+  });
+
+  it('默认按 sourceId 分层时不应产生同名合层告警', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+      createBusinessSource('source-b', [createPointFeature('point-b', [2, 2])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+      }),
+    });
+
+    expect(result.warnings).toEqual([]);
   });
 
   it('应覆盖点线面、多几何和不支持几何的导出行为', () => {

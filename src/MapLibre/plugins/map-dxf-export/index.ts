@@ -32,6 +32,8 @@ export type {
   MapDxfExportResult,
   MapDxfExportState,
   MapDxfExportTaskOptions,
+  MapDxfFeatureFilter,
+  MapDxfLayerNameResolver,
   ResolvedMapDxfExportControlOptions,
   ResolvedMapDxfExportOptions,
   ResolvedMapDxfExportTaskOptions,

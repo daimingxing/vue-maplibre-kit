@@ -33,5 +33,11 @@ export type { MapDxfExportState } from '../MapLibre/plugins/map-dxf-export';
 /** DXF 单次导出任务配置类型。业务层局部覆写导出参数时使用。 */
 export type { MapDxfExportTaskOptions } from '../MapLibre/plugins/map-dxf-export';
 
+/** DXF 要素过滤器类型。需要按业务规则筛掉部分要素时使用。 */
+export type { MapDxfFeatureFilter } from '../MapLibre/plugins/map-dxf-export';
+
+/** DXF 图层名解析器类型。需要按业务字段自定义图层名时使用。 */
+export type { MapDxfLayerNameResolver } from '../MapLibre/plugins/map-dxf-export';
+
 /** 归一化后的 DXF 导出任务配置类型。读取最终生效参数时使用。 */
 export type { ResolvedMapDxfExportTaskOptions } from '../MapLibre/plugins/map-dxf-export';

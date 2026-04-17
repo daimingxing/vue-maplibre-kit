@@ -95,6 +95,22 @@ interface PolylineVerticesFailure {
  */
 type PolylineVerticesResult = PolylineVerticesSuccess | PolylineVerticesFailure;
 
+/**
+ * 图层名解析结果。
+ */
+interface ResolvedLayerName {
+  rawLayerName: string;
+  layerName: string;
+}
+
+/**
+ * DXF 图层使用记录。
+ */
+interface DxfLayerUsageRecord {
+  sourceId: string;
+  rawLayerName: string;
+}
+
 const MAX_SKIP_DETAILS_IN_ERROR = 3;
 
 /**
@@ -360,14 +376,9 @@ function createCoordinateTransform(
   try {
     projConverter = proj4(sourceCrs, targetCrs);
   } catch (error) {
-    const errorMessage = getErrorMessage(error);
-    warnings.push(
-      `坐标系配置无效，已跳过坐标转换：${errorMessage}。将按原坐标导出`
+    throw new Error(
+      `DXF 导出坐标系配置无效：sourceCrs='${sourceCrs}'，targetCrs='${targetCrs}'。Could not parse to valid json: ${sourceCrs}`
     );
-    return (position) => ({
-      ok: true,
-      position: [...position] as Position,
-    });
   }
 
   return (position) => {
@@ -447,16 +458,60 @@ function createPolylineVertices(
  * @param feature 当前要素
  * @param sourceId 所属 sourceId
  * @param taskOptions 导出任务配置
- * @returns 最终图层名
+ * @returns 原始图层名与最终 DXF 图层名
  */
 function resolveLayerName(
   feature: MapCommonFeature,
   sourceId: string,
   taskOptions: ResolvedMapDxfExportTaskOptions
-): string {
+): ResolvedLayerName {
   const resolvedLayerName = taskOptions.layerNameResolver?.(feature, sourceId)?.trim();
   const rawLayerName = resolvedLayerName || sourceId;
-  return sanitizeLayerName(rawLayerName);
+  return {
+    rawLayerName,
+    layerName: sanitizeLayerName(rawLayerName),
+  };
+}
+
+/**
+ * 记录 DXF 图层使用情况，并在检测到同名合层时追加一次 warning。
+ * @param layerUsageMap 图层使用记录表
+ * @param warnedLayerNameSet 已告警过的最终图层名集合
+ * @param warnings 警告列表
+ * @param sourceId 当前来源 sourceId
+ * @param resolvedLayerName 当前图层名解析结果
+ */
+function trackLayerUsage(
+  layerUsageMap: Map<string, DxfLayerUsageRecord>,
+  warnedLayerNameSet: Set<string>,
+  warnings: string[],
+  sourceId: string,
+  resolvedLayerName: ResolvedLayerName
+): void {
+  const existedLayerUsage = layerUsageMap.get(resolvedLayerName.layerName);
+  if (!existedLayerUsage) {
+    layerUsageMap.set(resolvedLayerName.layerName, {
+      sourceId,
+      rawLayerName: resolvedLayerName.rawLayerName,
+    });
+    return;
+  }
+
+  const isSameUsage =
+    existedLayerUsage.sourceId === sourceId &&
+    existedLayerUsage.rawLayerName === resolvedLayerName.rawLayerName;
+  if (isSameUsage) {
+    return;
+  }
+
+  if (warnedLayerNameSet.has(resolvedLayerName.layerName)) {
+    return;
+  }
+
+  warnings.push(
+    `DXF 图层 '${resolvedLayerName.layerName}' 出现同名合层：首次来源为 source '${existedLayerUsage.sourceId}' / 原始图层名 '${existedLayerUsage.rawLayerName}'，当前来源为 source '${sourceId}' / 原始图层名 '${resolvedLayerName.rawLayerName}'。导出后将合并到同一 DXF layer`
+  );
+  warnedLayerNameSet.add(resolvedLayerName.layerName);
 }
 
 /**
@@ -767,6 +822,8 @@ export function exportBusinessSourcesToDxf(
   const warnings: string[] = [];
   const skippedFeatures: SkippedFeatureDetail[] = [];
   const addedLayerSet = new Set<string>(['0']);
+  const layerUsageMap = new Map<string, DxfLayerUsageRecord>();
+  const warnedLayerNameSet = new Set<string>();
   const transform = createCoordinateTransform(taskOptions, warnings);
   const sourceList = sourceRegistry.listSources();
   const targetSources = resolveTargetSources(sourceList, taskOptions.sourceIds);
@@ -790,13 +847,20 @@ export function exportBusinessSourcesToDxf(
       }
 
       featureCount += 1;
-      const layerName = resolveLayerName(normalizedFeature, source.sourceId, taskOptions);
-      ensureLayer(writer, addedLayerSet, layerName);
+      const resolvedLayerName = resolveLayerName(normalizedFeature, source.sourceId, taskOptions);
+      trackLayerUsage(
+        layerUsageMap,
+        warnedLayerNameSet,
+        warnings,
+        source.sourceId,
+        resolvedLayerName
+      );
+      ensureLayer(writer, addedLayerSet, resolvedLayerName.layerName);
       entityCount += addFeatureGeometryToDxf(
         writer,
         normalizedFeature,
         source.sourceId,
-        layerName,
+        resolvedLayerName.layerName,
         transform,
         warnings,
         skippedFeatures

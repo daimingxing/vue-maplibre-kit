@@ -83,5 +83,7 @@ export interface MapDxfExportState {
 export type {
   MapDxfExportResult,
   MapDxfExportTaskOptions,
+  MapDxfFeatureFilter,
+  MapDxfLayerNameResolver,
   ResolvedMapDxfExportTaskOptions,
 } from '../../exporters/dxf';
