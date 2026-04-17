@@ -12,6 +12,18 @@ export { mapDxfExportPlugin } from '../MapLibre/plugins/map-dxf-export';
 /** DXF 导出插件类型常量。按插件 type 判断是否为 DXF 导出插件时使用。 */
 export { MAP_DXF_EXPORT_PLUGIN_TYPE } from '../MapLibre/plugins/map-dxf-export';
 
+/** DXF 全局默认 CRS 配置。业务层未传 sourceCrs / targetCrs 时会回退到这里。 */
+export { DEFAULT_DXF_CRS_OPTIONS } from '../MapLibre/plugins/map-dxf-export';
+
+/** DXF 全局默认源坐标系。只需要读取默认来源坐标系时使用。 */
+export { DEFAULT_DXF_SOURCE_CRS } from '../MapLibre/plugins/map-dxf-export';
+
+/** DXF 全局默认目标坐标系。只需要读取默认目标坐标系时使用。 */
+export { DEFAULT_DXF_TARGET_CRS } from '../MapLibre/plugins/map-dxf-export';
+
+/** DXF 默认导出文件名。需要读取库内兜底文件名时使用。 */
+export { DEFAULT_DXF_FILE_NAME } from '../MapLibre/plugins/map-dxf-export';
+
 /** DXF 导出插件描述类型。声明单个 DXF 导出插件配置时使用。 */
 export type { MapDxfExportPluginDescriptor } from '../MapLibre/plugins/map-dxf-export';
 

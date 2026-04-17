@@ -4,6 +4,12 @@ import type { MapCommonFeature } from '../../shared/map-common-tools';
 /** DXF 默认导出文件名。 */
 export const DEFAULT_DXF_FILE_NAME = 'map-export.dxf';
 
+/** DXF 全局默认源坐标系。 */
+export const DEFAULT_DXF_SOURCE_CRS = 'EPSG:4326';
+
+/** DXF 全局默认目标坐标系。 */
+export const DEFAULT_DXF_TARGET_CRS = 'EPSG:3857';
+
 /** DXF 要素过滤函数。 */
 export type MapDxfFeatureFilter = (feature: MapCommonFeature, sourceId: string) => boolean;
 
@@ -41,6 +47,14 @@ export interface ResolvedMapDxfExportTaskOptions {
   /** 最终生效的图层名解析器。 */
   layerNameResolver?: MapDxfLayerNameResolver;
 }
+
+/** DXF 全局默认 CRS 配置。业务层未传时回退到这里。 */
+export const DEFAULT_DXF_CRS_OPTIONS: Readonly<
+  Pick<MapDxfExportTaskOptions, 'sourceCrs' | 'targetCrs'>
+> = Object.freeze({
+  sourceCrs: DEFAULT_DXF_SOURCE_CRS,
+  targetCrs: DEFAULT_DXF_TARGET_CRS,
+});
 
 /** DXF 导出结果。 */
 export interface MapDxfExportResult {

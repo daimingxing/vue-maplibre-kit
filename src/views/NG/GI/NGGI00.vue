@@ -32,7 +32,10 @@
             </ElButton>
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 140px" @click="downloadPrimaryBusinessSourceDxf">
+            <ElButton
+              style="background: white; width: 140px"
+              @click="downloadPrimaryBusinessSourceDxf"
+            >
               导出主业务DXF
             </ElButton>
           </mgl-custom-control>
@@ -161,8 +164,8 @@
             <strong>{{ dxfDefaultCrsText }}</strong>
           </div>
           <div class="demo-panel-kv">
-            <span>默认 CRS 填写位置</span>
-            <strong>defaults.sourceCrs / defaults.targetCrs</strong>
+            <span>全局默认 CRS 位置</span>
+            <strong>封装层 DEFAULT_DXF_CRS_OPTIONS</strong>
           </div>
           <div class="demo-panel-kv">
             <span>局部覆写文件</span>
@@ -206,9 +209,7 @@
           </el-descriptions-item>
           <el-descriptions-item label="选中线段">
             {{
-              popupSelectedSegmentIndex >= 0
-                ? `第 ${popupSelectedSegmentIndex + 1} 段`
-                : "未识别"
+              popupSelectedSegmentIndex >= 0 ? `第 ${popupSelectedSegmentIndex + 1} 段` : "未识别"
             }}
           </el-descriptions-item>
           <el-descriptions-item label="当前段长">
@@ -277,7 +278,10 @@
         </p>
         <p>
           <strong>状态：</strong>
-          <el-tag :type="popupPointFeatureProps.status === 'normal' ? 'success' : 'danger'" size="small">
+          <el-tag
+            :type="popupPointFeatureProps.status === 'normal' ? 'success' : 'danger'"
+            size="small"
+          >
             {{ popupPointFeatureProps.status === "normal" ? "正常" : "异常" }}
           </el-tag>
         </p>
@@ -367,6 +371,7 @@ import {
 } from "vue-maplibre-kit/plugins/line-draft-preview";
 import {
   createMapDxfExportPlugin,
+  DEFAULT_DXF_CRS_OPTIONS,
   type MapDxfExportOptions,
   type MapDxfExportTaskOptions,
   type MapDxfFeatureFilter,
@@ -501,20 +506,6 @@ const MEASURE_PROPERTY_PANEL_NOTE =
  */
 const DEMO_STYLE_STATE_KEY = "demoStyled";
 
-/**
- * DXF 导出示例默认源坐标系。
- * 当前页面的 mock 数据是常见的经纬度坐标，因此这里先按 WGS84 作为默认来源。
- * 如果后续真实业务源不是这个坐标系，可以在封装层统一改默认值。
- */
-const DXF_DEFAULT_SOURCE_CRS = "EPSG:4326";
-
-/**
- * DXF 导出示例默认目标坐标系。
- * 这里示例性转成 Web Mercator，主要是为了演示插件会在导出前统一走 proj4 做坐标转换。
- * 真实业务如果希望保留原坐标，直接把 sourceCrs / targetCrs 配成一致，或都不传即可。
- */
-const DXF_DEFAULT_TARGET_CRS = "EPSG:3857";
-
 /** DXF 插件默认导出的文件名。 */
 const DXF_DEFAULT_FILE_NAME = "nggi00-business-all.dxf";
 
@@ -525,22 +516,23 @@ const DXF_PRIMARY_ONLY_FILE_NAME = "nggi00-primary-only.dxf";
  * 默认坐标转换说明文本。
  * 模板直接展示这行文字，让业务开发者一眼就能看到封装层默认值。
  */
-const dxfDefaultCrsText = `${DXF_DEFAULT_SOURCE_CRS} -> ${DXF_DEFAULT_TARGET_CRS}`;
+const dxfDefaultCrsText = `${DEFAULT_DXF_CRS_OPTIONS.sourceCrs} -> ${DEFAULT_DXF_CRS_OPTIONS.targetCrs}`;
 
 /**
  * 默认 CRS 配置填写位置说明。
- * 这里直接把“应该写在哪一层”明确展示给业务开发者。
+ * 这里直接把“封装层默认值维护在哪里”明确展示给业务开发者。
  */
-const DXF_DEFAULT_CRS_CONFIG_PATH_TEXT = "createMapDxfExportPlugin({ defaults: { sourceCrs, targetCrs } })";
+const DXF_DEFAULT_CRS_CONFIG_PATH_TEXT =
+  "DXF 全局默认 CRS 已在插件封装层统一维护；业务层只有需要覆盖时，才在 createMapDxfExportPlugin({ defaults }) 或 downloadDxf(overrides) 里传 sourceCrs / targetCrs。";
 
 /**
  * DXF 局部覆写示例说明。
  * 这里强调两层职责边界：
- * 1. 插件 defaults 负责“封装层的稳定默认值”
- * 2. `downloadDxf(overrides)` 负责“业务层本次任务的局部覆写”
+ * 1. DXF 模块全局默认值负责兜底 CRS
+ * 2. 页面 `defaults` 与 `downloadDxf(overrides)` 负责局部覆盖
  */
 const DXF_OVERRIDE_GUIDE_TEXT =
-  "右上角插件自带的“导出DXF”按钮会按 defaults 导出全部业务 source；当前页面额外提供的“导出主业务DXF”按钮，只在本次任务里覆写 sourceIds、fileName 和 layerNameResolver。后续如果业务要按单次任务覆写 sourceCrs / targetCrs，也继续通过 downloadDxf(overrides) 传入即可。";
+  "右上角插件自带的“导出DXF”按钮会先吃封装层全局默认 CRS，再叠加当前页面 defaults；当前页面额外提供的“导出主业务DXF”按钮，只在本次任务里覆写 sourceIds、fileName 和 layerNameResolver。后续如果业务要按页面或单次任务改 sourceCrs / targetCrs，也继续通过 defaults 或 downloadDxf(overrides) 覆盖即可。";
 
 /**
  * DXF 插件根配置速查说明。
@@ -550,7 +542,7 @@ const DXF_PLUGIN_OPTIONS_GUIDE_TEXT = [
   "mapDxfExportPlugin 可配项：",
   "1. enabled?: 是否启用整个 DXF 导出插件。",
   "2. sourceRegistry: 必填，传当前页面的业务 sourceRegistry。",
-  "3. defaults?: 封装层默认导出配置。",
+  "3. defaults?: 页面级默认导出配置，会覆盖封装层统一维护的全局默认 CRS。",
   "   可配字段：sourceIds / fileName / sourceCrs / targetCrs / featureFilter / layerNameResolver。",
   "4. control?: 内置按钮配置。",
   "   可配字段：enabled / position / label。",
@@ -562,10 +554,10 @@ const DXF_PLUGIN_OPTIONS_GUIDE_TEXT = [
  */
 const DXF_CALLBACK_GUIDE_TEXT = [
   "featureFilter(feature, sourceId)：返回 true 表示保留当前要素，返回 false 表示本次导出跳过当前要素。",
-  "当前页面 defaults 里写的是 keepAllBusinessDxfFeatures，等价于“不过滤任何业务要素”。",
+  "当前页面 defaults 里内联了一个 featureFilter 示例：仅导出主业务 source，且只保留线/面，并排除 mark === 'hole' 的要素。",
   "如果业务只想导出主业务 source 里的线和面，可以改成：sourceId === SOURCE_IDS.primary && feature.geometry.type !== 'Point'。",
-  "layerNameResolver(feature, sourceId)：返回当前要素写入 DXF 的图层名。",
-  "当前页面 defaults 里写的是 resolveBusinessSourceDxfLayerName，等价于“按 sourceId 分层”；局部覆写按钮则演示了按 sourceId + mark 分层。",
+  "layerNameResolver(feature, sourceId)：返回当前要素写入 DXF 的图层名。相同返回值的要素会被放进同一个 DXF 图层。",
+  "当前页面 defaults 里内联了一个 layerNameResolver 示例：按 sourceId + 几何类型 + mark 分层，例如 primary_Line_main。",
   "底层会自动清洗 DXF 非法字符；如果不同来源最终落到同一 DXF 图层，也会在 warnings 里给出同名合层提示。",
 ].join("\n");
 
@@ -607,78 +599,6 @@ const businessSourceRegistry = createMapBusinessSourceRegistry([
   primaryBusinessSource,
   secondaryBusinessSource,
 ]);
-
-/**
- * DXF 默认要素过滤器。
- * 返回 true 表示保留当前要素，返回 false 表示本次导出跳过当前要素。
- * 当前示例故意全部返回 true，用来表达“默认不过滤任何业务要素”。
- * @param feature 当前业务要素
- * @param sourceId 当前业务 sourceId
- * @returns 是否保留当前要素
- */
-const keepAllBusinessDxfFeatures: MapDxfFeatureFilter = (
-  feature: MapCommonFeature,
-  sourceId: string,
-): boolean => {
-  void feature;
-  void sourceId;
-  return true;
-};
-
-/**
- * DXF 默认图层名解析器。
- * 返回值就是当前要素写入 DXF 的原始图层名；底层仍会自动做非法字符清洗与同名合层 warning。
- * 当前示例直接返回 sourceId，等价于按业务 source 分层。
- * @param feature 当前业务要素
- * @param sourceId 当前业务 sourceId
- * @returns 当前要素写入 DXF 前的原始图层名
- */
-const resolveBusinessSourceDxfLayerName: MapDxfLayerNameResolver = (
-  feature: MapCommonFeature,
-  sourceId: string,
-): string => {
-  void feature;
-  return sourceId;
-};
-
-/**
- * NGGI00 页面使用的 DXF 插件完整配置对象。
- * 这里故意把全部可配字段都显式写出来，方便业务开发者直接照着这份示例抄。
- */
-const mapDxfExportPluginOptions: MapDxfExportOptions = {
-  // 是否启用整个 DXF 导出插件。
-  enabled: true,
-
-  // 必填：告诉插件“当前页面有哪些业务 source 可参与导出”。
-  sourceRegistry: businessSourceRegistry,
-
-  // defaults 代表封装层默认值。
-  // 插件内置按钮会直接复用这组配置，适合沉淀成“整页统一的默认导出行为”。
-  defaults: {
-    // null / 不传都表示“默认导出全部业务 source”。
-    sourceIds: null,
-
-    // 默认下载文件名。
-    fileName: DXF_DEFAULT_FILE_NAME,
-
-    // 默认 CRS 就写在这里。
-    sourceCrs: DXF_DEFAULT_SOURCE_CRS,
-    targetCrs: DXF_DEFAULT_TARGET_CRS,
-
-    // 要素过滤器：true 保留，false 排除。
-    featureFilter: keepAllBusinessDxfFeatures,
-
-    // 图层名解析器：决定当前要素写入 DXF 时落到哪个图层。
-    layerNameResolver: resolveBusinessSourceDxfLayerName,
-  },
-
-  // 内置控件配置。
-  control: {
-    enabled: true,
-    position: "top-right",
-    label: "导出DXF",
-  },
-};
 
 /**
  * 当前页面持有的地图组件公开实例引用。
@@ -859,7 +779,73 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
 });
 
 // 4. DXF 导出插件：第一版只面向业务 source，不包含 TerraDraw / Measure / 手绘要素。
-const mapDxfExportPlugin = createMapDxfExportPlugin(mapDxfExportPluginOptions);
+const mapDxfExportPlugin = createMapDxfExportPlugin({
+  // 这里故意把全部可配字段都显式写出来，方便业务开发者直接照着这份示例抄。
+  // 是否启用整个 DXF 导出插件。
+  enabled: true,
+
+  // 必填：告诉插件“当前页面有哪些业务 source 可参与导出”。
+  sourceRegistry: businessSourceRegistry,
+
+  // defaults 代表当前页面的默认导出行为。
+  // 插件内置按钮会直接复用这组配置，适合沉淀成“整页统一的默认导出行为”。
+  // 这里不再重复填写 sourceCrs / targetCrs，而是直接吃封装层统一维护的全局默认 CRS。
+  defaults: {
+    // null / 不传都表示“默认导出全部业务 source”。
+    sourceIds: null,
+
+    // 默认下载文件名。
+    fileName: DXF_DEFAULT_FILE_NAME,
+
+    // 该页面局部指定的 源/目标坐标系写在这里
+    sourceCrs: "EPSG:4326",
+    targetCrs: "EPSG:3857",
+
+    // 要素过滤器：true 保留，false 排除。
+    // featureFilter: (feature: MapCommonFeature, sourceId: string): boolean => {
+    //   // 只导出主业务 source，其他来源全部跳过。
+    //   if (sourceId !== SOURCE_IDS.primary) {
+    //     return false;
+    //   }
+
+    //   // 点要素先不导出，示例里只保留线和面。
+    //   if (feature.geometry.type === "Point") {
+    //     return false;
+    //   }
+
+    //   // 这里演示按业务属性继续细分筛选。
+    //   // mark === 'hole' 的要素本次不导出。
+    //   const mark = String(feature.properties?.mark ?? "");
+    //   if (mark === "hole") {
+    //     return false;
+    //   }
+
+    //   // 走到这里说明当前要素满足导出条件。
+    //   return true;
+    // },
+
+    // 图层名解析器：决定当前要素写入 DXF 时落到哪个图层。
+    // layerNameResolver: (feature: MapCommonFeature, sourceId: string): string => {
+    //   // DXF 里的“图层”可以理解成 CAD 中的分类目录。
+    //   // 同一个图层里的实体会被放在一起，便于后续单独开关显示、选择、改样式。
+
+    //   // 这里先取业务标记；没有 mark 时给一个兜底值，避免图层名出现空段。
+    //   const mark = String(feature.properties?.mark ?? "normal");
+
+    //   // 这个示例按“sourceId + 几何类型 + mark”分层。
+    //   // 例如：primary_Line_main、primary_Polygon_area、secondary_Point_hole。
+    //   // 这样导出到 CAD 后，业务人员一眼就能看出每层分别装的是什么数据。
+    //   return `${sourceId}_${feature.geometry.type}_${mark}`;
+    // },
+  },
+
+  // 内置控件配置。
+  control: {
+    enabled: true,
+    position: "top-right",
+    label: "导出DXF",
+  },
+} as MapDxfExportOptions);
 
 /**
  * 集中注册当前页面需要启用的地图能力扩展。
@@ -2265,7 +2251,7 @@ const dxfResolvedOptionsText = computed(() => {
 
   return [
     `插件默认导出：范围 = ${formatDxfSourceIdsText(defaultOptions.sourceIds)}；文件 = ${defaultOptions.fileName}；坐标转换 = ${formatDxfCrsText(defaultOptions.sourceCrs, defaultOptions.targetCrs)}。`,
-    "插件默认回调：featureFilter = keepAllBusinessDxfFeatures（不过滤）；layerNameResolver = resolveBusinessSourceDxfLayerName（按 sourceId 分层）。",
+    "插件默认回调：featureFilter 与 layerNameResolver 都在 defaults 里内联，分别演示筛选规则与图层分层规则。",
     `业务层局部覆写后：范围 = ${formatDxfSourceIdsText(primaryOnlyOptions.sourceIds)}；文件 = ${primaryOnlyOptions.fileName}；图层名 = 按 sourceId + mark 生成。`,
   ].join("\n");
 });
@@ -2302,7 +2288,9 @@ const downloadPrimaryBusinessSourceDxf = async (): Promise<void> => {
  * 根据最新的选中集变化上下文更新示例面板文案。
  * @param context 选中集变化上下文
  */
-const syncSelectionPanelFromChange = (context: BusinessKit.MapLayerSelectionChangeContext): void => {
+const syncSelectionPanelFromChange = (
+  context: BusinessKit.MapLayerSelectionChangeContext,
+): void => {
   // 将底层选中变化上下文转换为业务层更易消费的结构；集合字段与触发目标字段已分组。
   const selectionContext = featureQuery.toSelectionBusinessContext(context);
   const currentSelectionMode = context.selectionMode || selectionMode.value;
@@ -2506,7 +2494,7 @@ const { visible: popupVisible, lngLat: popupLngLat, payload: popupPayload } = po
  */
 const popupLinePayload = computed<NgLinePopupPayload | null>(() => {
   const currentPayload = popupPayload.value;
-  return currentPayload?.type === POPUP_TYPE.line ? currentPayload : null
+  return currentPayload?.type === POPUP_TYPE.line ? currentPayload : null;
 });
 
 /** 当前是否为点弹窗。 */
@@ -2587,7 +2575,9 @@ const handlePopupAction = (): void => {
   }
 
   if (currentPayload.type === POPUP_TYPE.line) {
-    ElMessage.success(`查看线路详情：${String(currentPayload.featureProps.id || currentPayload.featureId)}`);
+    ElMessage.success(
+      `查看线路详情：${String(currentPayload.featureProps.id || currentPayload.featureId)}`,
+    );
     return;
   }
 
@@ -2716,10 +2706,7 @@ const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) =>
     if (!lineInteractionSnapshot) {
       popup.open({
         lngLat: createPopupLngLat(businessContext.lngLat),
-        payload: createLinePopupPayload(
-          businessContext.feature as MapCommonLineFeature,
-          -1,
-        ),
+        payload: createLinePopupPayload(businessContext.feature as MapCommonLineFeature, -1),
       });
       return;
     }
@@ -2857,7 +2844,9 @@ const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
       addedFeatureIds: getSelectionItemIds(selectionContext.added),
       removedFeatureIds: getSelectionItemIds(selectionContext.removed),
       circleLayerIds: getSelectionItemIds(
-        selectionContext.selected.filter((selectedItem) => selectedItem.layerId === LAYER_IDS.circle),
+        selectionContext.selected.filter(
+          (selectedItem) => selectedItem.layerId === LAYER_IDS.circle,
+        ),
       ),
       summary: selectionPanelState.lastChangeSummary,
     });
@@ -2937,7 +2926,7 @@ const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
       // 配合 line-width / line-color 表达式即可直接实现悬浮高亮。
       enableFeatureStateHover: true,
 
-  onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
+      onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
         console.log("[Map 图层示例] 正式线图层额外 onClick，可在这里补充专属业务逻辑", context);
       },
     },
@@ -2947,7 +2936,7 @@ const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
     [LAYER_IDS.secondaryLine]: {
       cursor: "pointer",
       enableFeatureStateHover: true,
-  onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
+      onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
         console.log("[Map 图层示例] 第二正式线图层额外 onClick，可在这里补充专属业务逻辑", context);
       },
     },
@@ -3124,7 +3113,9 @@ const openTerradrawContextMenu = (context: BusinessKit.TerradrawInteractiveConte
  * 将最新属性同步回右键面板和详情弹窗，保证页面态与底层数据一致。
  * @param nextEditorState 最新属性编辑器状态
  */
-const syncSavedPropertiesToPanels = (nextEditorState: BusinessKit.MapFeaturePropertyEditorState) => {
+const syncSavedPropertiesToPanels = (
+  nextEditorState: BusinessKit.MapFeaturePropertyEditorState,
+) => {
   syncContextMenuPanelState(nextEditorState);
 
   if (contextMenuState.editorTarget?.type === "terradraw") {

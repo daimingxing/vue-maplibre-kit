@@ -105,6 +105,8 @@ describe('mapDxfExportPlugin', () => {
     const renderItems = pluginInstance.getRenderItems?.() || [];
 
     expect(pluginApi.getResolvedOptions().fileName).toBe('map-export.dxf');
+    expect(pluginApi.getResolvedOptions().sourceCrs).toBe('EPSG:4326');
+    expect(pluginApi.getResolvedOptions().targetCrs).toBe('EPSG:3857');
     expect(renderItems).toHaveLength(1);
     expect(renderItems[0].props.position).toBe('top-right');
     expect(renderItems[0].props.label).toBe('导出DXF');
@@ -140,13 +142,7 @@ describe('mapDxfExportPlugin', () => {
   });
 
   it('应在导出成功后更新状态并触发下载', async () => {
-    const optionsRef = ref({
-      ...createPluginOptions(),
-      defaults: {
-        sourceCrs: 'EPSG:4326',
-        targetCrs: 'EPSG:4326',
-      },
-    });
+    const optionsRef = ref(createPluginOptions());
     const pluginInstance = mapDxfExportPlugin.createInstance(createPluginContext(optionsRef));
     const pluginApi = pluginInstance.getApi?.();
     if (!pluginApi) {

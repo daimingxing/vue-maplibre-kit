@@ -11,6 +11,7 @@ import type { Position } from 'geojson';
 import type { MapBusinessSource } from '../../facades/createMapBusinessSource';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../../shared/map-common-tools';
 import {
+  DEFAULT_DXF_CRS_OPTIONS,
   DEFAULT_DXF_FILE_NAME,
   type ExportBusinessSourcesToDxfOptions,
   type MapDxfExportResult,
@@ -182,7 +183,7 @@ function normalizeSourceIds(sourceIds: string[] | null | undefined): string[] | 
 
 /**
  * 合并 DXF 导出任务配置。
- * 合并顺序固定为：封装层默认值 -> 本次局部覆写。
+ * 合并顺序固定为：DXF 全局默认 CRS -> 封装层默认值 -> 本次局部覆写。
  *
  * @param defaults 封装层默认值
  * @param overrides 本次局部覆写
@@ -192,22 +193,31 @@ export function resolveMapDxfExportTaskOptions(
   defaults?: MapDxfExportTaskOptions | ResolvedMapDxfExportTaskOptions | null,
   overrides?: MapDxfExportTaskOptions | null
 ): ResolvedMapDxfExportTaskOptions {
+  // 先注入库内统一维护的全局默认 CRS；如果页面 defaults 显式传了值（哪怕是 undefined），
+  // 这里也允许它覆盖掉全局值，保留“页面可局部重写默认行为”的能力。
+  const baseDefaults: MapDxfExportTaskOptions | ResolvedMapDxfExportTaskOptions = {
+    ...DEFAULT_DXF_CRS_OPTIONS,
+    ...(defaults || {}),
+  };
+
   const rawSourceIds = hasOwnKey(overrides, 'sourceIds')
     ? overrides.sourceIds
-    : defaults?.sourceIds;
-  const rawFileName = hasOwnKey(overrides, 'fileName') ? overrides.fileName : defaults?.fileName;
+    : baseDefaults.sourceIds;
+  const rawFileName = hasOwnKey(overrides, 'fileName')
+    ? overrides.fileName
+    : baseDefaults.fileName;
   const rawSourceCrs = hasOwnKey(overrides, 'sourceCrs')
     ? overrides.sourceCrs
-    : defaults?.sourceCrs;
+    : baseDefaults.sourceCrs;
   const rawTargetCrs = hasOwnKey(overrides, 'targetCrs')
     ? overrides.targetCrs
-    : defaults?.targetCrs;
+    : baseDefaults.targetCrs;
   const rawFeatureFilter = hasOwnKey(overrides, 'featureFilter')
     ? overrides.featureFilter
-    : defaults?.featureFilter;
+    : baseDefaults.featureFilter;
   const rawLayerNameResolver = hasOwnKey(overrides, 'layerNameResolver')
     ? overrides.layerNameResolver
-    : defaults?.layerNameResolver;
+    : baseDefaults.layerNameResolver;
 
   return {
     sourceIds: normalizeSourceIds(rawSourceIds),

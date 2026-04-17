@@ -8,6 +8,7 @@ import {
 } from '../../facades/createMapBusinessSource';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../../shared/map-common-tools';
 import {
+  DEFAULT_DXF_CRS_OPTIONS,
   exportBusinessSourcesToDxf,
   resolveMapDxfExportTaskOptions,
   type MapDxfExportTaskOptions,
@@ -204,6 +205,15 @@ describe('exportBusinessSourcesToDxf', () => {
     expect(resolvedOptions.layerNameResolver).toBe(overrideLayerNameResolver);
   });
 
+  it('应在页面未传 CRS 时回退到全局默认 CRS', () => {
+    const resolvedOptions = resolveMapDxfExportTaskOptions({
+      fileName: 'default.dxf',
+    });
+
+    expect(resolvedOptions.sourceCrs).toBe(DEFAULT_DXF_CRS_OPTIONS.sourceCrs);
+    expect(resolvedOptions.targetCrs).toBe(DEFAULT_DXF_CRS_OPTIONS.targetCrs);
+  });
+
   it('应在双端 CRS 都存在且不同时执行坐标转换', () => {
     const sourceRegistry = createMapBusinessSourceRegistry([
       createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
@@ -243,7 +253,7 @@ describe('exportBusinessSourcesToDxf', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it('应在缺少任一 CRS 时跳过转换并返回警告', () => {
+  it('应在只传 sourceCrs 时继续回退到全局 targetCrs', () => {
     const sourceRegistry = createMapBusinessSourceRegistry([
       createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
     ]);
@@ -251,6 +261,25 @@ describe('exportBusinessSourcesToDxf', () => {
       sourceRegistry,
       taskOptions: resolveMapDxfExportTaskOptions({
         sourceCrs: 'EPSG:4326',
+      }),
+    });
+
+    const [x, y] = proj4('EPSG:4326', 'EPSG:3857', [1, 1]) as [number, number];
+    const [resultX, resultY] = extractFirstPoint(result.content);
+    expect(resultX).toBeCloseTo(x, 6);
+    expect(resultY).toBeCloseTo(y, 6);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('应在显式清空双端 CRS 时跳过转换并返回警告', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions(undefined, {
+        sourceCrs: undefined,
+        targetCrs: undefined,
       }),
     });
 

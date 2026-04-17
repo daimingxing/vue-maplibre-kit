@@ -32,7 +32,7 @@ export interface MapDxfExportOptions {
   enabled?: boolean;
   /** 业务数据源注册表。 */
   sourceRegistry: MapBusinessSourceRegistry;
-  /** 封装层默认导出配置。 */
+  /** 页面级默认导出配置；会覆盖 DXF 模块内置的全局默认 CRS。 */
   defaults?: MapDxfExportTaskOptions;
   /** 内置控件配置。 */
   control?: MapDxfExportControlOptions;
@@ -44,7 +44,7 @@ export interface ResolvedMapDxfExportOptions {
   enabled: boolean;
   /** 业务数据源注册表。 */
   sourceRegistry: MapBusinessSourceRegistry;
-  /** 归一化后的默认导出配置。 */
+  /** 已合并全局默认 CRS 后的默认导出配置。 */
   defaults: ResolvedMapDxfExportTaskOptions;
   /** 归一化后的控件配置。 */
   control: ResolvedMapDxfExportControlOptions;
@@ -80,6 +80,12 @@ export interface MapDxfExportState {
   lastExportAt: number | null;
 }
 
+export {
+  DEFAULT_DXF_CRS_OPTIONS,
+  DEFAULT_DXF_FILE_NAME,
+  DEFAULT_DXF_SOURCE_CRS,
+  DEFAULT_DXF_TARGET_CRS,
+} from '../../exporters/dxf';
 export type {
   MapDxfExportResult,
   MapDxfExportTaskOptions,

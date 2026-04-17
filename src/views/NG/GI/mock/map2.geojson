@@ -4,7 +4,8 @@
     {
       "type": "Feature",
       "properties": {
-        "id": "fill_1"
+        "id": "fill_1",
+        "color":"red"
       },
       "geometry": {
         "coordinates": [
