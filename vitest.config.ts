@@ -14,8 +14,16 @@ function resolveTestAliases() {
       replacement: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
     },
     {
+      find: /^vue-maplibre-kit\/business$/,
+      replacement: fileURLToPath(new URL('./src/business.ts', import.meta.url)),
+    },
+    {
       find: /^vue-maplibre-kit\/geometry$/,
       replacement: fileURLToPath(new URL('./src/geometry.ts', import.meta.url)),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins\/map-dxf-export$/,
+      replacement: fileURLToPath(new URL('./src/plugins/map-dxf-export.ts', import.meta.url)),
     },
     {
       find: /^vue-maplibre-kit\/plugins\/map-feature-snap$/,

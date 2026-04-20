@@ -50,144 +50,26 @@
         </template>
       </map-libre-init>
     </div>
-    <!-- 业务层示例面板：每一块只演示一种推荐写法，方便按功能阅读 -->
-    <div class="demo-panel-board">
-      <section class="demo-panel-card">
-        <div class="demo-panel-head">
-          <h3>当前选中态面板</h3>
-          <p>直接使用 `useBusinessMap(...).selection` 驱动 UI。</p>
-        </div>
-        <div class="demo-panel-actions">
-          <el-button type="primary" plain :disabled="isSelectionActive" @click="activateSelection">
-            进入多选
-          </el-button>
-          <el-button plain :disabled="!hasSelection" @click="clearSelection">清空选中</el-button>
-          <el-button plain :disabled="!isSelectionActive" @click="deactivateSelection">
-            退出多选
-          </el-button>
-        </div>
-        <div class="demo-panel-kv-list">
-          <div class="demo-panel-kv">
-            <span>当前模式</span>
-            <strong>{{ selectionModeText }}</strong>
-          </div>
-          <div class="demo-panel-kv">
-            <span>选中数量</span>
-            <strong>{{ selectedCount }} 个</strong>
-          </div>
-          <div class="demo-panel-kv">
-            <span>要素 ID</span>
-            <strong>{{ selectedFeatureIdsText }}</strong>
-          </div>
-          <div class="demo-panel-kv">
-            <span>circleLayer 业务 ID</span>
-            <strong>{{ selectedCircleLayerIdsText }}</strong>
-          </div>
-          <div class="demo-panel-kv">
-            <span>图层分布</span>
-            <strong>{{ selectedLayerDistributionText }}</strong>
-          </div>
-        </div>
-        <p class="demo-panel-note">{{ selectionGuideText }}</p>
-      </section>
-
-      <section class="demo-panel-card">
-        <div class="demo-panel-head">
-          <h3>选中集变化日志</h3>
-          <p>这里只演示 `onSelectionChange` 的快捷提取方法。</p>
-        </div>
-        <p class="demo-panel-summary">
-          {{ selectionPanelState.lastChangeSummary }}
-        </p>
-      </section>
-
-      <section class="demo-panel-card">
-        <div class="demo-panel-head">
-          <h3>多选右键摘要</h3>
-          <p>右键时直接复用 helper，快速生成业务摘要。</p>
-        </div>
-        <p class="demo-panel-summary">
-          {{ selectionPanelState.contextMenuSummary }}
-        </p>
-      </section>
-
-      <section class="demo-panel-card">
-        <div class="demo-panel-head">
-          <h3>线操作入口</h3>
-          <p>线弹窗、线廊生成和线草稿都只走本地要素查询门面。</p>
-        </div>
-        <p class="demo-panel-summary">{{ selectedLineOperationText }}</p>
-      </section>
-
-      <section class="demo-panel-card">
-        <div class="demo-panel-head">
-          <h3>线草稿状态</h3>
-          <p>线草稿状态现在直接通过 `useBusinessMap(...).draft` 读取。</p>
-        </div>
-        <div class="demo-panel-kv-list">
-          <div class="demo-panel-kv">
-            <span>当前状态</span>
-            <strong>{{ hasLineDraftFeatures ? "已有草稿" : "暂无草稿" }}</strong>
-          </div>
-        </div>
-        <p class="demo-panel-summary">{{ lineDraftStatusText }}</p>
-        <div class="demo-panel-actions">
-          <el-button
-            type="warning"
-            plain
-            :disabled="!hasLineDraftFeatures"
-            @click="handleClearLineDraftFeatures"
-          >
-            清空线草稿
-          </el-button>
-        </div>
-      </section>
-
-      <section class="demo-panel-card">
-        <div class="demo-panel-head">
-          <h3>DXF 导出插件</h3>
-          <p>这个示例同时演示“插件默认导出全部业务源”和“业务层局部覆写导出”。</p>
-        </div>
-        <div class="demo-panel-kv-list">
-          <div class="demo-panel-kv">
-            <span>插件默认文件</span>
-            <strong>{{ DXF_DEFAULT_FILE_NAME }}</strong>
-          </div>
-          <div class="demo-panel-kv">
-            <span>默认坐标转换</span>
-            <strong>{{ dxfDefaultCrsText }}</strong>
-          </div>
-          <div class="demo-panel-kv">
-            <span>全局默认 CRS 位置</span>
-            <strong>封装层 DEFAULT_DXF_CRS_OPTIONS</strong>
-          </div>
-          <div class="demo-panel-kv">
-            <span>全局默认配色</span>
-            <strong>{{ dxfGlobalTrueColorText }}</strong>
-          </div>
-          <div class="demo-panel-kv">
-            <span>局部覆写文件</span>
-            <strong>{{ DXF_PRIMARY_ONLY_FILE_NAME }}</strong>
-          </div>
-        </div>
-        <p class="demo-panel-note">{{ dxfResolvedOptionsText }}</p>
-        <p class="demo-panel-note">{{ DXF_DEFAULT_CRS_CONFIG_PATH_TEXT }}</p>
-        <p class="demo-panel-note">{{ DXF_DEFAULT_TRUE_COLOR_CONFIG_PATH_TEXT }}</p>
-        <p class="demo-panel-note">{{ DXF_OVERRIDE_GUIDE_TEXT }}</p>
-      </section>
-
-      <section class="demo-panel-card">
-        <div class="demo-panel-head">
-          <h3>DXF 配置速查</h3>
-          <p>
-            这里把插件壳、defaults 和常用筛选 / 分层 /
-            着色回调的含义一次性写全，方便业务层直接照着配。
-          </p>
-        </div>
-        <p class="demo-panel-note">{{ DXF_PLUGIN_OPTIONS_GUIDE_TEXT }}</p>
-        <p class="demo-panel-note">{{ DXF_CALLBACK_GUIDE_TEXT }}</p>
-      </section>
-    </div>
+    <NGGI00DemoPanel
+      ref="demoPanelRef"
+      :isSelectionActive="isSelectionActive"
+      :selectionMode="selectionMode"
+      :selectedCount="selectedCount"
+      :selectedFeatureIds="selectedFeatureIds"
+      :selectedLayerGroups="selectedLayerGroups"
+      :selectedCircleIds="selectedCircleIds"
+      :hasSelection="hasSelection"
+      :selectedLineFeatureId="selectedLineFeatureId"
+      :selectedLineSourceId="selectedLineSourceId"
+      :hasLineDraftFeatures="hasLineDraftFeatures"
+      :lineDraftCount="lineDraftPreview.featureCount.value"
+      :dxfDefaultOptions="dxfDefaultOptions"
+      :dxfPrimaryOptions="dxfPrimaryOptions"
+      @activate-selection="activateSelection"
+      @clear-selection="clearSelection"
+      @deactivate-selection="deactivateSelection"
+      @clear-line-draft="handleClearLineDraftFeatures"
+    />
     <!-- 引入自定义的 Vue Popup 组件 -->
     <mgl-popup
       v-model:visible="popupVisible"
@@ -355,6 +237,22 @@ import {
 } from "vue-maplibre-kit/business";
 import type * as BusinessKit from "vue-maplibre-kit/business";
 import FeaturePropertyEditor from "./components/FeaturePropertyEditor.vue";
+import NGGI00DemoPanel from "./components/NGGI00DemoPanel.vue";
+import {
+  DRAW_PROPERTY_PANEL_NOTE,
+  DXF_DEFAULT_FILE_NAME,
+  DXF_PRIMARY_ONLY_FILE_NAME,
+  LINE_DRAFT_PROPERTY_PANEL_NOTE,
+  MAP_CONTEXT_MENU_SUMMARY_TEXT,
+  MAP_PROPERTY_PANEL_NOTE,
+  MEASURE_PROPERTY_PANEL_NOTE,
+  TERRADRAW_CONTEXT_MENU_SUMMARY_TEXT,
+  buildSelectionChangeSummary,
+  buildSelectionSummaryRows,
+  buildSelectionSummaryText,
+  type DxfSummaryOptions,
+  type SelectionSummaryRow,
+} from "./components/NGGI00DemoPanel.shared";
 import { computed, ref, reactive } from "vue";
 import mapGeojson from "./mock/map.geojson";
 import mapGeojson2 from "./mock/map2.geojson";
@@ -373,8 +271,6 @@ import {
 } from "vue-maplibre-kit/plugins/line-draft-preview";
 import {
   createMapDxfExportPlugin,
-  DEFAULT_DXF_CRS_OPTIONS,
-  DEFAULT_DXF_TRUE_COLOR_RULES,
   type MapDxfExportOptions,
   type MapDxfExportTaskOptions,
   type MapDxfLayerNameResolver,
@@ -443,107 +339,12 @@ const LAYER_IDS = {
 } as const;
 
 /**
- * 普通业务源右键面板提示文案。
- */
-const MAP_PROPERTY_PANEL_NOTE =
-  "上方列表会先继承数据源默认规则：`name` 在本页默认只读，`id` 因为是 promoteId 也会被底层强保护；部分图层再局部把 `mark` 或 `name` 覆写成稳定字段。像 marker-color 这类样式辅助字段会被隐藏到下方调试快照。新增的临时字段默认允许删除。";
-
-/**
- * 线草稿右键面板提示文案。
- */
-const LINE_DRAFT_PROPERTY_PANEL_NOTE =
-  "线草稿会继承正式来源的属性治理规则。业务层看不到内部来源字段，也不能修改 ID；如果新增了临时字段，仍然可以通过删除按钮显式移除。";
-
-/**
- * TerraDraw 绘制控件右键面板提示文案。
- */
-const DRAW_PROPERTY_PANEL_NOTE =
-  "这里展示的是绘制业务字段。TerraDraw 内部状态字段已经被系统层隐藏；如果某个字段命中固定/只读规则，保存后会立即收紧为不可删或不可改。";
-
-/**
- * Measure 控件右键面板提示文案。
- */
-const MEASURE_PROPERTY_PANEL_NOTE =
-  "这里展示的是测量业务字段。像 distance、area、segments 这类测量结果由系统维护，不会出现在业务编辑列表里；如需排查，可查看下方原始属性调试快照。";
-
-/**
  * 修改样式示例统一使用的 feature-state 键名。
  * 这里故意使用 feature-state，而不是直接改 GeoJSON 数据。
  * 样式配置里会直接把它写成 `demoStyled`，方便业务层照着示例抄；
  * 按钮逻辑则统一复用这个常量，避免多处散落字符串。
  */
 const DEMO_STYLE_STATE_KEY = "demoStyled";
-
-/** DXF 插件默认导出的文件名。 */
-const DXF_DEFAULT_FILE_NAME = "nggi00-business-all.dxf";
-
-/** 业务层局部覆写时的文件名。 */
-const DXF_PRIMARY_ONLY_FILE_NAME = "nggi00-primary-only.dxf";
-
-/**
- * 默认坐标转换说明文本。
- * 模板直接展示这行文字，让业务开发者一眼就能看到封装层默认值。
- */
-const dxfDefaultCrsText = `${DEFAULT_DXF_CRS_OPTIONS.sourceCrs} -> ${DEFAULT_DXF_CRS_OPTIONS.targetCrs}`;
-
-/**
- * 默认 CRS 配置填写位置说明。
- * 这里直接把“封装层默认坐标配置维护在哪里”明确展示给业务开发者。
- */
-const DXF_DEFAULT_CRS_CONFIG_PATH_TEXT =
-  "DXF 全局默认 CRS 已在插件封装层统一维护；业务层只有需要覆盖时，才在 createMapDxfExportPlugin({ defaults }) 或 downloadDxf(overrides) 里传 sourceCrs / targetCrs。";
-
-/**
- * 全局 TrueColor 规则入口说明。
- * 当前库只提供统一配置入口，不在示例页里写死任何业务配色。
- */
-const DXF_DEFAULT_TRUE_COLOR_CONFIG_PATH_TEXT =
-  "DXF 全局默认 TrueColor 规则入口已经预留：DEFAULT_DXF_TRUE_COLOR_RULES。当前默认是空对象，只负责兜底入口，不内置任何业务颜色逻辑。";
-
-/**
- * 当前全局 TrueColor 入口的展示文本。
- * 用来提醒业务开发者：入口已经有了，但当前仓库默认仍保持空白规则。
- */
-const dxfGlobalTrueColorText =
-  Object.keys(DEFAULT_DXF_TRUE_COLOR_RULES).length === 0
-    ? "DEFAULT_DXF_TRUE_COLOR_RULES（当前为空）"
-    : "DEFAULT_DXF_TRUE_COLOR_RULES（已配置）";
-
-/**
- * DXF 局部覆写示例说明。
- * 这里强调两层职责边界：
- * 1. DXF 模块全局默认值负责兜底 CRS 和 TrueColor 规则入口
- * 2. 页面 `defaults` 与 `downloadDxf(overrides)` 负责局部覆盖
- */
-const DXF_OVERRIDE_GUIDE_TEXT =
-  "右上角插件自带的“导出DXF”按钮会按“全局默认 -> 页面 defaults -> 单次 overrides”合并配置。当前页面额外提供的“导出主业务DXF”按钮，只在本次任务里覆写 sourceIds、fileName 和 layerNameResolver；后续如果业务要按页面或单次任务改 CRS、图层色或特定要素色，也继续通过 defaults 或 downloadDxf(overrides) 覆盖即可。";
-
-/**
- * DXF 插件根配置速查说明。
- * 用来在示例面板里一次性展示插件壳的全部可配字段。
- */
-const DXF_PLUGIN_OPTIONS_GUIDE_TEXT = [
-  "mapDxfExportPlugin 可配项：",
-  "1. enabled?: 是否启用整个 DXF 导出插件。",
-  "2. sourceRegistry: 必填，传当前页面的业务 sourceRegistry。",
-  "3. defaults?: 页面级默认导出配置，会覆盖封装层统一维护的全局默认 CRS。",
-  "   可配字段：sourceIds / fileName / sourceCrs / targetCrs / featureFilter / layerNameResolver / layerTrueColorResolver / featureTrueColorResolver。",
-  "4. control?: 内置按钮配置。",
-  "   可配字段：enabled / position / label。",
-].join("\n");
-
-/**
- * DXF 回调用法速查说明。
- * 重点解释业务层最常用的筛选、分层和着色入口。
- */
-const DXF_CALLBACK_GUIDE_TEXT = [
-  "featureFilter(feature, sourceId)：返回 true 表示保留当前要素，返回 false 表示本次导出跳过当前要素。",
-  "layerNameResolver(feature, sourceId)：返回当前要素写入 DXF 的图层名。相同返回值的要素会被放进同一个 DXF 图层。",
-  "layerTrueColorResolver(layerName, sourceId)：返回图层 TrueColor；即使没有 layerNameResolver，默认按 sourceId 分层时也一样可用。",
-  "featureTrueColorResolver(feature, sourceId, layerName)：返回实体 TrueColor，优先级高于图层色，适合少量特殊要素。",
-  "当前示例页不预置任何颜色规则，只展示“全局入口 + 页面 defaults + 单次 overrides”的接法，避免把业务配色硬编码进示例页。",
-  "底层会自动清洗 DXF 非法图层名；如果不同来源最终落到同一 DXF 图层，也会在 warnings 里给出同名合层提示。",
-].join("\n");
 
 import sendIcon from "./assets/send.svg";
 // import segment_stretch_test from './assets/segment-stretch.svg';
@@ -1861,12 +1662,6 @@ const toggleFlash = (): void => {
 // 选择态展示逻辑示例
 // ==========================================
 
-/** 右键摘要行。 */
-interface SelectionSummaryRow {
-  label: string;
-  value: string;
-}
-
 /** 属性编辑器单键保存载荷。 */
 interface FeaturePropertyEditorSavePayload {
   key: string;
@@ -2080,207 +1875,30 @@ const getFeatureBusinessId = (
   return feature.id ?? null;
 };
 
-/**
- * 将选择模式转换为便于示例展示的中文文本。
- * @param mode 当前选择模式
- * @returns 中文模式文本
- */
-const getSelectionModeText = (mode: BusinessKit.MapSelectionMode): string => {
-  return mode === "multiple" ? "多选" : "单选";
-};
+/** 业务层示例面板公开实例。 */
+const demoPanelRef = ref<InstanceType<typeof NGGI00DemoPanel> | null>(null);
 
-/**
- * 将值列表格式化为易读文本。
- * @param values 需要展示的值列表
- * @returns 单行展示文本
- */
-const formatValueList = (values: Array<string | number>): string => {
-  return values.length > 0 ? values.map((value) => String(value)).join("、") : "无";
-};
-
-/**
- * 将按图层分组后的结果压缩成单行摘要。
- * @param layerGroups 图层分组结果
- * @returns 图层分布摘要文本
- */
-const formatLayerDistribution = (layerGroups: BusinessKit.MapSelectionLayerGroup[]): string => {
-  if (layerGroups.length === 0) {
-    return "无";
-  }
-
-  return layerGroups
-    .map((layerGroup) => {
-      return `${layerGroup.layerId || "未知图层"} x${layerGroup.features.length}`;
-    })
-    .join("，");
-};
-
-/**
- * 将当前选中集转换为右键面板摘要行。
- * @param currentSelectionMode 当前选择模式
- * @returns 适合直接传给属性面板的摘要行
- */
-const buildSelectionSummaryRows = (
-  currentSelectionMode: BusinessKit.MapSelectionMode,
-): SelectionSummaryRow[] => {
-  const currentSelectedFeatures = selectedFeatures.value;
-
-  return [
-    {
-      label: "当前模式",
-      value: getSelectionModeText(currentSelectionMode),
-    },
-    {
-      label: "选中数量",
-      value: `${currentSelectedFeatures.length} 个`,
-    },
-    {
-      label: "要素 ID",
-      value: formatValueList(selectedFeatureIds.value),
-    },
-    {
-      label: "图层分布",
-      value: formatLayerDistribution(getSelectionGroups()),
-    },
-  ];
-};
-
-/**
- * 将摘要行压缩为单行文本，便于日志和示例面板展示。
- * @param summaryRows 当前摘要行
- * @returns 压缩后的单行文本
- */
-const buildSelectionSummaryText = (summaryRows: SelectionSummaryRow[]): string => {
-  if (summaryRows.length === 0) {
-    return "当前没有可展示的选中集摘要";
-  }
-
-  return summaryRows.map((summaryRow) => `${summaryRow.label}：${summaryRow.value}`).join(" | ");
-};
-
-/**
- * 当前选中集的图层分布文本。
- * 这里直接演示 composable + helper 的组合用法。
- */
-const selectedLayerDistributionText = computed(() => {
-  return formatLayerDistribution(getSelectionGroups());
+/** 当前选中集的图层分组快照。 */
+const selectedLayerGroups = computed(() => {
+  return getSelectionGroups();
 });
 
-/**
- * 当前 circleLayer 图层中的业务 ID 摘要。
- * 这里演示 businessMap.selection 暴露的快捷属性提取方法。
- */
-const selectedCircleLayerIdsText = computed(() => {
-  return formatValueList(
-    getSelectionPropertyValues<string | number>("id", {
-      layerId: LAYER_IDS.circle,
-    }),
-  );
+/** 当前 circleLayer 图层中的业务 ID 列表。 */
+const selectedCircleIds = computed(() => {
+  return getSelectionPropertyValues<string | number>("id", {
+    layerId: LAYER_IDS.circle,
+  });
 });
 
-/**
- * 当前完整选中集的要素 ID 摘要。
- * 这里直接复用 businessMap.selection 已经暴露好的计算结果。
- */
-const selectedFeatureIdsText = computed(() => {
-  return formatValueList(selectedFeatureIds.value);
+/** 当前选中线要素的业务 ID。 */
+const selectedLineFeatureId = computed(() => {
+  return getFeatureBusinessId(featureQuery.resolveSelectedLine());
 });
 
-/**
- * 当前选择模式的中文文本。
- * 这里让模板只负责展示，不再自己写判断。
- */
-const selectionModeText = computed(() => {
-  return getSelectionModeText(selectionMode.value);
+/** 当前选中线要素所在的来源 sourceId。 */
+const selectedLineSourceId = computed(() => {
+  return featureQuery.getSelectedFeatureRef()?.sourceId ?? null;
 });
-
-/**
- * 当前选中态面板的说明文本。
- * 通过一句话告诉业务开发者：现在不需要再手动同步底层状态。
- */
-const selectionGuideText = computed(() => {
-  if (!hasSelection.value) {
-    return "当前没有选中要素。点右上角的多选按钮后，就可以直接用这个面板观察数量和操作入口。";
-  }
-
-  if (isSelectionActive.value) {
-    return "现在 UI 直接绑定选择态门面，不再手动同步数量、选中集和清空/退出按钮。";
-  }
-
-  return "当前展示的是已有选中结果；如果要批量处理，可以先进入多选模式。";
-});
-
-/**
- * 当前线操作入口的说明文本。
- * 这里专门演示：业务层只调用 featureQuery.resolveSelectedLine() 取最新线要素。
- */
-const selectedLineOperationText = computed(() => {
-  const selectionSignature = selectedFeatureIds.value.join("|");
-  const selectedLineFeature = featureQuery.resolveSelectedLine();
-
-  if (!selectedLineFeature) {
-    return selectionSignature
-      ? "当前选中的不是线要素。请改为点选线，再去试“生成线廊”或“创建线草稿”。"
-      : "当前未选中线要素。先点一条线，再去试“生成线廊”或“创建线草稿”。";
-  }
-
-  const featureId = getFeatureBusinessId(selectedLineFeature);
-  const selectedFeatureRef = featureQuery.getSelectedFeatureRef();
-  const sourceText =
-    selectedFeatureRef?.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID ? "线草稿源" : "正式业务源";
-
-  return `当前线操作会读取 ${sourceText} 的最新线要素：${String(featureId ?? "未命名线")}`;
-});
-
-/**
- * 当前线草稿状态的说明文本。
- * 用来强调业务层现在直接通过 businessMap.draft 读取线草稿状态。
- */
-const lineDraftStatusText = computed(() => {
-  return hasLineDraftFeatures.value
-    ? `线草稿能力门面当前已有临时结果（共 ${lineDraftPreview.featureCount.value} 个）；如果不需要，直接点击这里的“清空线草稿”即可。`
-    : "当前没有线草稿。选中线并点击“创建线草稿”后，这里会通过 businessMap.draft 自动刷新状态。";
-});
-
-/**
- * 统一格式化 DXF 导出的 source 范围文本。
- * @param sourceIds 最终生效的 sourceId 列表
- * @returns 适合示例面板直接展示的中文文本
- */
-const formatDxfSourceIdsText = (sourceIds: string[] | null): string => {
-  if (!sourceIds || sourceIds.length === 0) {
-    return "全部业务 source";
-  }
-
-  return sourceIds.join("、");
-};
-
-/**
- * 统一格式化 DXF 导出的坐标转换文本。
- * @param sourceCrs 源坐标系
- * @param targetCrs 目标坐标系
- * @returns 适合示例面板直接展示的中文文本
- */
-const formatDxfCrsText = (sourceCrs?: string, targetCrs?: string): string => {
-  if (!sourceCrs || !targetCrs) {
-    return "未完整配置 CRS，将按原坐标导出";
-  }
-
-  if (sourceCrs === targetCrs) {
-    return `${sourceCrs}（无需转换）`;
-  }
-
-  return `${sourceCrs} -> ${targetCrs}`;
-};
-
-/**
- * 统一格式化 TrueColor 解析器状态文本。
- * @param resolver 任意解析器
- * @returns 适合示例面板直接展示的中文文本
- */
-const formatDxfTrueColorResolverText = (resolver: unknown): string => {
-  return typeof resolver === "function" ? "已配置" : "未配置";
-};
 
 /**
  * 提取用户可读的错误消息。
@@ -2302,6 +1920,29 @@ const getReadableErrorMessage = (error: unknown): string => {
  */
 const getMapDxfExportApi = () => {
   return resolveMapDxfExportApi(mapInitRef.value);
+};
+
+/**
+ * 将 DXF 插件解析结果收敛成示例面板只关心的摘要字段。
+ * @param options 当前解析后的导出配置
+ * @returns 适合示例面板直接消费的轻量结构
+ */
+const toDxfSummaryOptions = (options: {
+  sourceIds?: string[] | null;
+  fileName: string;
+  sourceCrs?: string;
+  targetCrs?: string;
+  layerTrueColorResolver?: unknown;
+  featureTrueColorResolver?: unknown;
+}): DxfSummaryOptions => {
+  return {
+    sourceIds: options.sourceIds ?? null,
+    fileName: options.fileName,
+    sourceCrs: options.sourceCrs,
+    targetCrs: options.targetCrs,
+    layerTrueColorResolver: options.layerTrueColorResolver,
+    featureTrueColorResolver: options.featureTrueColorResolver,
+  };
 };
 
 /**
@@ -2338,26 +1979,29 @@ const createPrimaryBusinessDxfOverrides = (): MapDxfExportTaskOptions => {
 };
 
 /**
- * 当前示例面板展示的 DXF 默认配置说明。
- * 这里直接读取插件 API 的 getResolvedOptions()，确保页面展示的是最终生效值，而不是手写猜测。
+ * 当前示例面板展示的 DXF 默认配置。
+ * 这里直接读取插件 API 的 getResolvedOptions()，确保面板看到的是最终生效值。
  */
-const dxfResolvedOptionsText = computed(() => {
+const dxfDefaultOptions = computed<DxfSummaryOptions | null>(() => {
   const api = getMapDxfExportApi();
   if (!api) {
-    return "DXF 导出插件尚未挂载到地图实例。地图初始化完成后，这里会显示 defaults 和业务层覆写后的最终配置。";
+    return null;
   }
 
-  // 不传 overrides，读取的是“插件 defaults 最终落地后的默认导出配置”。
-  const defaultOptions = api.getResolvedOptions();
+  return toDxfSummaryOptions(api.getResolvedOptions());
+});
 
-  // 传入与按钮一致的 overrides，展示“业务层本次任务局部覆写后”的最终配置。
-  const primaryOnlyOptions = api.getResolvedOptions(createPrimaryBusinessDxfOverrides());
+/**
+ * 当前示例面板展示的 DXF 局部覆写配置。
+ * 这里与“导出主业务 DXF”按钮保持同一套 overrides，避免说明与实际行为脱节。
+ */
+const dxfPrimaryOptions = computed<DxfSummaryOptions | null>(() => {
+  const api = getMapDxfExportApi();
+  if (!api) {
+    return null;
+  }
 
-  return [
-    `插件默认导出：范围 = ${formatDxfSourceIdsText(defaultOptions.sourceIds)}；文件 = ${defaultOptions.fileName}；坐标转换 = ${formatDxfCrsText(defaultOptions.sourceCrs, defaultOptions.targetCrs)}。`,
-    `默认颜色解析器：图层色 = ${formatDxfTrueColorResolverText(defaultOptions.layerTrueColorResolver)}；要素色 = ${formatDxfTrueColorResolverText(defaultOptions.featureTrueColorResolver)}。`,
-    `业务层局部覆写后：范围 = ${formatDxfSourceIdsText(primaryOnlyOptions.sourceIds)}；文件 = ${primaryOnlyOptions.fileName}；图层名 = 按 sourceId + mark 生成；图层色 = ${formatDxfTrueColorResolverText(primaryOnlyOptions.layerTrueColorResolver)}；要素色 = ${formatDxfTrueColorResolverText(primaryOnlyOptions.featureTrueColorResolver)}。`,
-  ].join("\n");
+  return toDxfSummaryOptions(api.getResolvedOptions(createPrimaryBusinessDxfOverrides()));
 });
 
 /**
@@ -2394,31 +2038,34 @@ const downloadPrimaryBusinessSourceDxf = async (): Promise<void> => {
  */
 const syncSelectionPanelFromChange = (
   context: BusinessKit.MapLayerSelectionChangeContext,
-): void => {
+): string => {
   // 将底层选中变化上下文转换为业务层更易消费的结构；集合字段与触发目标字段已分组。
   const selectionContext = featureQuery.toSelectionBusinessContext(context);
   const currentSelectionMode = context.selectionMode || selectionMode.value;
-  const addedIdsText = formatValueList(getSelectionItemIds(selectionContext.added));
-  const removedIdsText = formatValueList(getSelectionItemIds(selectionContext.removed));
-  const circleLayerIdsText = formatValueList(
-    getSelectionItemIds(
+  const summaryInput = {
+    reason: selectionContext.reason,
+    selectionMode: currentSelectionMode,
+    selectedCount: selectionContext.selectedCount,
+    addedIds: getSelectionItemIds(selectionContext.added),
+    removedIds: getSelectionItemIds(selectionContext.removed),
+    circleIds: getSelectionItemIds(
       selectionContext.selected.filter((selectedItem) => selectedItem.layerId === LAYER_IDS.circle),
     ),
-  );
+  };
 
   /*
    * 旧写法 / 逃生出口：
-   * const addedIdsText = formatValueList(context.getAddedFeatureIds());
-   * const removedIdsText = formatValueList(context.getRemovedFeatureIds());
-   * const circleLayerIdsText = formatValueList(
+   * const addedIds = getSelectionItemIds(selectionContext.added);
+   * const removedIds = getSelectionItemIds(selectionContext.removed);
+   * const circleIds = getSelectionItemIds(
    *   context.getSelectedPropertyValues<string | number>("id", { layerId: LAYER_IDS.circle }),
    * );
-   * 适合需要直接处理底层 context / 自定义状态结构时使用。
+   * 适合需要直接处理底层 context / 自定义状态结构时使用，再手动交给面板 helper 拼装文本。
    */
-  selectionPanelState.lastChangeSummary =
-    `原因：${selectionContext.reason || "unknown"}；模式：${getSelectionModeText(currentSelectionMode)}；` +
-    `当前 ${selectionContext.selectedCount} 个；新增 ${addedIdsText}；移除 ${removedIdsText}；` +
-    `circleLayer 业务 ID：${circleLayerIdsText}`;
+  return (
+    demoPanelRef.value?.syncSelectionChangeSummary(summaryInput) ||
+    buildSelectionChangeSummary(summaryInput)
+  );
 };
 
 /**
@@ -2784,7 +2431,7 @@ const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) =>
 
   contextMenuState.visible = false;
   contextMenuState.summaryRows = [];
-  selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
+  demoPanelRef.value?.resetContextMenuSummary();
 
   /*
    * 旧写法 / 逃生出口：
@@ -2849,10 +2496,18 @@ const openMapFeatureContextMenu = (context: BusinessKit.MapLayerInteractiveConte
    * const featureRef = featureQuery.getFeatureRef(context);
    * const latestFeature = featureQuery.resolveFeature(featureRef);
    * 适合需要直接处理底层 context / 自定义状态结构时使用。
-   */
+  */
   const currentSelectionMode = context.selectionMode || selectionMode.value;
   const summaryRows =
-    currentSelectionMode === "multiple" ? buildSelectionSummaryRows(currentSelectionMode) : [];
+    currentSelectionMode === "multiple"
+      ? (demoPanelRef.value?.getSelectionSummaryRows(currentSelectionMode) ??
+        buildSelectionSummaryRows({
+          selectionMode: currentSelectionMode,
+          selectedCount: selectedCount.value,
+          selectedFeatureIds: selectedFeatureIds.value,
+          layerGroups: selectedLayerGroups.value,
+        }))
+      : [];
   const editorTarget: BusinessKit.MapFeaturePropertyEditorTarget = {
     type: "map",
     featureRef: businessContext.featureRef,
@@ -2865,10 +2520,11 @@ const openMapFeatureContextMenu = (context: BusinessKit.MapLayerInteractiveConte
   contextMenuState.editorTarget = editorTarget;
   contextMenuState.note = resolvePropertyPanelNote(editorTarget);
   contextMenuState.visible = true;
-  selectionPanelState.contextMenuSummary =
+  demoPanelRef.value?.setContextMenuSummary(
     summaryRows.length > 0
       ? buildSelectionSummaryText(summaryRows)
-      : "单选右键现在只展示业务可见字段；系统隐藏字段请看调试快照";
+      : MAP_CONTEXT_MENU_SUMMARY_TEXT,
+  );
 };
 
 /**
@@ -2940,7 +2596,7 @@ const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
   onSelectionChange: (context: BusinessKit.MapLayerSelectionChangeContext) => {
     // 将底层选中变化上下文转换为业务层更易消费的结构；集合字段与触发目标字段已分组。
     const selectionContext = featureQuery.toSelectionBusinessContext(context);
-    syncSelectionPanelFromChange(context);
+    const selectionChangeSummary = syncSelectionPanelFromChange(context);
     console.log("[NGGI00 示例] 选中集变化示例", {
       reason: selectionContext.reason,
       selectionMode: context.selectionMode,
@@ -2952,7 +2608,7 @@ const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
           (selectedItem) => selectedItem.layerId === LAYER_IDS.circle,
         ),
       ),
-      summary: selectionPanelState.lastChangeSummary,
+      summary: selectionChangeSummary,
     });
   },
 
@@ -3126,7 +2782,7 @@ const closeBusinessPanels = () => {
   contextMenuState.summaryRows = [];
   contextMenuState.editorTarget = null;
   contextMenuState.note = "";
-  selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
+  demoPanelRef.value?.resetContextMenuSummary();
 };
 
 /**
@@ -3165,7 +2821,7 @@ const openTerradrawPopup = (context: BusinessKit.TerradrawInteractiveContext) =>
 
   contextMenuState.visible = false;
   contextMenuState.summaryRows = [];
-  selectionPanelState.contextMenuSummary = "当前未展示选中集摘要";
+  demoPanelRef.value?.resetContextMenuSummary();
   popup.open({
     lngLat: createPopupLngLat(context.lngLat),
     payload: {
@@ -3209,8 +2865,7 @@ const openTerradrawContextMenu = (context: BusinessKit.TerradrawInteractiveConte
   contextMenuState.editorTarget = editorTarget;
   contextMenuState.note = resolvePropertyPanelNote(editorTarget);
   contextMenuState.visible = true;
-  selectionPanelState.contextMenuSummary =
-    "TerraDraw 右键现在只展示业务可见字段；系统字段请在下方调试快照中查看";
+  demoPanelRef.value?.setContextMenuSummary(TERRADRAW_CONTEXT_MENU_SUMMARY_TEXT);
 };
 
 /**
@@ -3290,83 +2945,6 @@ const handleRemovePropertyItem = (payload: FeaturePropertyEditorRemovePayload) =
   max-width: 1500px;
   height: 800px;
   margin: 0 auto;
-}
-
-.demo-panel-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 14px;
-  width: 100%;
-  max-width: 1500px;
-  margin: 16px auto 0;
-}
-
-.demo-panel-card {
-  padding: 16px;
-  background: #ffffff;
-  border: 1px solid #e4e7ed;
-  border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(31, 35, 41, 0.06);
-}
-
-.demo-panel-head {
-  margin-bottom: 12px;
-}
-
-.demo-panel-head h3 {
-  margin: 0;
-  font-size: 16px;
-  color: #303133;
-}
-
-.demo-panel-head p {
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #606266;
-}
-
-.demo-panel-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.demo-panel-kv-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.demo-panel-kv {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 10px;
-  font-size: 13px;
-  color: #606266;
-  background: #f7f9fc;
-  border-radius: 8px;
-}
-
-.demo-panel-kv strong {
-  color: #303133;
-  text-align: right;
-}
-
-.demo-panel-note,
-.demo-panel-summary {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #606266;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.demo-panel-note {
-  margin-top: 12px;
 }
 
 .terradraw-popup-json {
