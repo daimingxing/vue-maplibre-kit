@@ -15,6 +15,9 @@ export { MAP_DXF_EXPORT_PLUGIN_TYPE } from '../MapLibre/plugins/map-dxf-export';
 /** DXF 全局默认 CRS 配置。业务层未传 sourceCrs / targetCrs 时会回退到这里。 */
 export { DEFAULT_DXF_CRS_OPTIONS } from '../MapLibre/plugins/map-dxf-export';
 
+/** DXF 全局默认 TrueColor 规则。当前只提供统一配置入口，默认不预置业务颜色。 */
+export { DEFAULT_DXF_TRUE_COLOR_RULES } from '../MapLibre/plugins/map-dxf-export';
+
 /** DXF 全局默认源坐标系。只需要读取默认来源坐标系时使用。 */
 export { DEFAULT_DXF_SOURCE_CRS } from '../MapLibre/plugins/map-dxf-export';
 
@@ -50,6 +53,18 @@ export type { MapDxfFeatureFilter } from '../MapLibre/plugins/map-dxf-export';
 
 /** DXF 图层名解析器类型。需要按业务字段自定义图层名时使用。 */
 export type { MapDxfLayerNameResolver } from '../MapLibre/plugins/map-dxf-export';
+
+/** DXF TrueColor 类型。当前统一使用 #RRGGBB。 */
+export type { MapDxfTrueColor } from '../MapLibre/plugins/map-dxf-export';
+
+/** DXF 图层 TrueColor 解析器类型。需要按最终 DXF 图层设置图层色时使用。 */
+export type { MapDxfLayerTrueColorResolver } from '../MapLibre/plugins/map-dxf-export';
+
+/** DXF 要素 TrueColor 解析器类型。需要对少量特殊实体单独着色时使用。 */
+export type { MapDxfFeatureTrueColorResolver } from '../MapLibre/plugins/map-dxf-export';
+
+/** DXF TrueColor 规则集合类型。需要一次性声明图层色和要素色策略时使用。 */
+export type { MapDxfTrueColorRules } from '../MapLibre/plugins/map-dxf-export';
 
 /** 归一化后的 DXF 导出任务配置类型。读取最终生效参数时使用。 */
 export type { ResolvedMapDxfExportTaskOptions } from '../MapLibre/plugins/map-dxf-export';

@@ -168,19 +168,24 @@
             <strong>封装层 DEFAULT_DXF_CRS_OPTIONS</strong>
           </div>
           <div class="demo-panel-kv">
+            <span>全局默认配色</span>
+            <strong>{{ dxfGlobalTrueColorText }}</strong>
+          </div>
+          <div class="demo-panel-kv">
             <span>局部覆写文件</span>
             <strong>{{ DXF_PRIMARY_ONLY_FILE_NAME }}</strong>
           </div>
         </div>
         <p class="demo-panel-note">{{ dxfResolvedOptionsText }}</p>
         <p class="demo-panel-note">{{ DXF_DEFAULT_CRS_CONFIG_PATH_TEXT }}</p>
+        <p class="demo-panel-note">{{ DXF_DEFAULT_TRUE_COLOR_CONFIG_PATH_TEXT }}</p>
         <p class="demo-panel-note">{{ DXF_OVERRIDE_GUIDE_TEXT }}</p>
       </section>
 
       <section class="demo-panel-card">
         <div class="demo-panel-head">
           <h3>DXF 配置速查</h3>
-          <p>这里把插件壳、defaults 和两个常用回调的含义一次性写全，方便业务层直接照着配。</p>
+          <p>这里把插件壳、defaults 和常用筛选 / 分层 / 着色回调的含义一次性写全，方便业务层直接照着配。</p>
         </div>
         <p class="demo-panel-note">{{ DXF_PLUGIN_OPTIONS_GUIDE_TEXT }}</p>
         <p class="demo-panel-note">{{ DXF_CALLBACK_GUIDE_TEXT }}</p>
@@ -372,9 +377,9 @@ import {
 import {
   createMapDxfExportPlugin,
   DEFAULT_DXF_CRS_OPTIONS,
+  DEFAULT_DXF_TRUE_COLOR_RULES,
   type MapDxfExportOptions,
   type MapDxfExportTaskOptions,
-  type MapDxfFeatureFilter,
   type MapDxfLayerNameResolver,
 } from "vue-maplibre-kit/plugins/map-dxf-export";
 import { createMapFeatureMultiSelectPlugin } from "vue-maplibre-kit/plugins/map-feature-multi-select";
@@ -520,19 +525,35 @@ const dxfDefaultCrsText = `${DEFAULT_DXF_CRS_OPTIONS.sourceCrs} -> ${DEFAULT_DXF
 
 /**
  * 默认 CRS 配置填写位置说明。
- * 这里直接把“封装层默认值维护在哪里”明确展示给业务开发者。
+ * 这里直接把“封装层默认坐标配置维护在哪里”明确展示给业务开发者。
  */
 const DXF_DEFAULT_CRS_CONFIG_PATH_TEXT =
   "DXF 全局默认 CRS 已在插件封装层统一维护；业务层只有需要覆盖时，才在 createMapDxfExportPlugin({ defaults }) 或 downloadDxf(overrides) 里传 sourceCrs / targetCrs。";
 
 /**
+ * 全局 TrueColor 规则入口说明。
+ * 当前库只提供统一配置入口，不在示例页里写死任何业务配色。
+ */
+const DXF_DEFAULT_TRUE_COLOR_CONFIG_PATH_TEXT =
+  "DXF 全局默认 TrueColor 规则入口已经预留：DEFAULT_DXF_TRUE_COLOR_RULES。当前默认是空对象，只负责兜底入口，不内置任何业务颜色逻辑。";
+
+/**
+ * 当前全局 TrueColor 入口的展示文本。
+ * 用来提醒业务开发者：入口已经有了，但当前仓库默认仍保持空白规则。
+ */
+const dxfGlobalTrueColorText =
+  Object.keys(DEFAULT_DXF_TRUE_COLOR_RULES).length === 0
+    ? "DEFAULT_DXF_TRUE_COLOR_RULES（当前为空）"
+    : "DEFAULT_DXF_TRUE_COLOR_RULES（已配置）";
+
+/**
  * DXF 局部覆写示例说明。
  * 这里强调两层职责边界：
- * 1. DXF 模块全局默认值负责兜底 CRS
+ * 1. DXF 模块全局默认值负责兜底 CRS 和 TrueColor 规则入口
  * 2. 页面 `defaults` 与 `downloadDxf(overrides)` 负责局部覆盖
  */
 const DXF_OVERRIDE_GUIDE_TEXT =
-  "右上角插件自带的“导出DXF”按钮会先吃封装层全局默认 CRS，再叠加当前页面 defaults；当前页面额外提供的“导出主业务DXF”按钮，只在本次任务里覆写 sourceIds、fileName 和 layerNameResolver。后续如果业务要按页面或单次任务改 sourceCrs / targetCrs，也继续通过 defaults 或 downloadDxf(overrides) 覆盖即可。";
+  "右上角插件自带的“导出DXF”按钮会按“全局默认 -> 页面 defaults -> 单次 overrides”合并配置。当前页面额外提供的“导出主业务DXF”按钮，只在本次任务里覆写 sourceIds、fileName 和 layerNameResolver；后续如果业务要按页面或单次任务改 CRS、图层色或特定要素色，也继续通过 defaults 或 downloadDxf(overrides) 覆盖即可。";
 
 /**
  * DXF 插件根配置速查说明。
@@ -543,22 +564,22 @@ const DXF_PLUGIN_OPTIONS_GUIDE_TEXT = [
   "1. enabled?: 是否启用整个 DXF 导出插件。",
   "2. sourceRegistry: 必填，传当前页面的业务 sourceRegistry。",
   "3. defaults?: 页面级默认导出配置，会覆盖封装层统一维护的全局默认 CRS。",
-  "   可配字段：sourceIds / fileName / sourceCrs / targetCrs / featureFilter / layerNameResolver。",
+  "   可配字段：sourceIds / fileName / sourceCrs / targetCrs / featureFilter / layerNameResolver / layerTrueColorResolver / featureTrueColorResolver。",
   "4. control?: 内置按钮配置。",
   "   可配字段：enabled / position / label。",
 ].join("\n");
 
 /**
  * DXF 回调用法速查说明。
- * 重点解释业务层最容易疑惑的 featureFilter 和 layerNameResolver。
+ * 重点解释业务层最常用的筛选、分层和着色入口。
  */
 const DXF_CALLBACK_GUIDE_TEXT = [
   "featureFilter(feature, sourceId)：返回 true 表示保留当前要素，返回 false 表示本次导出跳过当前要素。",
-  "当前页面 defaults 里内联了一个 featureFilter 示例：仅导出主业务 source，且只保留线/面，并排除 mark === 'hole' 的要素。",
-  "如果业务只想导出主业务 source 里的线和面，可以改成：sourceId === SOURCE_IDS.primary && feature.geometry.type !== 'Point'。",
   "layerNameResolver(feature, sourceId)：返回当前要素写入 DXF 的图层名。相同返回值的要素会被放进同一个 DXF 图层。",
-  "当前页面 defaults 里内联了一个 layerNameResolver 示例：按 sourceId + 几何类型 + mark 分层，例如 primary_Line_main。",
-  "底层会自动清洗 DXF 非法字符；如果不同来源最终落到同一 DXF 图层，也会在 warnings 里给出同名合层提示。",
+  "layerTrueColorResolver(layerName, sourceId)：返回图层 TrueColor；即使没有 layerNameResolver，默认按 sourceId 分层时也一样可用。",
+  "featureTrueColorResolver(feature, sourceId, layerName)：返回实体 TrueColor，优先级高于图层色，适合少量特殊要素。",
+  "当前示例页不预置任何颜色规则，只展示“全局入口 + 页面 defaults + 单次 overrides”的接法，避免把业务配色硬编码进示例页。",
+  "底层会自动清洗 DXF 非法图层名；如果不同来源最终落到同一 DXF 图层，也会在 warnings 里给出同名合层提示。",
 ].join("\n");
 
 import sendIcon from "./assets/send.svg";
@@ -790,16 +811,13 @@ const mapDxfExportPlugin = createMapDxfExportPlugin({
   // defaults 代表当前页面的默认导出行为。
   // 插件内置按钮会直接复用这组配置，适合沉淀成“整页统一的默认导出行为”。
   // 这里不再重复填写 sourceCrs / targetCrs，而是直接吃封装层统一维护的全局默认 CRS。
+  // TrueColor 也同样先走封装层统一入口；当前示例页不预置任何页面级颜色规则。
   defaults: {
     // null / 不传都表示“默认导出全部业务 source”。
     sourceIds: null,
 
     // 默认下载文件名。
     fileName: DXF_DEFAULT_FILE_NAME,
-
-    // 该页面局部指定的 源/目标坐标系写在这里
-    sourceCrs: "EPSG:4326",
-    targetCrs: "EPSG:3857",
 
     // 要素过滤器：true 保留，false 排除。
     // featureFilter: (feature: MapCommonFeature, sourceId: string): boolean => {
@@ -2179,6 +2197,15 @@ const formatDxfCrsText = (sourceCrs?: string, targetCrs?: string): string => {
 };
 
 /**
+ * 统一格式化 TrueColor 解析器状态文本。
+ * @param resolver 任意解析器
+ * @returns 适合示例面板直接展示的中文文本
+ */
+const formatDxfTrueColorResolverText = (resolver: unknown): string => {
+  return typeof resolver === "function" ? "已配置" : "未配置";
+};
+
+/**
  * 提取用户可读的错误消息。
  * @param error 任意异常对象
  * @returns 适合直接提示给用户的错误文本
@@ -2251,8 +2278,8 @@ const dxfResolvedOptionsText = computed(() => {
 
   return [
     `插件默认导出：范围 = ${formatDxfSourceIdsText(defaultOptions.sourceIds)}；文件 = ${defaultOptions.fileName}；坐标转换 = ${formatDxfCrsText(defaultOptions.sourceCrs, defaultOptions.targetCrs)}。`,
-    "插件默认回调：featureFilter 与 layerNameResolver 都在 defaults 里内联，分别演示筛选规则与图层分层规则。",
-    `业务层局部覆写后：范围 = ${formatDxfSourceIdsText(primaryOnlyOptions.sourceIds)}；文件 = ${primaryOnlyOptions.fileName}；图层名 = 按 sourceId + mark 生成。`,
+    `默认颜色解析器：图层色 = ${formatDxfTrueColorResolverText(defaultOptions.layerTrueColorResolver)}；要素色 = ${formatDxfTrueColorResolverText(defaultOptions.featureTrueColorResolver)}。`,
+    `业务层局部覆写后：范围 = ${formatDxfSourceIdsText(primaryOnlyOptions.sourceIds)}；文件 = ${primaryOnlyOptions.fileName}；图层名 = 按 sourceId + mark 生成；图层色 = ${formatDxfTrueColorResolverText(primaryOnlyOptions.layerTrueColorResolver)}；要素色 = ${formatDxfTrueColorResolverText(primaryOnlyOptions.featureTrueColorResolver)}。`,
   ].join("\n");
 });
 

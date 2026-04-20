@@ -29,6 +29,7 @@ export {
   DEFAULT_DXF_FILE_NAME,
   DEFAULT_DXF_SOURCE_CRS,
   DEFAULT_DXF_TARGET_CRS,
+  DEFAULT_DXF_TRUE_COLOR_RULES,
 } from './types';
 export type { MapDxfExportPluginDescriptor };
 export type {
@@ -38,8 +39,12 @@ export type {
   MapDxfExportResult,
   MapDxfExportState,
   MapDxfExportTaskOptions,
+  MapDxfFeatureTrueColorResolver,
   MapDxfFeatureFilter,
+  MapDxfLayerTrueColorResolver,
   MapDxfLayerNameResolver,
+  MapDxfTrueColor,
+  MapDxfTrueColorRules,
   ResolvedMapDxfExportControlOptions,
   ResolvedMapDxfExportOptions,
   ResolvedMapDxfExportTaskOptions,

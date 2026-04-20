@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { describe, expect, it } from 'vitest';
+import { TrueColor } from '@tarikjabiri/dxf';
 import proj4 from 'proj4';
 import {
   createMapBusinessSource,
@@ -9,6 +10,7 @@ import {
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../../shared/map-common-tools';
 import {
   DEFAULT_DXF_CRS_OPTIONS,
+  DEFAULT_DXF_TRUE_COLOR_RULES,
   exportBusinessSourcesToDxf,
   resolveMapDxfExportTaskOptions,
   type MapDxfExportTaskOptions,
@@ -138,6 +140,58 @@ function hasEntityLayer(content: string, layerName: string): boolean {
   return content.includes(`\n8\n${layerName}\n`);
 }
 
+/**
+ * 转义正则中的特殊字符。
+ * @param value 原始文本
+ * @returns 可直接用于正则的文本
+ */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 提取指定图层记录中的 TrueColor 值。
+ * @param content DXF 文本
+ * @param layerName 图层名
+ * @returns TrueColor 数值；不存在时返回 null
+ */
+function extractLayerTrueColor(content: string, layerName: string): number | null {
+  const layerRecordPattern = new RegExp(
+    `0\\nLAYER\\n[\\s\\S]*?\\n2\\n${escapeRegExp(layerName)}\\n[\\s\\S]*?(?=\\n0\\n(?:LAYER|ENDTAB))`
+  );
+  const layerRecord = content.match(layerRecordPattern)?.[0];
+  if (!layerRecord) {
+    return null;
+  }
+
+  const matchResult = layerRecord.match(/\n420\n([^\n]+)/);
+  return matchResult ? Number(matchResult[1]) : null;
+}
+
+/**
+ * 提取首个实体上的 TrueColor 值。
+ * @param content DXF 文本
+ * @param entityType 实体类型
+ * @returns TrueColor 数值；不存在时返回 null
+ */
+function extractFirstEntityTrueColor(
+  content: string,
+  entityType: 'POINT' | 'LWPOLYLINE'
+): number | null {
+  const matchResult = content.match(new RegExp(`0\\n${entityType}\\n[\\s\\S]*?\\n420\\n([^\\n]+)`));
+  return matchResult ? Number(matchResult[1]) : null;
+}
+
+/**
+ * 统计包含指定关键字的 warning 数量。
+ * @param warnings 警告列表
+ * @param keyword 关键字
+ * @returns 命中数量
+ */
+function countWarningsByKeyword(warnings: string[], keyword: string): number {
+  return warnings.filter((warning) => warning.includes(keyword)).length;
+}
+
 describe('exportBusinessSourcesToDxf', () => {
   it('应支持导出全部 source 和按 sourceIds 局部导出', () => {
     const sourceA = createBusinessSource('source-a', [createPointFeature('point-a', [1, 2])]);
@@ -185,9 +239,13 @@ describe('exportBusinessSourcesToDxf', () => {
       targetCrs: 'EPSG:3857',
       featureFilter: () => true,
       layerNameResolver: () => 'default-layer',
+      layerTrueColorResolver: () => '#112233',
+      featureTrueColorResolver: () => '#223344',
     };
     const overrideFilter = () => false;
     const overrideLayerNameResolver = () => 'override-layer';
+    const overrideLayerTrueColorResolver = () => '#445566';
+    const overrideFeatureTrueColorResolver = () => '#556677';
 
     const resolvedOptions = resolveMapDxfExportTaskOptions(defaults, {
       sourceIds: ['source-b'],
@@ -195,6 +253,8 @@ describe('exportBusinessSourcesToDxf', () => {
       targetCrs: 'EPSG:4490',
       featureFilter: overrideFilter,
       layerNameResolver: overrideLayerNameResolver,
+      layerTrueColorResolver: overrideLayerTrueColorResolver,
+      featureTrueColorResolver: overrideFeatureTrueColorResolver,
     });
 
     expect(resolvedOptions.sourceIds).toEqual(['source-b']);
@@ -203,6 +263,8 @@ describe('exportBusinessSourcesToDxf', () => {
     expect(resolvedOptions.targetCrs).toBe('EPSG:4490');
     expect(resolvedOptions.featureFilter).toBe(overrideFilter);
     expect(resolvedOptions.layerNameResolver).toBe(overrideLayerNameResolver);
+    expect(resolvedOptions.layerTrueColorResolver).toBe(overrideLayerTrueColorResolver);
+    expect(resolvedOptions.featureTrueColorResolver).toBe(overrideFeatureTrueColorResolver);
   });
 
   it('应在页面未传 CRS 时回退到全局默认 CRS', () => {
@@ -212,6 +274,28 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(resolvedOptions.sourceCrs).toBe(DEFAULT_DXF_CRS_OPTIONS.sourceCrs);
     expect(resolvedOptions.targetCrs).toBe(DEFAULT_DXF_CRS_OPTIONS.targetCrs);
+  });
+
+  it('全局 TrueColor 规则为空时，不应影响现有 DXF 导出', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+    const resolvedOptions = resolveMapDxfExportTaskOptions({
+      sourceCrs: 'EPSG:4326',
+      targetCrs: 'EPSG:4326',
+    });
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolvedOptions,
+    });
+
+    expect(resolvedOptions.layerTrueColorResolver).toBe(DEFAULT_DXF_TRUE_COLOR_RULES.layerTrueColorResolver);
+    expect(resolvedOptions.featureTrueColorResolver).toBe(
+      DEFAULT_DXF_TRUE_COLOR_RULES.featureTrueColorResolver
+    );
+    expect(result.entityCount).toBe(1);
+    expect(result.warnings).toEqual([]);
+    expect(result.content.includes('\n420\n')).toBe(false);
   });
 
   it('应在双端 CRS 都存在且不同时执行坐标转换', () => {
@@ -324,6 +408,129 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(hasEntityLayer(result.content, 'layer_a_b_c_test')).toBe(true);
     expect(result.warnings).toEqual([]);
+  });
+
+  it('页面 defaults.layerTrueColorResolver 应在默认按 sourceId 分层时生效', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+        layerTrueColorResolver: (layerName, sourceId) =>
+          layerName === sourceId ? '#112233' : undefined,
+      }),
+    });
+
+    expect(extractLayerTrueColor(result.content, 'source-a')).toBe(TrueColor.fromHex('#112233'));
+    expect(extractFirstEntityTrueColor(result.content, 'POINT')).toBeNull();
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('单次 overrides.layerTrueColorResolver 应覆盖页面规则', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions(
+        {
+          sourceCrs: 'EPSG:4326',
+          targetCrs: 'EPSG:4326',
+          layerTrueColorResolver: () => '#112233',
+        },
+        {
+          layerTrueColorResolver: () => '#445566',
+        }
+      ),
+    });
+
+    expect(extractLayerTrueColor(result.content, 'source-a')).toBe(TrueColor.fromHex('#445566'));
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('自定义 layerNameResolver 后仍可写入图层 TrueColor', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+        layerNameResolver: () => 'custom-layer',
+        layerTrueColorResolver: (layerName) => (layerName === 'custom-layer' ? '#ABCDEF' : undefined),
+      }),
+    });
+
+    expect(extractLayerTrueColor(result.content, 'custom-layer')).toBe(
+      TrueColor.fromHex('#ABCDEF')
+    );
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('featureTrueColorResolver 应写入实体色，并覆盖图层继承色', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+        layerTrueColorResolver: () => '#112233',
+        featureTrueColorResolver: () => '#445566',
+      }),
+    });
+
+    expect(extractLayerTrueColor(result.content, 'source-a')).toBe(TrueColor.fromHex('#112233'));
+    expect(extractFirstEntityTrueColor(result.content, 'POINT')).toBe(TrueColor.fromHex('#445566'));
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('同一最终 DXF 图层出现多个不同图层色时，应保留首次颜色且只告警一次', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+      createBusinessSource('source-b', [
+        createPointFeature('point-b', [2, 2]),
+        createPointFeature('point-c', [3, 3]),
+      ]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+        layerNameResolver: () => 'same-layer',
+        layerTrueColorResolver: (_layerName, sourceId) =>
+          sourceId === 'source-a' ? '#112233' : '#445566',
+      }),
+    });
+
+    expect(extractLayerTrueColor(result.content, 'same-layer')).toBe(TrueColor.fromHex('#112233'));
+    expect(countWarningsByKeyword(result.warnings, '多个图层 TrueColor')).toBe(1);
+  });
+
+  it('非法 TrueColor 值应产生 warning，但不影响几何导出', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+        layerTrueColorResolver: () => '#12ZZ33' as `#${string}`,
+      }),
+    });
+
+    expect(result.entityCount).toBe(1);
+    expect(countEntity(result.content, 'POINT')).toBe(1);
+    expect(extractLayerTrueColor(result.content, 'source-a')).toBeNull();
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain("TrueColor 值 '#12ZZ33' 非法");
   });
 
   it('应在不同来源映射到同一最终 DXF 图层时只返回一条告警', () => {

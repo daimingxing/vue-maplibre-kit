@@ -177,6 +177,34 @@ describe('mapDxfExportPlugin', () => {
     expect(click).toHaveBeenCalledTimes(1);
   });
 
+  it('getResolvedOptions 应返回已合并的 TrueColor 解析器字段', () => {
+    const pageLayerTrueColorResolver = vi.fn(() => '#112233');
+    const pageFeatureTrueColorResolver = vi.fn(() => '#223344');
+    const overrideLayerTrueColorResolver = vi.fn(() => '#445566');
+    const optionsRef = ref({
+      ...createPluginOptions(),
+      defaults: {
+        layerTrueColorResolver: pageLayerTrueColorResolver,
+        featureTrueColorResolver: pageFeatureTrueColorResolver,
+      },
+    });
+    const pluginInstance = mapDxfExportPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error('未获取到 DXF 导出插件 API');
+    }
+
+    const defaultOptions = pluginApi.getResolvedOptions();
+    const overrideOptions = pluginApi.getResolvedOptions({
+      layerTrueColorResolver: overrideLayerTrueColorResolver,
+    });
+
+    expect(defaultOptions.layerTrueColorResolver).toBe(pageLayerTrueColorResolver);
+    expect(defaultOptions.featureTrueColorResolver).toBe(pageFeatureTrueColorResolver);
+    expect(overrideOptions.layerTrueColorResolver).toBe(overrideLayerTrueColorResolver);
+    expect(overrideOptions.featureTrueColorResolver).toBe(pageFeatureTrueColorResolver);
+  });
+
   it('应在导出失败后更新错误状态', async () => {
     const optionsRef = ref(createPluginOptions());
     const pluginInstance = mapDxfExportPlugin.createInstance(createPluginContext(optionsRef));
