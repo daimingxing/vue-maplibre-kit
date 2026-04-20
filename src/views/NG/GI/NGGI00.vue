@@ -45,14 +45,8 @@
             业务层现在优先通过 MapBusinessSourceLayers 声明高频图层。
             如果 geometryTypes / where / filter 仍然不够表达业务规则，再回退到原始 Mgl 图层写法。
           -->
-          <map-business-source-layers
-            :source="primaryBusinessSource"
-            :layers="primaryBusinessLayers"
-          />
-          <map-business-source-layers
-            :source="secondaryBusinessSource"
-            :layers="secondaryBusinessLayers"
-          />
+          <map-business-source-layers :source="primaryBusinessSource" />
+          <map-business-source-layers :source="secondaryBusinessSource" />
         </template>
       </map-libre-init>
     </div>
@@ -185,7 +179,10 @@
       <section class="demo-panel-card">
         <div class="demo-panel-head">
           <h3>DXF 配置速查</h3>
-          <p>这里把插件壳、defaults 和常用筛选 / 分层 / 着色回调的含义一次性写全，方便业务层直接照着配。</p>
+          <p>
+            这里把插件壳、defaults 和常用筛选 / 分层 /
+            着色回调的含义一次性写全，方便业务层直接照着配。
+          </p>
         </div>
         <p class="demo-panel-note">{{ DXF_PLUGIN_OPTIONS_GUIDE_TEXT }}</p>
         <p class="demo-panel-note">{{ DXF_CALLBACK_GUIDE_TEXT }}</p>
@@ -446,15 +443,15 @@ const LAYER_IDS = {
 } as const;
 
 /**
- * 正式业务源的字段规则示例。
+ * 正式业务图层的字段规则示例。
  * 业务层只需要声明：
  * 1. 哪些字段只读
  * 2. 哪些字段属于稳定业务字段
  * 3. 哪些字段不该进入业务属性面板
  *
- * 面板态与保存/删除权限都会统一复用这份规则。
+ * 当前命中的图层会决定面板态与保存/删除权限。
  */
-const BUSINESS_SOURCE_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
+const LAYER_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
   readonlyKeys: ["id"],
   fixedKeys: ["mark"],
   hiddenKeys: ["marker-color", "marker-size", "marker-symbol"],
@@ -483,7 +480,7 @@ const MEASURE_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
  * 普通业务源右键面板提示文案。
  */
 const MAP_PROPERTY_PANEL_NOTE =
-  "上方列表只展示业务可见字段。`id` 是只读字段不能修改，`mark` 被声明为稳定字段可改但不可删；像 marker-color 这类样式辅助字段会被隐藏到下方调试快照。新增的临时字段默认允许删除。";
+  "上方列表只展示当前命中图层允许暴露的业务字段。`id` 是只读字段不能修改，`mark` 被声明为稳定字段可改但不可删；像 marker-color 这类样式辅助字段会被隐藏到下方调试快照。新增的临时字段默认允许删除。";
 
 /**
  * 线草稿右键面板提示文案。
@@ -598,391 +595,11 @@ const test_geojson_secondary = ref<MapCommonFeatureCollection>(
   mapGeojson2 as MapCommonFeatureCollection,
 );
 
-// 1. 注册业务数据源 (Source)
-// 通过 createMapBusinessSource 将普通 GeoJSON 包装为带 ID 的规范化数据源
-const primaryBusinessSource = createMapBusinessSource({
-  sourceId: SOURCE_IDS.primary,
-  data: test_geojson,
-  promoteId: "id", // 指定用作要素唯一标识的属性名
-  // 业务层只声明“哪些字段可见、可改、可删”，具体过滤与保护交给底层统一完成。
-  propertyPolicy: BUSINESS_SOURCE_PROPERTY_POLICY,
-});
-
-const secondaryBusinessSource = createMapBusinessSource({
-  sourceId: SOURCE_IDS.secondary,
-  data: test_geojson_secondary,
-  promoteId: "id",
-  propertyPolicy: BUSINESS_SOURCE_PROPERTY_POLICY,
-});
-
-// 将所有业务源注册到管理中心，供查询与写入时使用
-const businessSourceRegistry = createMapBusinessSourceRegistry([
-  primaryBusinessSource,
-  secondaryBusinessSource,
-]);
-
 /**
  * 当前页面持有的地图组件公开实例引用。
  * 业务层所有地图操作都通过它与底层进行通信。
  */
 const mapInitRef = ref<BusinessKit.MapLibreInitExpose | null>(null);
-
-/**
- * ==========================
- * 插件注册区
- * ==========================
- */
-
-// 1. 线草稿预览插件：提供线段临时延长和预览能力
-const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
-  enabled: true,
-  // 草稿线要继承哪个正式图层的交互行为（保持交互一致性）
-  inheritInteractiveFromLayerId: LAYER_IDS.primaryLine,
-  // 覆盖默认草稿样式
-  styleOverrides: {
-    // 线草稿图层样式覆写。
-    line: {
-      // 线图层 layout 局部覆写。
-      // 当前示例未覆写 layout，因此保留容器层默认值。
-      layout: {
-        // 示例留空：业务层如需覆写可在这里补充 line-cap、visibility 等字段。
-      },
-
-      // 线图层 paint 局部覆写。
-      paint: {
-        // 线草稿颜色。
-        // hover 时显示为更醒目的红色，默认态显示为橙红色。
-        "line-color": createFeatureStateExpression({
-          hover: "white",
-          default: "#fa8c16",
-        }),
-
-        // 线草稿宽度。
-        // 这里略微调大，用于演示业务层如何只覆写单条样式。
-        "line-width": createFeatureStateExpression({
-          hover: 6,
-          default: 5,
-        }),
-
-        // 线草稿虚线样式。
-        "line-dasharray": [2, 1.2],
-      },
-    },
-
-    // 线廊草稿图层样式覆写。
-    fill: {
-      // 面图层 layout 局部覆写。
-      // 当前示例同样不改 layout，仅演示 paint 覆写。
-      layout: {
-        // 示例留空：业务层如需覆写 visibility 等字段，可在这里补充。
-      },
-
-      // 面图层 paint 局部覆写。
-      paint: {
-        // 线廊草稿填充颜色。
-        "fill-color": "#fa8c16",
-
-        // 线廊草稿透明度。
-        // 透明度略低，避免遮挡底图与正式业务图层。
-        "fill-opacity": 0.18,
-
-        // 线廊草稿轮廓颜色。
-        "fill-outline-color": "#ff7a00",
-      },
-    },
-  },
-});
-
-// 2. 要素多选插件：提供框选和点击多选能力
-const mapFeatureMultiSelectPlugin = createMapFeatureMultiSelectPlugin({
-  // 是否启用多选插件，默认为 true
-  enabled: true,
-  // 插件控件在地图上的显示位置，可选值如 'top-left', 'top-right', 'bottom-left', 'bottom-right'
-  position: "top-right",
-  // 退出多选模式时的行为策略：'clear'（清空选中集） 或 'retain'（保留选中集）
-  deactivateBehavior: "retain",
-  // 是否允许通过按下 Esc 快捷键退出多选模式，默认为 true
-  closeOnEscape: true,
-  // 不允许参与多选的图层 ID 集合，这里的点二图层中的要素将无法被多选
-  excludeLayerIds: [LAYER_IDS.circleDec],
-  // 也可以通过 targetLayerIds: ['layer1', 'layer2'] 显式指定允许参与多选的图层 ID 集合
-
-  // 自定义候选过滤函数，返回 true 表示允许选中，返回 false 表示禁止选中
-  canSelect: ({ layerId, properties }) => {
-    // 如果不是主点图层，则允许选中
-    if (layerId !== LAYER_IDS.circle) {
-      return true;
-    }
-
-    // 对于主点图层，拦截 id 为 'point_4' 的要素，使其无法被选中
-    return properties?.id !== "point_4";
-  },
-});
-
-// 3. 要素吸附插件：配置哪些图层允许作为测绘的吸附目标
-const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
-  // 启用统一吸附扩展。
-  enabled: true,
-
-  // 全局默认吸附范围（像素）。
-  // 业务层大多数规则不需要重复传，只有个别规则需要更大或更小的吸附范围时再局部覆写。
-  defaultTolerancePx: 16,
-
-  // 吸附预览配置。
-  // 这里演示如何只关心效果层面的少数视觉参数。
-  preview: {
-    enabled: true,
-    pointColor: "#f56c6c",
-    pointRadius: 6,
-    lineColor: "#f56c6c",
-    lineWidth: 4,
-  },
-
-  // 普通业务图层吸附规则。
-  ordinaryLayers: {
-    enabled: true,
-    rules: [
-      {
-        // 主正式线图层：既允许吸附到顶点，也允许吸附到线段。
-        id: "primary-line-snap",
-        layerIds: [LAYER_IDS.primaryLine],
-        priority: 30,
-        snapTo: ["vertex", "segment"],
-        // filter示例，高级定制规则，返回fasle表示当前吸附规则失效
-        // filter: (context) => {
-        //   console.log('context', context);
-        //   if (context.feature.id === 'line_2') {
-        //     return false;
-        //   }
-        //   return true;
-        // },
-      },
-      {
-        // 第二正式线图层：继续参与吸附，但优先级略低于主线图层。
-        id: "secondary-line-snap",
-        layerIds: [LAYER_IDS.secondaryLine],
-        priority: 20,
-        snapTo: ["vertex", "segment"],
-      },
-      {
-        // 点图层示例：点要素只参与顶点吸附。
-        id: "point-hole-snap",
-        layerIds: [LAYER_IDS.circle, LAYER_IDS.circleDec],
-        priority: 10,
-        snapTo: ["vertex"], // 点图层只能吸附到顶点
-      },
-      {
-        // 特定条件要素示例：只允许吸附 mark === 'hole' 的点。
-        // 用于演示“不是按点/线/面粗分，而是按具体业务条件筛选”的能力。
-        id: "point-hole-filtered-snap",
-        layerIds: [LAYER_IDS.circle, LAYER_IDS.circleDec],
-        priority: 40,
-        tolerancePx: 20,
-        geometryTypes: ["Point"],
-        snapTo: ["vertex"],
-        where: {
-          mark: "hole",
-        },
-      },
-    ],
-  },
-
-  // TerraDraw / Measure 公共默认值。
-  // 业务层只需要在控件里传 { enabled: true }，默认就会同时开启原生吸附与普通层候选吸附。
-  terradraw: {
-    defaults: {
-      enabled: true,
-      tolerancePx: 16,
-      useNative: true,
-      useMapTargets: true,
-    },
-  },
-});
-
-// 4. DXF 导出插件：第一版只面向业务 source，不包含 TerraDraw / Measure / 手绘要素。
-const mapDxfExportPlugin = createMapDxfExportPlugin({
-  // 这里故意把全部可配字段都显式写出来，方便业务开发者直接照着这份示例抄。
-  // 是否启用整个 DXF 导出插件。
-  enabled: true,
-
-  // 必填：告诉插件“当前页面有哪些业务 source 可参与导出”。
-  sourceRegistry: businessSourceRegistry,
-
-  // defaults 代表当前页面的默认导出行为。
-  // 插件内置按钮会直接复用这组配置，适合沉淀成“整页统一的默认导出行为”。
-  // 这里不再重复填写 sourceCrs / targetCrs，而是直接吃封装层统一维护的全局默认 CRS。
-  // TrueColor 也同样先走封装层统一入口；当前示例页不预置任何页面级颜色规则。
-  defaults: {
-    // null / 不传都表示“默认导出全部业务 source”。
-    sourceIds: null,
-
-    // 默认下载文件名。
-    fileName: DXF_DEFAULT_FILE_NAME,
-
-    // 统一线宽：所有线和面边界都会使用同一组宽度。
-    // 如果本页不传，封装层会回退到 DXF 全局默认值。
-    lineWidth: 5,
-
-    // 点导出模式：
-    // - point：按 DXF 原生 POINT 导出，显示样式由 CAD 环境控制
-    // - circle：按 DXF CIRCLE 导出，便于跨软件稳定显示
-    // pointMode: "circle",
-
-    // 点半径：仅在 pointMode='circle' 时生效。
-    // 当前示例选择 circle 模式，所以这里的数值会直接变成 CAD 里可见的圆半径。
-    // pointRadius: 3,
-
-    // 图层级颜色：给“这一层里的大多数实体”先设一个默认色。
-    // 如果没有开启 layerNameResolver，layerName 默认就等于 sourceId。
-    layerTrueColorResolver: (layerName, sourceId) => {
-      // 这里演示“按 source + 图层名关键词”做页面级默认着色。
-      // 返回值必须是 #RRGGBB；返回 undefined 表示当前图层不在这里指定颜色。
-
-      // 主业务 source 默认走蓝色系
-      if (sourceId === SOURCE_IDS.primary) {
-        // 面图层默认灰色
-        if (layerName.includes("Polygon")) {
-          return "#FF3300";
-        }
-
-        // 线图层默认蓝色
-        if (layerName.includes("LineString") || layerName.includes("Line")) {
-          return "#0066FF";
-        }
-      }
-
-      // 洞点 / 孔位这类特殊点要素，图层默认给红色，方便导出后快速定位。
-      if (layerName.includes("Point") && layerName.includes("hole")) {
-        return "#FF3300";
-      }
-
-      // 没命中规则就交给封装层后续逻辑处理。
-      return undefined;
-    },
-
-    // 要素级颜色：用于“局部覆写”。
-    // 它的优先级高于图层级颜色；一旦这里返回颜色，当前要素就不再沿用图层默认色。
-    // 一般不配特定要素颜色。因为会导致cad软件里图层变色不能控制这个要素的颜色。
-    featureTrueColorResolver: (feature, sourceId, layerName) => {
-      // 先把业务属性统一转成字符串，避免属性缺失时出现 null / undefined 干扰判断。
-      const mark = String(feature.properties?.mark ?? "");
-      const name = String(feature.properties?.name ?? "");
-
-      // 示例 1：hole 要素不管所在图层原本是什么颜色，都强制覆写成亮红色。
-      // 这就是“局部覆写”的核心：只改当前命中的要素，不影响同图层其他实体。
-      if (mark === "hole") {
-        return "#FF0000";
-      }
-
-      // 示例 2：主业务 source 里的重点线要素，额外提亮成橙色。
-      // 这里故意同时结合 sourceId、图层名、业务属性做判断，演示规则可以非常细。
-      if (
-        sourceId === SOURCE_IDS.primary &&
-        layerName.includes("Line") &&
-        name.includes("主")
-      ) {
-        return "#FF9900";
-      }
-
-      // 示例 3：如果后续你们有 status / level / risk 之类字段，也可以继续在这里细分。
-      // 没命中则返回 undefined，表示当前要素继续沿用所属图层的默认色。
-      return undefined;
-    },
-
-    // 要素过滤器：true 保留，false 排除。
-    /* featureFilter: (feature: MapCommonFeature, sourceId: string): boolean => {
-      // 只导出主业务 source，其他来源全部跳过。
-      if (sourceId !== SOURCE_IDS.primary) {
-        return false;
-      }
-
-      // 点要素先不导出，示例里只保留线和面。
-      if (feature.geometry.type === "Point") {
-        return false;
-      }
-
-      // 这里演示按业务属性继续细分筛选。
-      // mark === 'hole' 的要素本次不导出。
-      const mark = String(feature.properties?.mark ?? "");
-      if (mark === "hole") {
-        return false;
-      }
-
-      // 走到这里说明当前要素满足导出条件。
-      return true;
-    }, */
-
-    // 图层名解析器：决定当前要素写入 DXF 时落到哪个图层。
-    layerNameResolver: (feature: MapCommonFeature, sourceId: string): string => {
-      // DXF 里的“图层”可以理解成 CAD 中的分类目录。
-      // 同一个图层里的实体会被放在一起，便于后续单独开关显示、选择、改样式。
-
-      // 这里先取业务标记；没有 mark 时给一个兜底值，避免图层名出现空段。
-      const mark = String(feature.properties?.mark ?? "normal");
-
-      // 这个示例按“sourceId + 几何类型 + mark”分层。
-      // 例如：primary_Line_main、primary_Polygon_area、secondary_Point_hole。
-      // 这样导出到 CAD 后，业务人员一眼就能看出每层分别装的是什么数据。
-      return `${sourceId}_${feature.geometry.type}_${mark}`;
-    },
-  },
-
-  // 内置控件配置。
-  control: {
-    enabled: true,
-    position: "top-right",
-    label: "导出DXF",
-  },
-} as MapDxfExportOptions);
-
-/**
- * 集中注册当前页面需要启用的地图能力扩展。
- */
-const mapPlugins = [
-  mapFeatureSnapPlugin,
-  lineDraftPreviewPlugin,
-  mapFeatureMultiSelectPlugin,
-  mapDxfExportPlugin,
-];
-
-/**
- * 当前页面统一使用的业务聚合门面。
- *
- * 作用：
- * 1. 把选择态、要素查询、要素动作、属性编辑、线草稿、特效统一收口
- * 2. 业务层不再自己分别拼装多个 `use*` 门面
- * 3. 后续新增业务能力时，优先继续往这个高层入口下分组扩展
- */
-const businessMap = useBusinessMap({
-  mapRef: mapInitRef,
-  sourceRegistry: businessSourceRegistry,
-});
-
-/**
- * 统一的地图要素能力分组。
- * 这里同时包含查询和动作能力，业务层统一走 `businessMap.feature` 即可。
- */
-const featureQuery = businessMap.feature;
-
-/**
- * 统一属性编辑分组。
- * 业务层只需要维护当前编辑目标，再调用 editor 分组即可。
- */
-const propertyEditor = businessMap.editor;
-
-/**
- * 统一线草稿分组。
- * 业务层通过 businessMap.draft 读取草稿状态与动作。
- */
-const lineDraftPreview = businessMap.draft;
-
-/**
- * 当前页面是否存在线草稿要素。
- * 该状态直接来自线草稿能力门面，用于驱动示例面板与按钮显隐。
- */
-const hasLineDraftFeatures = computed(() => {
-  return lineDraftPreview.hasFeatures.value;
-});
 
 /**
  * 核心：初始化地图基础配置。
@@ -1479,51 +1096,6 @@ const mapControls: BusinessKit.MapControlsConfig = {
   },
 };
 
-/**
- * ==========================
- * 业务操作：获取测绘数据
- * ==========================
- */
-
-/** 获取当前所有已绘制要素的数据快照 */
-const getDrawnData = () => {
-  if (!mapInitRef.value) return;
-
-  // getDrawFeatures():
-  // 1. null 代表绘图控件尚未初始化或未启用
-  // 2. [] 代表绘图控件可用，但当前没有已绘制要素
-  // 3. 非空数组即 TerraDraw 当前快照
-  const features = mapInitRef.value.getDrawFeatures?.();
-  if (features === null) {
-    ElMessage.warning("绘图控件尚未初始化或未启用");
-    return;
-  }
-  if (features.length === 0) {
-    ElMessage.info("当前没有绘制任何图形");
-    return;
-  }
-
-  console.log("--- 绘制的 GeoJSON 数据 ---", JSON.stringify(features, null, 2));
-  ElMessage.success(`成功获取 ${features.length} 个图形数据，请查看控制台`);
-};
-
-/** 获取当前所有测量要素的数据快照 */
-const getMeasureData = () => {
-  if (!mapInitRef.value) return;
-
-  const features = mapInitRef.value.getMeasureFeatures?.();
-  if (features === null) {
-    ElMessage.warning("测量控件尚未初始化或未启用");
-    return;
-  }
-  if (features.length === 0) {
-    ElMessage.info("当前没有测量任何图形");
-    return;
-  }
-
-  console.log("--- 测量的 GeoJSON 数据 ---", JSON.stringify(features, null, 2));
-  ElMessage.success(`成功获取 ${features.length} 个测量图形数据，请查看控制台`);
-};
 
 // ==========================================
 // 图层样式配置实例 (Layer Configurations)
@@ -1710,6 +1282,8 @@ const primaryBusinessLayers = [
   // 1. 创建业务点图层（通常用于展示设备节点、站点等点状数据）
   createCircleBusinessLayer({
     layerId: LAYER_IDS.circle,
+    // 普通点图层命中后，属性面板与保存/删除都复用这份图层级规则。
+    propertyPolicy: LAYER_PROPERTY_POLICY,
     // 样式配置：指定该图层的绘制表现（颜色、大小、显隐等）
     // 如果不传 style，底层会自动回退使用 createCircleLayerStyle() 生成的默认样式
     style: {
@@ -1729,6 +1303,7 @@ const primaryBusinessLayers = [
   // 2. 创建另一个业务点图层（展示另一类点状数据，通过 where 条件区分）
   createCircleBusinessLayer({
     layerId: LAYER_IDS.circleDec,
+    propertyPolicy: LAYER_PROPERTY_POLICY,
     // 样式配置：指定该图层的绘制表现（颜色、大小、显隐等）
     // 如果不传 style，底层会自动回退使用 createCircleLayerStyle() 生成的默认样式
     style: {
@@ -1745,6 +1320,7 @@ const primaryBusinessLayers = [
   // 3. 创建业务线图层（通常用于展示管道、道路等线状数据）
   createLineBusinessLayer({
     layerId: LAYER_IDS.primaryLine,
+    propertyPolicy: LAYER_PROPERTY_POLICY,
     style: {
       layout: lineLayout,
       paint: linePaint,
@@ -1768,6 +1344,7 @@ const primaryBusinessLayers = [
   // 5. 创建业务符号图层（通常用于展示图标 icon 或文字标签 text）
   createSymbolBusinessLayer({
     layerId: LAYER_IDS.symbol,
+    propertyPolicy: LAYER_PROPERTY_POLICY,
     style: {
       layout: symbolLayout,
       paint: symbolPaint,
@@ -1783,6 +1360,7 @@ const primaryBusinessLayers = [
 const secondaryBusinessLayers = [
   createLineBusinessLayer({
     layerId: LAYER_IDS.secondaryLine,
+    propertyPolicy: LAYER_PROPERTY_POLICY,
     style: {
       layout: lineLayout, // 复用前面解构出来的 lineLayout
       paint: linePaint, // 复用前面解构出来的 linePaint
@@ -1799,6 +1377,433 @@ const secondaryBusinessLayers = [
     interactive: false,
   }),
 ];
+
+/**
+ * 业务数据源注册区。
+ * 这里直接复用已经声明好的图层数组，避免再用回调仅仅处理声明顺序。
+ */
+const primaryBusinessSource = createMapBusinessSource({
+  sourceId: SOURCE_IDS.primary,
+  data: test_geojson,
+  promoteId: "id", // 指定用作要素唯一标识的属性名
+  layers: primaryBusinessLayers,
+});
+
+const secondaryBusinessSource = createMapBusinessSource({
+  sourceId: SOURCE_IDS.secondary,
+  data: test_geojson_secondary,
+  promoteId: "id",
+  layers: secondaryBusinessLayers,
+});
+
+// 将所有业务源注册到管理中心，供查询与写入时使用。
+const businessSourceRegistry = createMapBusinessSourceRegistry([
+  primaryBusinessSource,
+  secondaryBusinessSource,
+]);
+
+/**
+ * ==========================
+ * 插件注册区
+ * ==========================
+ */
+
+// 1. 线草稿预览插件：提供线段临时延长和预览能力
+const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
+  enabled: true,
+  // 草稿线要继承哪个正式图层的交互行为（保持交互一致性）
+  inheritInteractiveFromLayerId: LAYER_IDS.primaryLine,
+  // 覆盖默认草稿样式
+  styleOverrides: {
+    // 线草稿图层样式覆写。
+    line: {
+      // 线图层 layout 局部覆写。
+      // 当前示例未覆写 layout，因此保留容器层默认值。
+      layout: {
+        // 示例留空：业务层如需覆写可在这里补充 line-cap、visibility 等字段。
+      },
+
+      // 线图层 paint 局部覆写。
+      paint: {
+        // 线草稿颜色。
+        // hover 时显示为更醒目的红色，默认态显示为橙红色。
+        "line-color": createFeatureStateExpression({
+          hover: "white",
+          default: "#fa8c16",
+        }),
+
+        // 线草稿宽度。
+        // 这里略微调大，用于演示业务层如何只覆写单条样式。
+        "line-width": createFeatureStateExpression({
+          hover: 6,
+          default: 5,
+        }),
+
+        // 线草稿虚线样式。
+        "line-dasharray": [2, 1.2],
+      },
+    },
+
+    // 线廊草稿图层样式覆写。
+    fill: {
+      // 面图层 layout 局部覆写。
+      // 当前示例同样不改 layout，仅演示 paint 覆写。
+      layout: {
+        // 示例留空：业务层如需覆写 visibility 等字段，可在这里补充。
+      },
+
+      // 面图层 paint 局部覆写。
+      paint: {
+        // 线廊草稿填充颜色。
+        "fill-color": "#fa8c16",
+
+        // 线廊草稿透明度。
+        // 透明度略低，避免遮挡底图与正式业务图层。
+        "fill-opacity": 0.18,
+
+        // 线廊草稿轮廓颜色。
+        "fill-outline-color": "#ff7a00",
+      },
+    },
+  },
+});
+
+// 2. 要素多选插件：提供框选和点击多选能力
+const mapFeatureMultiSelectPlugin = createMapFeatureMultiSelectPlugin({
+  // 是否启用多选插件，默认为 true
+  enabled: true,
+  // 插件控件在地图上的显示位置，可选值如 'top-left', 'top-right', 'bottom-left', 'bottom-right'
+  position: "top-right",
+  // 退出多选模式时的行为策略：'clear'（清空选中集） 或 'retain'（保留选中集）
+  deactivateBehavior: "retain",
+  // 是否允许通过按下 Esc 快捷键退出多选模式，默认为 true
+  closeOnEscape: true,
+  // 不允许参与多选的图层 ID 集合，这里的点二图层中的要素将无法被多选
+  excludeLayerIds: [LAYER_IDS.circleDec],
+  // 也可以通过 targetLayerIds: ['layer1', 'layer2'] 显式指定允许参与多选的图层 ID 集合
+
+  // 自定义候选过滤函数，返回 true 表示允许选中，返回 false 表示禁止选中
+  canSelect: ({ layerId, properties }) => {
+    // 如果不是主点图层，则允许选中
+    if (layerId !== LAYER_IDS.circle) {
+      return true;
+    }
+
+    // 对于主点图层，拦截 id 为 'point_4' 的要素，使其无法被选中
+    return properties?.id !== "point_4";
+  },
+});
+
+// 3. 要素吸附插件：配置哪些图层允许作为测绘的吸附目标
+const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
+  // 启用统一吸附扩展。
+  enabled: true,
+
+  // 全局默认吸附范围（像素）。
+  // 业务层大多数规则不需要重复传，只有个别规则需要更大或更小的吸附范围时再局部覆写。
+  defaultTolerancePx: 16,
+
+  // 吸附预览配置。
+  // 这里演示如何只关心效果层面的少数视觉参数。
+  preview: {
+    enabled: true,
+    pointColor: "#f56c6c",
+    pointRadius: 6,
+    lineColor: "#f56c6c",
+    lineWidth: 4,
+  },
+
+  // 普通业务图层吸附规则。
+  ordinaryLayers: {
+    enabled: true,
+    rules: [
+      {
+        // 主正式线图层：既允许吸附到顶点，也允许吸附到线段。
+        id: "primary-line-snap",
+        layerIds: [LAYER_IDS.primaryLine],
+        priority: 30,
+        snapTo: ["vertex", "segment"],
+        // filter示例，高级定制规则，返回fasle表示当前吸附规则失效
+        // filter: (context) => {
+        //   console.log('context', context);
+        //   if (context.feature.id === 'line_2') {
+        //     return false;
+        //   }
+        //   return true;
+        // },
+      },
+      {
+        // 第二正式线图层：继续参与吸附，但优先级略低于主线图层。
+        id: "secondary-line-snap",
+        layerIds: [LAYER_IDS.secondaryLine],
+        priority: 20,
+        snapTo: ["vertex", "segment"],
+      },
+      {
+        // 点图层示例：点要素只参与顶点吸附。
+        id: "point-hole-snap",
+        layerIds: [LAYER_IDS.circle, LAYER_IDS.circleDec],
+        priority: 10,
+        snapTo: ["vertex"], // 点图层只能吸附到顶点
+      },
+      {
+        // 特定条件要素示例：只允许吸附 mark === 'hole' 的点。
+        // 用于演示“不是按点/线/面粗分，而是按具体业务条件筛选”的能力。
+        id: "point-hole-filtered-snap",
+        layerIds: [LAYER_IDS.circle, LAYER_IDS.circleDec],
+        priority: 40,
+        tolerancePx: 20,
+        geometryTypes: ["Point"],
+        snapTo: ["vertex"],
+        where: {
+          mark: "hole",
+        },
+      },
+    ],
+  },
+
+  // TerraDraw / Measure 公共默认值。
+  // 业务层只需要在控件里传 { enabled: true }，默认就会同时开启原生吸附与普通层候选吸附。
+  terradraw: {
+    defaults: {
+      enabled: true,
+      tolerancePx: 16,
+      useNative: true,
+      useMapTargets: true,
+    },
+  },
+});
+
+/**
+ * DXF 导出插件：第一版只面向业务 source，不包含 TerraDraw / Measure / 手绘要素。
+ */
+const mapDxfExportPlugin = createMapDxfExportPlugin({
+  // 这里故意把全部可配字段都显式写出来，方便业务开发者直接照着这份示例抄。
+  // 是否启用整个 DXF 导出插件。
+  enabled: true,
+
+  // 必填：告诉插件“当前页面有哪些业务 source 可参与导出”。
+  sourceRegistry: businessSourceRegistry,
+
+  // defaults 代表当前页面的默认导出行为。
+  // 插件内置按钮会直接复用这组配置，适合沉淀成“整页统一的默认导出行为”。
+  // 这里不再重复填写 sourceCrs / targetCrs，而是直接吃封装层统一维护的全局默认 CRS。
+  // TrueColor 也同样先走封装层统一入口；当前示例页不预置任何页面级颜色规则。
+  defaults: {
+    // null / 不传都表示“默认导出全部业务 source”。
+    sourceIds: null,
+
+    // 默认下载文件名。
+    fileName: DXF_DEFAULT_FILE_NAME,
+
+    // 统一线宽：所有线和面边界都会使用同一组宽度。
+    // 如果本页不传，封装层会回退到 DXF 全局默认值。
+    lineWidth: 5,
+
+    // 点导出模式：
+    // - point：按 DXF 原生 POINT 导出，显示样式由 CAD 环境控制
+    // - circle：按 DXF CIRCLE 导出，便于跨软件稳定显示
+    // pointMode: "circle",
+
+    // 点半径：仅在 pointMode='circle' 时生效。
+    // 当前示例选择 circle 模式，所以这里的数值会直接变成 CAD 里可见的圆半径。
+    // pointRadius: 3,
+
+    // 图层级颜色：给“这一层里的大多数实体”先设一个默认色。
+    // 如果没有开启 layerNameResolver，layerName 默认就等于 sourceId。
+    layerTrueColorResolver: (layerName, sourceId) => {
+      // 这里演示“按 source + 图层名关键词”做页面级默认着色。
+      // 返回值必须是 #RRGGBB；返回 undefined 表示当前图层不在这里指定颜色。
+
+      // 主业务 source 默认走蓝色系
+      if (sourceId === SOURCE_IDS.primary) {
+        // 面图层默认灰色
+        if (layerName.includes("Polygon")) {
+          return "#FF3300";
+        }
+
+        // 线图层默认蓝色
+        if (layerName.includes("LineString") || layerName.includes("Line")) {
+          return "#0066FF";
+        }
+      }
+
+      // 洞点 / 孔位这类特殊点要素，图层默认给红色，方便导出后快速定位。
+      if (layerName.includes("Point") && layerName.includes("hole")) {
+        return "#FF3300";
+      }
+
+      // 没命中规则就交给封装层后续逻辑处理。
+      return undefined;
+    },
+
+    // 要素级颜色：用于“局部覆写”。
+    // 它的优先级高于图层级颜色；一旦这里返回颜色，当前要素就不再沿用图层默认色。
+    // 一般不配特定要素颜色。因为会导致cad软件里图层变色不能控制这个要素的颜色。
+    featureTrueColorResolver: (feature, sourceId, layerName) => {
+      // 先把业务属性统一转成字符串，避免属性缺失时出现 null / undefined 干扰判断。
+      const mark = String(feature.properties?.mark ?? "");
+      const name = String(feature.properties?.name ?? "");
+
+      // 示例 1：hole 要素不管所在图层原本是什么颜色，都强制覆写成亮红色。
+      // 这就是“局部覆写”的核心：只改当前命中的要素，不影响同图层其他实体。
+      if (mark === "hole") {
+        return "#FF0000";
+      }
+
+      // 示例 2：主业务 source 里的重点线要素，额外提亮成橙色。
+      // 这里故意同时结合 sourceId、图层名、业务属性做判断，演示规则可以非常细。
+      if (sourceId === SOURCE_IDS.primary && layerName.includes("Line") && name.includes("主")) {
+        return "#FF9900";
+      }
+
+      // 示例 3：如果后续你们有 status / level / risk 之类字段，也可以继续在这里细分。
+      // 没命中则返回 undefined，表示当前要素继续沿用所属图层的默认色。
+      return undefined;
+    },
+
+    // 要素过滤器：true 保留，false 排除。
+    /* featureFilter: (feature: MapCommonFeature, sourceId: string): boolean => {
+      // 只导出主业务 source，其他来源全部跳过。
+      if (sourceId !== SOURCE_IDS.primary) {
+        return false;
+      }
+
+      // 点要素先不导出，示例里只保留线和面。
+      if (feature.geometry.type === "Point") {
+        return false;
+      }
+
+      // 这里演示按业务属性继续细分筛选。
+      // mark === 'hole' 的要素本次不导出。
+      const mark = String(feature.properties?.mark ?? "");
+      if (mark === "hole") {
+        return false;
+      }
+
+      // 走到这里说明当前要素满足导出条件。
+      return true;
+    }, */
+
+    // 图层名解析器：决定当前要素写入 DXF 时落到哪个图层。
+    layerNameResolver: (feature: MapCommonFeature, sourceId: string): string => {
+      // DXF 里的“图层”可以理解成 CAD 中的分类目录。
+      // 同一个图层里的实体会被放在一起，便于后续单独开关显示、选择、改样式。
+
+      // 这里先取业务标记；没有 mark 时给一个兜底值，避免图层名出现空段。
+      const mark = String(feature.properties?.mark ?? "normal");
+
+      // 这个示例按“sourceId + 几何类型 + mark”分层。
+      // 例如：primary_Line_main、primary_Polygon_area、secondary_Point_hole。
+      // 这样导出到 CAD 后，业务人员一眼就能看出每层分别装的是什么数据。
+      return `${sourceId}_${feature.geometry.type}_${mark}`;
+    },
+  },
+
+  // 内置控件配置。
+  control: {
+    enabled: true,
+    position: "top-right",
+    label: "导出DXF",
+  },
+} as MapDxfExportOptions);
+
+/**
+ * 集中注册当前页面需要启用的地图能力扩展。
+ */
+const mapPlugins = [
+  mapFeatureSnapPlugin,
+  lineDraftPreviewPlugin,
+  mapFeatureMultiSelectPlugin,
+  mapDxfExportPlugin,
+];
+
+/**
+ * 当前页面统一使用的业务聚合门面。
+ *
+ * 作用：
+ * 1. 把选择态、要素查询、要素动作、属性编辑、线草稿、特效统一收口
+ * 2. 业务层不再自己分别拼装多个 `use*` 门面
+ * 3. 后续新增业务能力时，优先继续往这个高层入口下分组扩展
+ */
+const businessMap = useBusinessMap({
+  mapRef: mapInitRef,
+  sourceRegistry: businessSourceRegistry,
+});
+
+/**
+ * 统一的地图要素能力分组。
+ * 这里同时包含查询和动作能力，业务层统一走 `businessMap.feature` 即可。
+ */
+const featureQuery = businessMap.feature;
+
+/**
+ * 统一属性编辑分组。
+ * 业务层只需要维护当前编辑目标，再调用 editor 分组即可。
+ */
+const propertyEditor = businessMap.editor;
+
+/**
+ * 统一线草稿分组。
+ * 业务层通过 businessMap.draft 读取草稿状态与动作。
+ */
+const lineDraftPreview = businessMap.draft;
+
+/**
+ * 当前页面是否存在线草稿要素。
+ * 该状态直接来自线草稿能力门面，用于驱动示例面板与按钮显隐。
+ */
+const hasLineDraftFeatures = computed(() => {
+  return lineDraftPreview.hasFeatures.value;
+});
+
+
+/**
+ * ==========================
+ * 业务操作：获取测绘数据
+ * ==========================
+ */
+
+/** 获取当前所有已绘制要素的数据快照 */
+const getDrawnData = () => {
+  if (!mapInitRef.value) return;
+
+  // getDrawFeatures():
+  // 1. null 代表绘图控件尚未初始化或未启用
+  // 2. [] 代表绘图控件可用，但当前没有已绘制要素
+  // 3. 非空数组即 TerraDraw 当前快照
+  const features = mapInitRef.value.getDrawFeatures?.();
+  if (features === null) {
+    ElMessage.warning("绘图控件尚未初始化或未启用");
+    return;
+  }
+  if (features.length === 0) {
+    ElMessage.info("当前没有绘制任何图形");
+    return;
+  }
+
+  console.log("--- 绘制的 GeoJSON 数据 ---", JSON.stringify(features, null, 2));
+  ElMessage.success(`成功获取 ${features.length} 个图形数据，请查看控制台`);
+};
+
+/** 获取当前所有测量要素的数据快照 */
+const getMeasureData = () => {
+  if (!mapInitRef.value) return;
+
+  const features = mapInitRef.value.getMeasureFeatures?.();
+  if (features === null) {
+    ElMessage.warning("测量控件尚未初始化或未启用");
+    return;
+  }
+  if (features.length === 0) {
+    ElMessage.info("当前没有测量任何图形");
+    return;
+  }
+
+  console.log("--- 测量的 GeoJSON 数据 ---", JSON.stringify(features, null, 2));
+  ElMessage.success(`成功获取 ${features.length} 个测量图形数据，请查看控制台`);
+};
+
 
 // ==========================================
 // 闪烁特效逻辑示例

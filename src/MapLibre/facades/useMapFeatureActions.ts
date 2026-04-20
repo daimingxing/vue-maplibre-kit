@@ -188,7 +188,7 @@ export interface UseMapFeatureActionsResult {
  * 3. 因此这里不再单独拆一个 hiddenKeys，避免与 propertyPolicy 形成重复来源
  */
 interface LineDraftGovernance {
-  /** 正式来源完整的业务属性治理配置，其中已包含 hiddenKeys。 */
+  /** 正式来源原图层的业务属性治理配置，其中已包含 hiddenKeys。 */
   propertyPolicy: MapFeaturePropertyPolicy | null;
   /** 正式来源强保护但仍可见的字段列表。 */
   protectedKeys: readonly string[];
@@ -253,9 +253,9 @@ export function useMapFeatureActions(
     const targetSource = originRef?.sourceId ? sourceRegistry.getSource(originRef.sourceId) : null;
 
     return {
-      // 注意：正式源的 hiddenKeys 已经包含在 propertyPolicy 内，
+      // 注意：正式源的 hiddenKeys 已经包含在图层级 propertyPolicy 内，
       // 线草稿自己的内部隐藏字段由 store 层统一追加，这里无需重复拆出 hiddenKeys。
-      propertyPolicy: targetSource?.propertyPolicy || null,
+      propertyPolicy: targetSource?.resolvePropertyPolicy(originRef?.layerId) || null,
       protectedKeys: targetSource?.protectedPropertyKeys || [],
     };
   };
@@ -311,7 +311,8 @@ export function useMapFeatureActions(
     const result = sourceRegistry.saveProperties(
       featureRef.sourceId,
       featureRef.featureId,
-      newProperties
+      newProperties,
+      featureRef.layerId
     );
 
     return {
@@ -375,7 +376,8 @@ export function useMapFeatureActions(
     const result = sourceRegistry.removeProperties(
       featureRef.sourceId,
       featureRef.featureId,
-      propertyKeys
+      propertyKeys,
+      featureRef.layerId
     );
 
     return {

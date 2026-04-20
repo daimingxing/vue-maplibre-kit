@@ -4,6 +4,7 @@ import type { FeatureProperties } from '../composables/useMapDataUpdate';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
 import * as mapFeatureData from '../shared/map-feature-data';
 import { createMapBusinessSource, createMapBusinessSourceRegistry } from './createMapBusinessSource';
+import { createCircleBusinessLayer } from './mapBusinessLayer';
 
 /**
  * 创建测试用点要素。
@@ -245,5 +246,46 @@ describe('createMapBusinessSource', () => {
     expect(() => {
       createMapBusinessSourceRegistry([primarySource, secondarySource]);
     }).toThrowError("[createMapBusinessSourceRegistry] 检测到重复 sourceId：business-duplicate");
+  });
+
+  it('layers 支持 ref 与 getter 输入，并在非法值时回退为空数组', () => {
+    const layerRef = ref([
+      createCircleBusinessLayer({
+        layerId: 'circle-ref',
+      }),
+    ]);
+    const getterSource = createMapBusinessSource({
+      sourceId: 'business-layer-getter',
+      data: ref(createFeatureCollection([createPointFeature('feature-1')])),
+      promoteId: 'id',
+      layers: () => layerRef.value,
+    });
+    const refSource = createMapBusinessSource({
+      sourceId: 'business-layer-ref',
+      data: ref(createFeatureCollection([createPointFeature('feature-2')])),
+      promoteId: 'id',
+      layers: layerRef,
+    });
+
+    expect(getterSource.getLayers()).toEqual(layerRef.value);
+    expect(refSource.getLayers()).toEqual(layerRef.value);
+
+    layerRef.value = [
+      createCircleBusinessLayer({
+        layerId: 'circle-next',
+      }),
+    ];
+
+    expect(getterSource.getLayers()).toEqual(layerRef.value);
+    expect(refSource.getLayers()).toEqual(layerRef.value);
+
+    const invalidSource = createMapBusinessSource({
+      sourceId: 'business-layer-invalid',
+      data: ref(createFeatureCollection([createPointFeature('feature-3')])),
+      promoteId: 'id',
+      layers: ref('invalid-layer-input') as any,
+    });
+
+    expect(invalidSource.getLayers()).toEqual([]);
   });
 });

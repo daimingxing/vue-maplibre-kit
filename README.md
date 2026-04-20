@@ -169,15 +169,6 @@ import {
 } from 'vue-maplibre-kit/plugins/map-feature-snap';
 ```
 
-## 开发命令
-
-```bash
-npm run dev
-npm run build
-npm run test
-npm run preview
-```
-
 ## 维护边界
 
 ### npm 库优先

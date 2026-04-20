@@ -23,6 +23,7 @@ import {
   createMapBusinessSourceRegistry,
   type MapBusinessSource,
 } from './createMapBusinessSource';
+import { createCircleBusinessLayer } from './mapBusinessLayer';
 import { useMapFeaturePropertyEditor } from './useMapFeaturePropertyEditor';
 
 /** 线草稿插件类型常量。 */
@@ -87,15 +88,21 @@ function createBusinessSourceHarness(): {
       createFeatureCollection([
         createPointFeature('feature-1', {
           name: '原始名称',
+          mark: '锁定值',
           tag: '临时字段',
         }),
       ])
     ),
     promoteId: 'id',
-    propertyPolicy: {
-      readonlyKeys: ['id'],
-      fixedKeys: ['mark'],
-    },
+    layers: [
+      createCircleBusinessLayer({
+        layerId: 'circleLayer',
+        propertyPolicy: {
+          readonlyKeys: ['id'],
+          fixedKeys: ['mark'],
+        },
+      }),
+    ],
   });
 
   return {
@@ -178,6 +185,7 @@ function createLineDraftApi(source: MapBusinessSource): {
     name: '草稿名称',
     managedPreviewOriginSourceId: source.sourceId,
     managedPreviewOriginFeatureId: 'feature-1',
+    managedPreviewOriginLayerId: 'circleLayer',
     managedPreviewOriginKey: `${source.sourceId}::feature-1`,
   });
 
@@ -348,7 +356,7 @@ describe('useMapFeaturePropertyEditor', () => {
     const result = propertyEditor.saveItem(
       {
         type: 'map',
-        featureRef: source.toFeatureRef('feature-1'),
+        featureRef: source.toFeatureRef('feature-1', 'circleLayer'),
       },
       {
         key: 'name',
@@ -372,7 +380,7 @@ describe('useMapFeaturePropertyEditor', () => {
     const result = propertyEditor.removeItem(
       {
         type: 'map',
-        featureRef: source.toFeatureRef('feature-1'),
+        featureRef: source.toFeatureRef('feature-1', 'circleLayer'),
       },
       'tag'
     );
@@ -381,6 +389,29 @@ describe('useMapFeaturePropertyEditor', () => {
     expect(result.target).toBe('business');
     expect(result.editorState.rawProperties.tag).toBeUndefined();
     expect(source.resolveFeature('feature-1')?.properties?.tag).toBeUndefined();
+  });
+
+  it('map 目标会按图层 propertyPolicy 阻止固定字段删除', () => {
+    const { source, sourceRegistry } = createBusinessSourceHarness();
+    const propertyEditor = useMapFeaturePropertyEditor({
+      mapRef: ref(createMapExpose()),
+      sourceRegistry,
+    });
+
+    const result = propertyEditor.removeItem(
+      {
+        type: 'map',
+        featureRef: source.toFeatureRef('feature-1', 'circleLayer'),
+      },
+      'mark'
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.blockedKeys).toEqual(['mark']);
+    expect(result.editorState.panelState.items.find((item) => item.key === 'mark')?.removable).toBe(
+      false
+    );
+    expect(source.resolveFeature('feature-1')?.properties?.mark).toBe('锁定值');
   });
 
   it('lineDraft 来源会自动分流到线草稿属性写回', () => {
@@ -407,6 +438,7 @@ describe('useMapFeaturePropertyEditor', () => {
     expect(lineDraftHarness.getFeature().properties?.name).toBe('草稿已更新');
     expect(result.editorState.rawProperties.name).toBe('草稿已更新');
     expect(result.editorState.panelState.properties.managedPreviewOriginSourceId).toBeUndefined();
+    expect(result.editorState.panelState.properties.managedPreviewOriginLayerId).toBeUndefined();
   });
 
   it('terradraw 目标可以统一保存和删除属性，并返回最新属性快照', () => {

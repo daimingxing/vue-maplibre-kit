@@ -880,13 +880,17 @@ function addPointEntities(
 
     const transformedPosition = transformedResult.position;
     if (pointMode === 'circle') {
+      if (pointRadius === undefined) {
+        throw new Error('DXF pointRadius 未完成归一化，无法按圆导出点要素');
+      }
+
       writer.addCircle(
         point3d(
           transformedPosition[0],
           transformedPosition[1],
           transformedPosition[2] ?? 0
         ),
-        pointRadius ?? DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS.pointRadius ?? 1,
+        pointRadius,
         entityOptions
       );
     } else {

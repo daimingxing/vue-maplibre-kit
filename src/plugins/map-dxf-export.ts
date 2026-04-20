@@ -12,6 +12,9 @@ export { mapDxfExportPlugin } from '../MapLibre/plugins/map-dxf-export';
 /** DXF 导出插件类型常量。按插件 type 判断是否为 DXF 导出插件时使用。 */
 export { MAP_DXF_EXPORT_PLUGIN_TYPE } from '../MapLibre/plugins/map-dxf-export';
 
+/** DXF 全局默认几何样式配置。业务层未传 lineWidth / pointMode / pointRadius 时会回退到这里。 */
+export { DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS } from '../MapLibre/plugins/map-dxf-export';
+
 /** DXF 全局默认 CRS 配置。业务层未传 sourceCrs / targetCrs 时会回退到这里。 */
 export { DEFAULT_DXF_CRS_OPTIONS } from '../MapLibre/plugins/map-dxf-export';
 

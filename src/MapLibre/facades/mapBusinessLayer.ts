@@ -5,6 +5,7 @@ import type {
   LineLayerSpecification,
   SymbolLayerSpecification,
 } from 'maplibre-gl';
+import type { MapFeaturePropertyPolicy } from '../shared/map-feature-data';
 import {
   createCircleLayerStyle,
   createFillLayerStyle,
@@ -39,6 +40,8 @@ interface MapBusinessLayerBaseDescriptor<TType extends string, Layout, Paint> {
   type: TType;
   /** 当前图层唯一标识。 */
   layerId: string;
+  /** 当前图层对应的属性治理规则。 */
+  propertyPolicy?: MapFeaturePropertyPolicy;
   /** 当前图层样式。 */
   style?: MapLayerStyle<Layout, Paint>;
   /** 当前图层允许渲染的几何类型。 */

@@ -14,6 +14,7 @@ import {
   createMapBusinessSourceRegistry,
   type MapBusinessSource,
 } from './createMapBusinessSource';
+import { createCircleBusinessLayer, createFillBusinessLayer } from './mapBusinessLayer';
 import { useMapFeatureQuery } from './useMapFeatureQuery';
 
 /**
@@ -132,6 +133,14 @@ function createBusinessSourceHarness(): {
       ])
     ),
     promoteId: 'id',
+    layers: [
+      createCircleBusinessLayer({
+        layerId: 'circleLayer',
+      }),
+      createFillBusinessLayer({
+        layerId: 'fillLayer',
+      }),
+    ],
   });
 
   return {
@@ -244,6 +253,7 @@ describe('useMapFeatureQuery', () => {
     expect(businessContext.featureRef).toEqual({
       sourceId: 'business-source',
       featureId: 'feature-1',
+      layerId: 'circleLayer',
     });
     expect(businessContext.feature?.properties?.name).toBe('最新业务名称');
     expect(businessContext.properties?.name).toBe('最新业务名称');

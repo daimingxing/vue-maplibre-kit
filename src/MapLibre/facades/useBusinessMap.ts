@@ -57,9 +57,14 @@ export interface UseBusinessMapSources {
    *
    * @param sourceId 目标业务 source ID
    * @param featureId 目标要素 ID
+   * @param layerId 当前命中的业务图层 ID
    * @returns 标准来源引用；参数不足时返回 null
    */
-  createFeatureRef: (sourceId: string, featureId: MapFeatureId | null) => MapSourceFeatureRef | null;
+  createFeatureRef: (
+    sourceId: string,
+    featureId: MapFeatureId | null,
+    layerId?: string | null
+  ) => MapSourceFeatureRef | null;
 }
 
 /**

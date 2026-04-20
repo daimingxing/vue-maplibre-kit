@@ -285,7 +285,8 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
   ): MapSourceFeatureRef | null => {
     const normalizedExplicitOrigin = createMapSourceFeatureRef(
       explicitOrigin?.sourceId || null,
-      explicitOrigin?.featureId ?? null
+      explicitOrigin?.featureId ?? null,
+      explicitOrigin?.layerId || null
     );
     if (normalizedExplicitOrigin) {
       return normalizedExplicitOrigin;
@@ -299,7 +300,8 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
     const selectedFeatureContext = getSelectedFeatureContext();
     return createMapSourceFeatureRef(
       selectedFeatureContext?.sourceId || null,
-      selectedFeatureContext?.featureId ?? null
+      selectedFeatureContext?.featureId ?? null,
+      selectedFeatureContext?.layerId || null
     );
   };
 
