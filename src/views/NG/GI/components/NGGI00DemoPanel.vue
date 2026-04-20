@@ -146,7 +146,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed } from "vue";
 import type * as BusinessKit from "vue-maplibre-kit/business";
 import { LINE_DRAFT_PREVIEW_SOURCE_ID } from "vue-maplibre-kit/plugins/line-draft-preview";
 import {
@@ -163,16 +163,12 @@ import {
   buildDxfResolvedOptionsText,
   buildLineDraftStatusText,
   buildLineOperationText,
-  buildSelectionChangeSummary,
   buildSelectionGuideText,
-  buildSelectionSummaryRows,
-  createSelectionPanelState,
   formatLayerDistribution,
   formatValueList,
   getSelectionModeText,
   type DxfSummaryOptions,
-  type SelectionChangeSummaryInput,
-  type SelectionSummaryRow,
+  type SelectionPanelState,
 } from "./NGGI00DemoPanel.shared";
 
 interface Props {
@@ -189,6 +185,7 @@ interface Props {
   lineDraftCount: number;
   dxfDefaultOptions: DxfSummaryOptions | null;
   dxfPrimaryOptions: DxfSummaryOptions | null;
+  selectionPanelState: SelectionPanelState;
 }
 
 const props = defineProps<Props>();
@@ -199,8 +196,6 @@ const emit = defineEmits<{
   "deactivate-selection": [];
   "clear-line-draft": [];
 }>();
-
-const selectionPanelState = reactive(createSelectionPanelState());
 
 /** 当前选择模式的中文文本。 */
 const selectionModeText = computed(() => {
@@ -278,55 +273,6 @@ function handleDeactivateSelection(): void {
 function handleClearLineDraft(): void {
   emit("clear-line-draft");
 }
-
-/**
- * 读取当前选中集的摘要行。
- * @param selectionMode 当前需要展示的选择模式
- * @returns 适合右键属性面板直接展示的摘要行
- */
-function getSelectionSummaryRows(
-  selectionMode: BusinessKit.MapSelectionMode = props.selectionMode,
-): SelectionSummaryRow[] {
-  return buildSelectionSummaryRows({
-    selectionMode,
-    selectedCount: props.selectedCount,
-    selectedFeatureIds: props.selectedFeatureIds,
-    layerGroups: props.selectedLayerGroups,
-  });
-}
-
-/**
- * 根据最新选中集变化刷新面板摘要。
- * @param input 选中集变化摘要入参
- * @returns 本次写入后的摘要文本
- */
-function syncSelectionChangeSummary(input: SelectionChangeSummaryInput): string {
-  const summary = buildSelectionChangeSummary(input);
-  selectionPanelState.lastChangeSummary = summary;
-  return summary;
-}
-
-/**
- * 更新当前右键摘要文本。
- * @param summary 需要展示的右键摘要
- */
-function setContextMenuSummary(summary: string): void {
-  selectionPanelState.contextMenuSummary = summary;
-}
-
-/**
- * 重置当前右键摘要文本。
- */
-function resetContextMenuSummary(): void {
-  selectionPanelState.contextMenuSummary = createSelectionPanelState().contextMenuSummary;
-}
-
-defineExpose({
-  getSelectionSummaryRows,
-  syncSelectionChangeSummary,
-  setContextMenuSummary,
-  resetContextMenuSummary,
-});
 </script>
 
 <style scoped lang="scss">

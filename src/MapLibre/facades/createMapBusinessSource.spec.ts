@@ -125,6 +125,7 @@ describe('createMapBusinessSource', () => {
   });
 
   it('无效策略路径会克隆原始集合，避免外部修改污染内部快照', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const collection = createFeatureCollection([
       createPointFeature('feature-1', {
         properties: { status: 'normal' },
@@ -149,6 +150,11 @@ describe('createMapBusinessSource', () => {
         toRaw(source.sourceProps.data as MapCommonFeatureCollection) as MapCommonFeatureCollection
       ).features[0].properties?.status
     ).toBe('normal');
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[createMapBusinessSource] source 'business-invalid-strategy' 必须且只能配置一种 ID 策略：promoteId、featureIdKey、getFeatureId"
+    );
+
+    errorSpy.mockRestore();
   });
 
   it('promoteId 路径本地属性写回后会直接复用增量结果，不再重新标准化', () => {
@@ -378,6 +384,11 @@ describe('createMapBusinessSource', () => {
     const sourceSaveResult = source.saveProperties('feature-1', {
       name: 'source-should-block',
     });
+
+    expect(sourceSaveResult.success).toBe(false);
+    expect(sourceSaveResult.blockedKeys).toEqual(['name']);
+    expect(source.resolveFeature('feature-1')?.properties?.name).toBe('原始名称');
+
     const layerSaveResult = source.saveProperties(
       'feature-1',
       {
@@ -386,18 +397,15 @@ describe('createMapBusinessSource', () => {
       'circle-layer'
     );
 
-    expect(sourceSaveResult.success).toBe(true);
-    expect(sourceSaveResult.blockedKeys).toEqual(['name']);
-    expect(sourceSaveResult.properties?.name).toBe('原始名称');
-
     expect(layerSaveResult.success).toBe(true);
     expect(layerSaveResult.blockedKeys).toEqual([]);
     expect(layerSaveResult.properties?.name).toBe('layer-allowed');
 
     const removeResult = source.removeProperties('feature-1', ['status'], 'circle-layer');
 
-    expect(removeResult.success).toBe(true);
+    expect(removeResult.success).toBe(false);
+    expect(removeResult.blockedKeys).toEqual(['status']);
     expect(removeResult.removedKeys).toEqual([]);
-    expect(removeResult.properties?.status).toBe('draft');
+    expect(source.resolveFeature('feature-1')?.properties?.status).toBe('draft');
   });
 });

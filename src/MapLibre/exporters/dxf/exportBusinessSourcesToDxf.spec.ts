@@ -194,7 +194,7 @@ function extractLayerTrueColor(content: string, layerName: string): number | nul
  */
 function extractFirstEntityTrueColor(
   content: string,
-  entityType: 'CIRCLE' | 'LWPOLYLINE'
+  entityType: 'POINT' | 'CIRCLE' | 'LWPOLYLINE'
 ): number | null {
   const matchResult = content.match(new RegExp(`0\\n${entityType}\\n[\\s\\S]*?\\n420\\n([^\\n]+)`));
   return matchResult ? Number(matchResult[1]) : null;
@@ -245,7 +245,7 @@ describe('exportBusinessSourcesToDxf', () => {
     expect(partialResult.sourceCount).toBe(1);
     expect(partialResult.featureCount).toBe(1);
     expect(partialResult.entityCount).toBe(1);
-    expect(countEntity(partialResult.content, 'CIRCLE')).toBe(1);
+    expect(countEntity(partialResult.content, 'POINT')).toBe(1);
     expect(countEntity(partialResult.content, 'LWPOLYLINE')).toBe(0);
   });
 
@@ -558,7 +558,7 @@ describe('exportBusinessSourcesToDxf', () => {
     });
 
     expect(extractLayerTrueColor(result.content, 'source-a')).toBe(TrueColor.fromHex('#112233'));
-    expect(extractFirstEntityTrueColor(result.content, 'CIRCLE')).toBeNull();
+    expect(extractFirstEntityTrueColor(result.content, 'POINT')).toBeNull();
     expect(result.warnings).toEqual([]);
   });
 
@@ -619,7 +619,7 @@ describe('exportBusinessSourcesToDxf', () => {
     });
 
     expect(extractLayerTrueColor(result.content, 'source-a')).toBe(TrueColor.fromHex('#112233'));
-    expect(extractFirstEntityTrueColor(result.content, 'CIRCLE')).toBe(TrueColor.fromHex('#445566'));
+    expect(extractFirstEntityTrueColor(result.content, 'POINT')).toBe(TrueColor.fromHex('#445566'));
     expect(result.warnings).toEqual([]);
   });
 
@@ -660,7 +660,7 @@ describe('exportBusinessSourcesToDxf', () => {
     });
 
     expect(result.entityCount).toBe(1);
-    expect(countEntity(result.content, 'CIRCLE')).toBe(1);
+    expect(countEntity(result.content, 'POINT')).toBe(1);
     expect(extractLayerTrueColor(result.content, 'source-a')).toBeNull();
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("TrueColor 值 '#12ZZ33' 非法");
@@ -841,7 +841,7 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(result.featureCount).toBe(7);
     expect(result.entityCount).toBe(10);
-    expect(countEntity(result.content, 'CIRCLE')).toBe(3);
+    expect(countEntity(result.content, 'POINT')).toBe(3);
     expect(countEntity(result.content, 'LWPOLYLINE')).toBe(7);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("几何类型 'GeometryCollection'");
@@ -869,7 +869,7 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(result.featureCount).toBe(2);
     expect(result.entityCount).toBe(1);
-    expect(countEntity(result.content, 'CIRCLE')).toBe(1);
+    expect(countEntity(result.content, 'POINT')).toBe(1);
     expect(countEntity(result.content, 'LWPOLYLINE')).toBe(0);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("要素 'line-bad'");
@@ -920,7 +920,7 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(result.featureCount).toBe(2);
     expect(result.entityCount).toBe(1);
-    expect(countEntity(result.content, 'CIRCLE')).toBe(1);
+    expect(countEntity(result.content, 'POINT')).toBe(1);
     expect(countEntity(result.content, 'LWPOLYLINE')).toBe(0);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("要素 'multi-polygon-bad'");
@@ -957,7 +957,7 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(result.featureCount).toBe(1);
     expect(result.entityCount).toBe(2);
-    expect(countEntity(result.content, 'CIRCLE')).toBe(2);
+    expect(countEntity(result.content, 'POINT')).toBe(2);
     expect(countEntity(result.content, 'LWPOLYLINE')).toBe(0);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("要素 'multi-point-bad'");
