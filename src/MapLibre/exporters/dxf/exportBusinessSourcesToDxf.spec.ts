@@ -108,7 +108,7 @@ function createBusinessSource(sourceId: string, features: MapCommonFeature[]): M
  * @param entityType 实体类型
  * @returns 实体数量
  */
-function countEntity(content: string, entityType: 'POINT' | 'LWPOLYLINE'): number {
+function countEntity(content: string, entityType: 'POINT' | 'LWPOLYLINE' | 'CIRCLE'): number {
   return content.match(new RegExp(`0\\n${entityType}\\n`, 'g'))?.length || 0;
 }
 
@@ -121,6 +121,24 @@ function extractFirstPoint(content: string): [number, number, number] {
   const matchResult = content.match(/0\nPOINT[\s\S]*?\n10\n([^\n]+)\n20\n([^\n]+)\n30\n([^\n]+)/);
   if (!matchResult) {
     throw new Error('未找到点实体');
+  }
+
+  return [
+    Number(matchResult[1]),
+    Number(matchResult[2]),
+    Number(matchResult[3]),
+  ];
+}
+
+/**
+ * 提取 DXF 文本中的首个圆实体坐标。
+ * @param content DXF 文本
+ * @returns 圆实体圆心坐标
+ */
+function extractFirstCircleCenter(content: string): [number, number, number] {
+  const matchResult = content.match(/0\nCIRCLE[\s\S]*?\n10\n([^\n]+)\n20\n([^\n]+)\n30\n([^\n]+)/);
+  if (!matchResult) {
+    throw new Error('未找到圆实体');
   }
 
   return [
@@ -176,7 +194,7 @@ function extractLayerTrueColor(content: string, layerName: string): number | nul
  */
 function extractFirstEntityTrueColor(
   content: string,
-  entityType: 'POINT' | 'LWPOLYLINE'
+  entityType: 'CIRCLE' | 'LWPOLYLINE'
 ): number | null {
   const matchResult = content.match(new RegExp(`0\\n${entityType}\\n[\\s\\S]*?\\n420\\n([^\\n]+)`));
   return matchResult ? Number(matchResult[1]) : null;
@@ -227,8 +245,77 @@ describe('exportBusinessSourcesToDxf', () => {
     expect(partialResult.sourceCount).toBe(1);
     expect(partialResult.featureCount).toBe(1);
     expect(partialResult.entityCount).toBe(1);
-    expect(countEntity(partialResult.content, 'POINT')).toBe(1);
+    expect(countEntity(partialResult.content, 'CIRCLE')).toBe(1);
     expect(countEntity(partialResult.content, 'LWPOLYLINE')).toBe(0);
+  });
+
+  it('默认应将点要素导出为 POINT', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+      }),
+    });
+
+    expect(countEntity(result.content, 'POINT')).toBe(1);
+    expect(countEntity(result.content, 'CIRCLE')).toBe(0);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('应在配置 pointMode=circle 时将点要素导出为圆', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [createPointFeature('point-a', [1, 1])]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+        pointMode: 'circle',
+        pointRadius: 3,
+      }),
+    });
+
+    expect(countEntity(result.content, 'CIRCLE')).toBe(1);
+    expect(countEntity(result.content, 'POINT')).toBe(0);
+    expect(result.content).toContain('\n40\n3\n');
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('应在线和面导出时按 lineWidth 写入 constantWidth', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createBusinessSource('source-a', [
+        createLineFeature('line-a', [
+          [0, 0],
+          [10, 10],
+        ]),
+        createPolygonFeature('polygon-a', [
+          [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 0],
+          ],
+        ]),
+      ]),
+    ]);
+    const result = exportBusinessSourcesToDxf({
+      sourceRegistry,
+      taskOptions: resolveMapDxfExportTaskOptions({
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:4326',
+        lineWidth: 2,
+      }),
+    });
+
+    expect(countEntity(result.content, 'LWPOLYLINE')).toBe(2);
+    expect(result.content).toContain('\n40\n2\n');
+    expect(result.content).toContain('\n41\n2\n');
+    expect(result.warnings).toEqual([]);
   });
 
   it('应按 defaults -> overrides 合并任务配置', () => {
@@ -241,11 +328,18 @@ describe('exportBusinessSourcesToDxf', () => {
       layerNameResolver: () => 'default-layer',
       layerTrueColorResolver: () => '#112233',
       featureTrueColorResolver: () => '#223344',
+      lineWidth: 2,
+      pointMode: 'circle',
+      pointRadius: 3,
     };
     const overrideFilter = () => false;
     const overrideLayerNameResolver = () => 'override-layer';
-    const overrideLayerTrueColorResolver = () => '#445566';
-    const overrideFeatureTrueColorResolver = () => '#556677';
+    const overrideLayerTrueColorResolver: NonNullable<
+      MapDxfExportTaskOptions['layerTrueColorResolver']
+    > = () => '#445566';
+    const overrideFeatureTrueColorResolver: NonNullable<
+      MapDxfExportTaskOptions['featureTrueColorResolver']
+    > = () => '#556677';
 
     const resolvedOptions = resolveMapDxfExportTaskOptions(defaults, {
       sourceIds: ['source-b'],
@@ -255,6 +349,9 @@ describe('exportBusinessSourcesToDxf', () => {
       layerNameResolver: overrideLayerNameResolver,
       layerTrueColorResolver: overrideLayerTrueColorResolver,
       featureTrueColorResolver: overrideFeatureTrueColorResolver,
+      lineWidth: 5,
+      pointMode: 'point',
+      pointRadius: 6,
     });
 
     expect(resolvedOptions.sourceIds).toEqual(['source-b']);
@@ -265,6 +362,9 @@ describe('exportBusinessSourcesToDxf', () => {
     expect(resolvedOptions.layerNameResolver).toBe(overrideLayerNameResolver);
     expect(resolvedOptions.layerTrueColorResolver).toBe(overrideLayerTrueColorResolver);
     expect(resolvedOptions.featureTrueColorResolver).toBe(overrideFeatureTrueColorResolver);
+    expect(resolvedOptions.lineWidth).toBe(5);
+    expect(resolvedOptions.pointMode).toBe('point');
+    expect(resolvedOptions.pointRadius).toBeUndefined();
   });
 
   it('应在页面未传 CRS 时回退到全局默认 CRS', () => {
@@ -274,6 +374,37 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(resolvedOptions.sourceCrs).toBe(DEFAULT_DXF_CRS_OPTIONS.sourceCrs);
     expect(resolvedOptions.targetCrs).toBe(DEFAULT_DXF_CRS_OPTIONS.targetCrs);
+    expect(resolvedOptions.lineWidth).toBeUndefined();
+    expect(resolvedOptions.pointMode).toBe('point');
+    expect(resolvedOptions.pointRadius).toBeUndefined();
+  });
+
+  it('应在 lineWidth 非法时回退为 undefined', () => {
+    const resolvedOptions = resolveMapDxfExportTaskOptions({
+      lineWidth: 0,
+    });
+
+    expect(resolvedOptions.lineWidth).toBeUndefined();
+  });
+
+  it('应在 pointMode=circle 且 pointRadius 非法时回退到默认半径 1', () => {
+    const resolvedOptions = resolveMapDxfExportTaskOptions({
+      pointMode: 'circle',
+      pointRadius: -3,
+    });
+
+    expect(resolvedOptions.pointMode).toBe('circle');
+    expect(resolvedOptions.pointRadius).toBe(1);
+  });
+
+  it('应在 pointMode=point 时忽略 pointRadius', () => {
+    const resolvedOptions = resolveMapDxfExportTaskOptions({
+      pointMode: 'point',
+      pointRadius: 9,
+    });
+
+    expect(resolvedOptions.pointMode).toBe('point');
+    expect(resolvedOptions.pointRadius).toBeUndefined();
   });
 
   it('全局 TrueColor 规则为空时，不应影响现有 DXF 导出', () => {
@@ -293,6 +424,8 @@ describe('exportBusinessSourcesToDxf', () => {
     expect(resolvedOptions.featureTrueColorResolver).toBe(
       DEFAULT_DXF_TRUE_COLOR_RULES.featureTrueColorResolver
     );
+    expect(resolvedOptions.pointMode).toBe('point');
+    expect(resolvedOptions.pointRadius).toBeUndefined();
     expect(result.entityCount).toBe(1);
     expect(result.warnings).toEqual([]);
     expect(result.content.includes('\n420\n')).toBe(false);
@@ -425,7 +558,7 @@ describe('exportBusinessSourcesToDxf', () => {
     });
 
     expect(extractLayerTrueColor(result.content, 'source-a')).toBe(TrueColor.fromHex('#112233'));
-    expect(extractFirstEntityTrueColor(result.content, 'POINT')).toBeNull();
+    expect(extractFirstEntityTrueColor(result.content, 'CIRCLE')).toBeNull();
     expect(result.warnings).toEqual([]);
   });
 
@@ -486,7 +619,7 @@ describe('exportBusinessSourcesToDxf', () => {
     });
 
     expect(extractLayerTrueColor(result.content, 'source-a')).toBe(TrueColor.fromHex('#112233'));
-    expect(extractFirstEntityTrueColor(result.content, 'POINT')).toBe(TrueColor.fromHex('#445566'));
+    expect(extractFirstEntityTrueColor(result.content, 'CIRCLE')).toBe(TrueColor.fromHex('#445566'));
     expect(result.warnings).toEqual([]);
   });
 
@@ -527,7 +660,7 @@ describe('exportBusinessSourcesToDxf', () => {
     });
 
     expect(result.entityCount).toBe(1);
-    expect(countEntity(result.content, 'POINT')).toBe(1);
+    expect(countEntity(result.content, 'CIRCLE')).toBe(1);
     expect(extractLayerTrueColor(result.content, 'source-a')).toBeNull();
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("TrueColor 值 '#12ZZ33' 非法");
@@ -708,7 +841,7 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(result.featureCount).toBe(7);
     expect(result.entityCount).toBe(10);
-    expect(countEntity(result.content, 'POINT')).toBe(3);
+    expect(countEntity(result.content, 'CIRCLE')).toBe(3);
     expect(countEntity(result.content, 'LWPOLYLINE')).toBe(7);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("几何类型 'GeometryCollection'");
@@ -736,7 +869,7 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(result.featureCount).toBe(2);
     expect(result.entityCount).toBe(1);
-    expect(countEntity(result.content, 'POINT')).toBe(1);
+    expect(countEntity(result.content, 'CIRCLE')).toBe(1);
     expect(countEntity(result.content, 'LWPOLYLINE')).toBe(0);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("要素 'line-bad'");
@@ -787,7 +920,7 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(result.featureCount).toBe(2);
     expect(result.entityCount).toBe(1);
-    expect(countEntity(result.content, 'POINT')).toBe(1);
+    expect(countEntity(result.content, 'CIRCLE')).toBe(1);
     expect(countEntity(result.content, 'LWPOLYLINE')).toBe(0);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("要素 'multi-polygon-bad'");
@@ -824,7 +957,7 @@ describe('exportBusinessSourcesToDxf', () => {
 
     expect(result.featureCount).toBe(1);
     expect(result.entityCount).toBe(2);
-    expect(countEntity(result.content, 'POINT')).toBe(2);
+    expect(countEntity(result.content, 'CIRCLE')).toBe(2);
     expect(countEntity(result.content, 'LWPOLYLINE')).toBe(0);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("要素 'multi-point-bad'");
@@ -899,3 +1032,4 @@ describe('exportBusinessSourcesToDxf', () => {
     ).toThrowError('当前没有可导出的业务要素');
   });
 });
+

@@ -106,8 +106,37 @@ export interface MapDxfTrueColorRules {
   featureTrueColorResolver?: MapDxfFeatureTrueColorResolver;
 }
 
+/** DXF 点导出模式。 */
+export type MapDxfPointMode = 'point' | 'circle';
+
+/**
+ * DXF 统一几何样式配置。
+ * - `lineWidth`：统一控制线和面边界的宽度
+ * - `pointMode`：点要素导出模式
+ * - `pointRadius`：点要素按圆导出时的半径
+ */
+export interface MapDxfGeometryStyleOptions {
+  /**
+   * 统一线宽。
+   * 这里直接映射到 LWPOLYLINE 的 constantWidth。
+   * 传入 `undefined` 表示不指定线宽，交给 CAD 默认行为处理。
+   */
+  lineWidth?: number;
+  /**
+   * 点导出模式。
+   * - `point`：按 DXF POINT 导出，遵循 CAD 点样式显示
+   * - `circle`：按 DXF CIRCLE 导出，便于跨软件稳定显示
+   */
+  pointMode?: MapDxfPointMode;
+  /**
+   * 点半径。
+   * 仅在 `pointMode='circle'` 时生效，用于控制圆实体半径。
+   */
+  pointRadius?: number;
+}
+
 /** 单次 DXF 导出任务配置。 */
-export interface MapDxfExportTaskOptions extends MapDxfTrueColorRules {
+export interface MapDxfExportTaskOptions extends MapDxfTrueColorRules, MapDxfGeometryStyleOptions {
   /** 需要导出的 sourceId 列表；未传时导出全部业务 source。 */
   sourceIds?: string[] | null;
   /** 导出文件名。 */
@@ -123,7 +152,7 @@ export interface MapDxfExportTaskOptions extends MapDxfTrueColorRules {
 }
 
 /** 归一化后的 DXF 导出任务配置。 */
-export interface ResolvedMapDxfExportTaskOptions extends MapDxfTrueColorRules {
+export interface ResolvedMapDxfExportTaskOptions extends MapDxfTrueColorRules, MapDxfGeometryStyleOptions {
   /** 最终生效的 sourceId 列表；null 表示全部业务 source。 */
   sourceIds: string[] | null;
   /** 最终生效的导出文件名。 */
@@ -136,6 +165,10 @@ export interface ResolvedMapDxfExportTaskOptions extends MapDxfTrueColorRules {
   featureFilter?: MapDxfFeatureFilter;
   /** 最终生效的图层名解析器。 */
   layerNameResolver?: MapDxfLayerNameResolver;
+  /** 最终生效的点导出模式。 */
+  pointMode: MapDxfPointMode;
+  /** 最终生效的点半径；仅在 `pointMode='circle'` 时参与导出。 */
+  pointRadius?: number;
 }
 
 /** DXF 导出结果。 */

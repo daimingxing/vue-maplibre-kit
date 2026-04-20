@@ -5,6 +5,7 @@ import {
   LWPolylineFlags,
   TrueColor,
   point2d,
+  point3d,
   type LWPolylineVertex,
 } from '@tarikjabiri/dxf';
 import proj4 from 'proj4';
@@ -13,6 +14,7 @@ import type { MapBusinessSource } from '../../facades/createMapBusinessSource';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../../shared/map-common-tools';
 import {
   DEFAULT_DXF_CRS_OPTIONS,
+  DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS,
   DEFAULT_DXF_TRUE_COLOR_RULES,
 } from './defaults';
 import {
@@ -20,6 +22,7 @@ import {
   type ExportBusinessSourcesToDxfOptions,
   type MapDxfExportResult,
   type MapDxfExportTaskOptions,
+  type MapDxfPointMode,
   type MapDxfTrueColor,
   type ResolvedMapDxfExportTaskOptions,
 } from './types';
@@ -140,6 +143,7 @@ interface DxfLayerTrueColorRecord {
 interface DxfEntityOptions {
   layerName: string;
   trueColor?: string;
+  lineWidth?: number;
 }
 
 const MAX_SKIP_DETAILS_IN_ERROR = 3;
@@ -213,6 +217,63 @@ function normalizeSourceIds(sourceIds: string[] | null | undefined): string[] | 
 }
 
 /**
+ * 归一化统一线宽。
+ * @param rawLineWidth 原始线宽
+ * @param warnings 警告列表
+ * @returns 可用于 DXF 折线的线宽；无效时返回 undefined
+ */
+function normalizeLineWidth(rawLineWidth: unknown, warnings: string[]): number | undefined {
+  if (rawLineWidth === null || rawLineWidth === undefined) {
+    return undefined;
+  }
+
+  const lineWidth = Number(rawLineWidth);
+
+  // DXF 折线宽度必须是大于 0 的有限数值；非正数会导致实体宽度语义失效。
+  if (!Number.isFinite(lineWidth) || lineWidth <= 0) {
+    warnings.push(`DXF lineWidth 值 '${String(rawLineWidth)}' 非法：必须是大于 0 的数字，已跳过线宽设置`);
+    return undefined;
+  }
+
+  return lineWidth;
+}
+
+/**
+ * 归一化点导出模式。
+ * @param rawPointMode 原始点导出模式
+ * @returns 最终生效的点导出模式
+ */
+function normalizePointMode(rawPointMode: unknown): MapDxfPointMode {
+  return rawPointMode === 'circle' ? 'circle' : 'point';
+}
+
+/**
+ * 归一化点半径。
+ * @param rawPointRadius 原始点半径
+ * @param warnings 警告列表
+ * @returns 可用于圆实体的半径；无效时回退到全局默认值
+ */
+function normalizePointRadius(rawPointRadius: unknown, warnings: string[]): number {
+  const fallbackRadius = DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS.pointRadius ?? 1;
+
+  if (rawPointRadius === null || rawPointRadius === undefined) {
+    return fallbackRadius;
+  }
+
+  const pointRadius = Number(rawPointRadius);
+
+  // 点导出为圆时，半径必须大于 0；否则 CAD 中会退化成不可见或非法几何。
+  if (!Number.isFinite(pointRadius) || pointRadius <= 0) {
+    warnings.push(
+      `DXF pointRadius 值 '${String(rawPointRadius)}' 非法：必须是大于 0 的数字，已回退到默认半径 ${fallbackRadius}`
+    );
+    return fallbackRadius;
+  }
+
+  return pointRadius;
+}
+
+/**
  * 合并 DXF 导出任务配置。
  * 合并顺序固定为：DXF 全局默认配置 -> 页面 defaults -> 本次局部覆写。
  *
@@ -229,6 +290,7 @@ export function resolveMapDxfExportTaskOptions(
   const baseDefaults: MapDxfExportTaskOptions | ResolvedMapDxfExportTaskOptions = {
     ...DEFAULT_DXF_CRS_OPTIONS,
     ...DEFAULT_DXF_TRUE_COLOR_RULES,
+    ...DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS,
     ...(defaults || {}),
   };
 
@@ -256,6 +318,15 @@ export function resolveMapDxfExportTaskOptions(
   const rawFeatureTrueColorResolver = hasOwnKey(overrides, 'featureTrueColorResolver')
     ? overrides.featureTrueColorResolver
     : baseDefaults.featureTrueColorResolver;
+  const rawLineWidth = hasOwnKey(overrides, 'lineWidth') ? overrides.lineWidth : baseDefaults.lineWidth;
+  const rawPointMode = hasOwnKey(overrides, 'pointMode') ? overrides.pointMode : baseDefaults.pointMode;
+  const rawPointRadius = hasOwnKey(overrides, 'pointRadius')
+    ? overrides.pointRadius
+    : baseDefaults.pointRadius;
+  const warnings: string[] = [];
+  const lineWidth = normalizeLineWidth(rawLineWidth, warnings);
+  const pointMode = normalizePointMode(rawPointMode);
+  const pointRadius = pointMode === 'circle' ? normalizePointRadius(rawPointRadius, warnings) : undefined;
 
   return {
     sourceIds: normalizeSourceIds(rawSourceIds),
@@ -266,6 +337,9 @@ export function resolveMapDxfExportTaskOptions(
     layerNameResolver: rawLayerNameResolver,
     layerTrueColorResolver: rawLayerTrueColorResolver,
     featureTrueColorResolver: rawFeatureTrueColorResolver,
+    lineWidth,
+    pointMode,
+    pointRadius,
   };
 }
 
@@ -467,7 +541,8 @@ function createCoordinateTransform(
 function createPolylineVertices(
   positions: Position[],
   transform: CoordinateTransform,
-  partLabel: string
+  partLabel: string,
+  lineWidth?: number
 ): PolylineVerticesResult {
   let hasZCoordinate = false;
 
@@ -491,9 +566,17 @@ function createPolylineVertices(
       hasZCoordinate = true;
     }
 
-    vertices.push({
+    const vertex: LWPolylineVertex = {
       point: point2d(transformedPosition[0], transformedPosition[1]),
-    });
+    };
+
+    // 统一线宽系统只允许一个数值全局控制，因此首尾宽度写成同值，避免出现锥形线段。
+    if (lineWidth !== undefined) {
+      vertex.startingWidth = lineWidth;
+      vertex.endWidth = lineWidth;
+    }
+
+    vertices.push(vertex);
   }
 
   return {
@@ -721,19 +804,27 @@ function ensureLayer(
  *
  * @param layerName 最终 DXF 图层名
  * @param entityTrueColor 实体 TrueColor
+ * @param lineWidth 统一线宽
  * @returns 实体公共配置
  */
-function createEntityOptions(layerName: string, entityTrueColor?: string): DxfEntityOptions {
-  if (!entityTrueColor) {
-    return {
-      layerName,
-    };
+function createEntityOptions(
+  layerName: string,
+  entityTrueColor?: string,
+  lineWidth?: number
+): DxfEntityOptions {
+  const entityOptions: DxfEntityOptions = {
+    layerName,
+  };
+
+  if (entityTrueColor) {
+    entityOptions.trueColor = entityTrueColor;
   }
 
-  return {
-    layerName,
-    trueColor: entityTrueColor,
-  };
+  if (lineWidth !== undefined) {
+    entityOptions.lineWidth = lineWidth;
+  }
+
+  return entityOptions;
 }
 
 /**
@@ -751,9 +842,13 @@ function getFeatureLabel(feature: MapCommonFeature): string {
 
 /**
  * 写入点要素。
+ * 根据 pointMode 决定输出为 DXF POINT 还是 CIRCLE。
+ *
  * @param writer DXF 写入器
  * @param positions 点坐标列表
- * @param layerName 图层名
+ * @param entityOptions 实体公共配置
+ * @param pointMode 点导出模式
+ * @param pointRadius 点半径
  * @param transform 坐标转换函数
  * @returns 新增的实体数量
  */
@@ -761,6 +856,8 @@ function addPointEntities(
   writer: DxfWriter,
   positions: Position[],
   entityOptions: DxfEntityOptions,
+  pointMode: MapDxfPointMode,
+  pointRadius: number | undefined,
   transform: CoordinateTransform,
   warnings: string[],
   skippedFeatures: SkippedFeatureDetail[],
@@ -782,12 +879,24 @@ function addPointEntities(
     }
 
     const transformedPosition = transformedResult.position;
-    writer.addPoint(
-      transformedPosition[0],
-      transformedPosition[1],
-      transformedPosition[2] ?? 0,
-      entityOptions
-    );
+    if (pointMode === 'circle') {
+      writer.addCircle(
+        point3d(
+          transformedPosition[0],
+          transformedPosition[1],
+          transformedPosition[2] ?? 0
+        ),
+        pointRadius ?? DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS.pointRadius ?? 1,
+        entityOptions
+      );
+    } else {
+      writer.addPoint(
+        transformedPosition[0],
+        transformedPosition[1],
+        transformedPosition[2] ?? 0,
+        entityOptions
+      );
+    }
     addedCount += 1;
   });
 
@@ -822,7 +931,7 @@ function addPointEntities(
  * 写入折线要素。
  * @param writer DXF 写入器
  * @param partList 折线部件集合
- * @param layerName 图层名
+ * @param entityOptions 实体公共配置
  * @param transform 坐标转换函数
  * @param warnings 警告列表
  * @param skippedFeatures 被跳过要素列表
@@ -855,7 +964,12 @@ function addPolylineEntities(
       return 0;
     }
 
-    const verticesResult = createPolylineVertices(part.positions, transform, part.label);
+    const verticesResult = createPolylineVertices(
+      part.positions,
+      transform,
+      part.label,
+      entityOptions.lineWidth
+    );
 
     if (!verticesResult.ok) {
       recordSkippedFeature(
@@ -873,8 +987,11 @@ function addPolylineEntities(
 
   polylineList.forEach((vertices) => {
     writer.addLWPolyline(vertices, {
-      ...entityOptions,
+      layerName: entityOptions.layerName,
+      trueColor: entityOptions.trueColor,
       flags: closed ? LWPolylineFlags.Closed : LWPolylineFlags.None,
+      // 使用 constantWidth 让整条折线宽度一致，符合“只给一个统一线宽参数”的设计目标。
+      constantWidth: entityOptions.lineWidth,
     });
   });
 
@@ -923,7 +1040,9 @@ function createPolygonParts(
  * @param writer DXF 写入器
  * @param feature 当前要素
  * @param sourceId 所属 sourceId
- * @param layerName 目标图层名
+ * @param entityOptions 实体公共配置
+ * @param pointMode 点导出模式
+ * @param pointRadius 点半径
  * @param transform 坐标转换函数
  * @param warnings 警告列表
  * @returns 新增的实体数量
@@ -933,6 +1052,8 @@ function addFeatureGeometryToDxf(
   feature: MapCommonFeature,
   sourceId: string,
   entityOptions: DxfEntityOptions,
+  pointMode: MapDxfPointMode,
+  pointRadius: number | undefined,
   transform: CoordinateTransform,
   warnings: string[],
   skippedFeatures: SkippedFeatureDetail[]
@@ -945,6 +1066,8 @@ function addFeatureGeometryToDxf(
         writer,
         [feature.geometry.coordinates],
         entityOptions,
+        pointMode,
+        pointRadius,
         transform,
         warnings,
         skippedFeatures,
@@ -955,6 +1078,8 @@ function addFeatureGeometryToDxf(
         writer,
         feature.geometry.coordinates,
         entityOptions,
+        pointMode,
+        pointRadius,
         transform,
         warnings,
         skippedFeatures,
@@ -1087,8 +1212,11 @@ export function exportBusinessSourcesToDxf(
         source.sourceId,
         createEntityOptions(
           resolvedLayerName.layerName,
-          resolvedFeatureTrueColor?.entityTrueColorValue
+          resolvedFeatureTrueColor?.entityTrueColorValue,
+          taskOptions.lineWidth
         ),
+        taskOptions.pointMode,
+        taskOptions.pointRadius,
         transform,
         warnings,
         skippedFeatures
