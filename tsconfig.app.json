@@ -7,10 +7,12 @@
     "paths": {
       "@/*": ["./src/*"],
       "vue-maplibre-kit": ["./src/index.ts"],
+      "vue-maplibre-kit/business": ["./src/business.ts"],
       "vue-maplibre-kit/geometry": ["./src/geometry.ts"],
       "vue-maplibre-kit/plugins/map-feature-snap": ["./src/plugins/map-feature-snap.ts"],
       "vue-maplibre-kit/plugins/line-draft-preview": ["./src/plugins/line-draft-preview.ts"],
-      "vue-maplibre-kit/plugins/map-feature-multi-select": ["./src/plugins/map-feature-multi-select.ts"]
+      "vue-maplibre-kit/plugins/map-feature-multi-select": ["./src/plugins/map-feature-multi-select.ts"],
+      "vue-maplibre-kit/plugins/map-dxf-export": ["./src/plugins/map-dxf-export.ts"]
     },
 
     /* Linting */

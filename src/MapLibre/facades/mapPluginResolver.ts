@@ -1,9 +1,14 @@
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
 import type {
+  MapDxfExportPluginApi,
+  MapDxfExportState,
+} from '../plugins/map-dxf-export';
+import type {
   LineDraftPreviewPluginApi,
   LineDraftPreviewStateChangePayload,
 } from '../plugins/line-draft-preview/useLineDraftPreviewController';
 
+const MAP_DXF_EXPORT_PLUGIN_TYPE = 'mapDxfExport';
 const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
 
 /** 按类型解析出的插件目标。 */
@@ -96,4 +101,50 @@ export function resolveLineDraftPreviewState(
   }
 
   return mapExpose?.plugins.getState<LineDraftPreviewStateChangePayload>(pluginTarget.id) || null;
+}
+
+/**
+ * 读取 DXF 导出插件 API。
+ * @param mapExpose 地图公开实例
+ * @param pluginId 历史兼容参数；传入时会额外校验唯一插件 ID
+ * @returns 命中的 DXF 导出插件 API；找不到时返回 null
+ */
+export function resolveMapDxfExportApi(
+  mapExpose: MapLibreInitExpose | null | undefined,
+  pluginId?: string
+): MapDxfExportPluginApi | null {
+  const pluginTarget = resolveMapPluginTargetByType(
+    mapExpose,
+    MAP_DXF_EXPORT_PLUGIN_TYPE,
+    pluginId
+  );
+
+  if (!pluginTarget) {
+    return null;
+  }
+
+  return mapExpose?.plugins.getApi<MapDxfExportPluginApi>(pluginTarget.id) || null;
+}
+
+/**
+ * 读取 DXF 导出插件状态。
+ * @param mapExpose 地图公开实例
+ * @param pluginId 历史兼容参数；传入时会额外校验唯一插件 ID
+ * @returns 命中的 DXF 导出插件状态；找不到时返回 null
+ */
+export function resolveMapDxfExportState(
+  mapExpose: MapLibreInitExpose | null | undefined,
+  pluginId?: string
+): MapDxfExportState | null {
+  const pluginTarget = resolveMapPluginTargetByType(
+    mapExpose,
+    MAP_DXF_EXPORT_PLUGIN_TYPE,
+    pluginId
+  );
+
+  if (!pluginTarget) {
+    return null;
+  }
+
+  return mapExpose?.plugins.getState<MapDxfExportState>(pluginTarget.id) || null;
 }

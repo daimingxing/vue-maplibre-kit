@@ -133,6 +133,16 @@ export function useTerradrawControlLifecycle<
   const lineDecorationLayerProps = createLineDecorationLayerProps(lineDecorationRef);
 
   /**
+   * 统一读取当前控件实例。
+   * 某些 TypeScript 版本在 watch 闭包里读取泛型 shallowRef 时，
+   * 会把值退化成约束联合类型，这里显式收敛为当前生命周期真实托管的控件类型。
+   */
+  const getCurrentControl = (): TControl | null => {
+    const control = controlRef.value;
+    return control ? (control as TControl) : null;
+  };
+
+  /**
    * 提取控件实例启停所需的最小依赖。
    * 控件创建后不会根据其余配置做热更新，因此这里只跟踪地图就绪态与 isUse 开关。
    * @returns 控件实例启停依赖快照
@@ -195,7 +205,7 @@ export function useTerradrawControlLifecycle<
    * 组件销毁阶段若地图已先一步释放，移除控件时的异常会被静默忽略。
    */
   const destroyControl = () => {
-    const control = controlRef.value;
+    const control = getCurrentControl();
     if (!control) {
       return;
     }
@@ -260,7 +270,7 @@ export function useTerradrawControlLifecycle<
       }
 
       const map = getMapInstance().map;
-      const control = controlRef.value;
+      const control = getCurrentControl();
       if (!map || !control) {
         return;
       }
@@ -286,7 +296,7 @@ export function useTerradrawControlLifecycle<
       }
 
       const map = getMapInstance().map;
-      const control = controlRef.value;
+      const control = getCurrentControl();
       if (!map || !control) {
         return;
       }
@@ -314,11 +324,12 @@ export function useTerradrawControlLifecycle<
       snapping: getSnappingWatchSource ? getSnappingWatchSource() : getConfig(),
     }),
     ({ isLoaded, isUse, hasControl }) => {
-      if (!isLoaded || !isUse || !hasControl || !controlRef.value) {
+      const control = getCurrentControl();
+      if (!isLoaded || !isUse || !hasControl || !control) {
         return;
       }
 
-      syncSnapping(controlRef.value, getConfig());
+      syncSnapping(control, getConfig());
     },
     { immediate: true }
   );

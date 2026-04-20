@@ -48,6 +48,18 @@ export interface FeatureStateExpressionOptions {
   order?: string[];
 }
 
+/** 单个闪烁目标的内部调度记录。 */
+interface FlashingTargetRecord {
+  /** 当前闪烁目标。 */
+  target: MapFeatureStateTarget;
+  /** 当前目标使用的闪烁频率。 */
+  intervalMs: number;
+  /** 当前目标独立定时器句柄。 */
+  timer: ReturnType<typeof globalThis.setInterval> | null;
+  /** 当前目标最近一次写入的闪烁布尔值。 */
+  flashToggle: boolean;
+}
+
 /** useMapEffect 返回结果。 */
 export interface UseMapEffectResult {
   /** 当前所有正在闪烁的要素目标。 */
@@ -60,10 +72,16 @@ export interface UseMapEffectResult {
     id?: MapFeatureStateTarget['id']
   ) => boolean;
   /** 开启指定要素闪烁。 */
-  startFlash: (
-    targetOrSource: MapFeatureStateTarget | string,
-    id?: MapFeatureStateTarget['id']
-  ) => boolean;
+  startFlash: {
+    /** 直接传入标准目标对象；第二个参数可选传入独立闪烁频率。 */
+    (target: MapFeatureStateTarget, intervalMs?: number): boolean;
+    /** 传入 sourceId + featureId；第三个参数可选传入独立闪烁频率。 */
+    (
+      targetOrSource: string,
+      id: MapFeatureStateTarget['id'],
+      intervalMs?: number
+    ): boolean;
+  };
   /** 停止指定要素闪烁。 */
   stopFlash: (
     targetOrSource: MapFeatureStateTarget | string,
@@ -167,6 +185,24 @@ function buildFeatureStateKey(target: MapFeatureStateTarget): string {
 }
 
 /**
+ * 规范化闪烁频率。
+ * @param nextIntervalMs 业务层传入的频率
+ * @param defaultIntervalMs useMapEffect 默认频率
+ * @returns 合法频率；非法值统一回退到默认值
+ */
+function normalizeFlashIntervalMs(nextIntervalMs: unknown, defaultIntervalMs: number): number {
+  if (
+    typeof nextIntervalMs === 'number' &&
+    Number.isFinite(nextIntervalMs) &&
+    nextIntervalMs > 0
+  ) {
+    return nextIntervalMs;
+  }
+
+  return defaultIntervalMs;
+}
+
+/**
  * 从任意输入中解析底层原生 map。
  * 兼容原生 map、vue-maplibre-gl 返回对象以及 Ref 包装对象。
  * @param target 当前目标输入
@@ -246,7 +282,7 @@ export function useMapEffect(
   targetInput: MaybeRefOrGetter<MapEffectTargetInput>,
   intervalMs = 500
 ): UseMapEffectResult {
-  const flashingRegistry = new Map<string, MapFeatureStateTarget>();
+  const flashingRegistry = new Map<string, FlashingTargetRecord>();
   const flashingTargetsRef = shallowRef<MapFeatureStateTarget[]>([]);
   const flashingKeySet = computed(() => {
     return new Set(flashingTargetsRef.value.map((target) => buildFeatureStateKey(target)));
@@ -255,14 +291,12 @@ export function useMapEffect(
     return [...flashingTargetsRef.value];
   });
   const hasFlashing = computed(() => flashingTargetsRef.value.length > 0);
-  let timer: number | null = null;
-  let flashToggle = false;
 
   /**
    * 同步对外暴露的闪烁目标快照，保证业务层读取结果具备响应式。
    */
   function syncFlashingTargets(): void {
-    flashingTargetsRef.value = [...flashingRegistry.values()];
+    flashingTargetsRef.value = [...flashingRegistry.values()].map((record) => record.target);
   }
 
   /**
@@ -281,33 +315,26 @@ export function useMapEffect(
   }
 
   /**
-   * 启动统一心跳引擎。
-   * 所有闪烁目标共用同一个定时器，避免业务层各自维护多个 interval。
+   * 停止指定目标的独立定时器。
+   * @param record 当前目标记录
    */
-  function startEngine(): void {
-    if (timer) {
-      return;
+  function stopTargetTimer(record: FlashingTargetRecord): void {
+    if (record.timer !== null) {
+      clearInterval(record.timer);
+      record.timer = null;
     }
-
-    timer = window.setInterval(() => {
-      flashToggle = !flashToggle;
-
-      flashingRegistry.forEach((target) => {
-        applyFeatureState(target, { isFlashing: flashToggle });
-      });
-    }, intervalMs);
   }
 
   /**
-   * 停止统一心跳引擎，并重置内部节拍。
+   * 启动或重启指定目标的独立闪烁定时器。
+   * @param record 当前目标记录
    */
-  function stopEngine(): void {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-
-    flashToggle = false;
+  function startTargetTimer(record: FlashingTargetRecord): void {
+    stopTargetTimer(record);
+    record.timer = globalThis.setInterval(() => {
+      record.flashToggle = !record.flashToggle;
+      applyFeatureState(record.target, { isFlashing: record.flashToggle });
+    }, record.intervalMs);
   }
 
   /**
@@ -331,26 +358,53 @@ export function useMapEffect(
   /**
    * 开启指定要素闪烁。
    * @param targetOrSource 目标对象或 sourceId
-   * @param id 要素原生 ID
-   * @returns 是否成功加入闪烁注册表
+   * @param idOrInterval 目标对象模式下表示频率；sourceId 模式下表示要素 ID
+   * @param nextIntervalMs sourceId 模式下可选传入独立闪烁频率
+   * @returns 是否成功启用或更新闪烁
    */
+  function startFlash(target: MapFeatureStateTarget, intervalMs?: number): boolean;
+  function startFlash(
+    targetOrSource: string,
+    id: MapFeatureStateTarget['id'],
+    intervalMs?: number
+  ): boolean;
   function startFlash(
     targetOrSource: MapFeatureStateTarget | string,
-    id?: MapFeatureStateTarget['id']
+    idOrInterval?: MapFeatureStateTarget['id'] | number,
+    nextIntervalMs?: number
   ): boolean {
-    const target = normalizeFeatureStateTarget(targetOrSource, id);
+    const target =
+      typeof targetOrSource === 'string'
+        ? normalizeFeatureStateTarget(targetOrSource, idOrInterval as MapFeatureStateTarget['id'])
+        : normalizeFeatureStateTarget(targetOrSource);
     if (!target) {
       return false;
     }
 
+    const targetIntervalMs = normalizeFlashIntervalMs(
+      typeof targetOrSource === 'string' ? nextIntervalMs : idOrInterval,
+      intervalMs
+    );
     const targetKey = buildFeatureStateKey(target);
-    if (flashingRegistry.has(targetKey)) {
-      return false;
+    const existedRecord = flashingRegistry.get(targetKey);
+    if (existedRecord) {
+      existedRecord.target = target;
+      existedRecord.intervalMs = targetIntervalMs;
+      startTargetTimer(existedRecord);
+      syncFlashingTargets();
+      return true;
     }
 
-    flashingRegistry.set(targetKey, target);
+    const targetRecord: FlashingTargetRecord = {
+      target,
+      intervalMs: targetIntervalMs,
+      timer: null,
+      flashToggle: false,
+    };
+
+    flashingRegistry.set(targetKey, targetRecord);
     syncFlashingTargets();
-    startEngine();
+    startTargetTimer(targetRecord);
     return true;
   }
 
@@ -370,16 +424,18 @@ export function useMapEffect(
     }
 
     const targetKey = buildFeatureStateKey(target);
-    const existed = flashingRegistry.delete(targetKey);
+    const existedRecord = flashingRegistry.get(targetKey);
+    const existed = Boolean(existedRecord);
+    if (existedRecord) {
+      stopTargetTimer(existedRecord);
+      flashingRegistry.delete(targetKey);
+    }
+
     if (existed) {
       syncFlashingTargets();
     }
 
     applyFeatureState(target, { isFlashing: false });
-
-    if (flashingRegistry.size === 0) {
-      stopEngine();
-    }
 
     return existed;
   }
@@ -389,17 +445,16 @@ export function useMapEffect(
    */
   function clearFlash(): void {
     if (flashingRegistry.size === 0) {
-      stopEngine();
       return;
     }
 
-    [...flashingRegistry.values()].forEach((target) => {
-      applyFeatureState(target, { isFlashing: false });
+    [...flashingRegistry.values()].forEach((record) => {
+      stopTargetTimer(record);
+      applyFeatureState(record.target, { isFlashing: false });
     });
 
     flashingRegistry.clear();
     syncFlashingTargets();
-    stopEngine();
   }
 
   onBeforeUnmount(() => {

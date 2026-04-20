@@ -27,6 +27,7 @@ function geojsonPlugin() {
 function resolveLibraryEntries() {
   return {
     index: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
+    business: fileURLToPath(new URL('./src/business.ts', import.meta.url)),
     geometry: fileURLToPath(new URL('./src/geometry.ts', import.meta.url)),
     'plugins/map-feature-snap': fileURLToPath(
       new URL('./src/plugins/map-feature-snap.ts', import.meta.url)
@@ -36,6 +37,9 @@ function resolveLibraryEntries() {
     ),
     'plugins/map-feature-multi-select': fileURLToPath(
       new URL('./src/plugins/map-feature-multi-select.ts', import.meta.url)
+    ),
+    'plugins/map-dxf-export': fileURLToPath(
+      new URL('./src/plugins/map-dxf-export.ts', import.meta.url)
     ),
   };
 }
@@ -51,6 +55,10 @@ function resolveDevAliases() {
     {
       find: /^vue-maplibre-kit$/,
       replacement: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
+    },
+    {
+      find: /^vue-maplibre-kit\/business$/,
+      replacement: fileURLToPath(new URL('./src/business.ts', import.meta.url)),
     },
     {
       find: /^vue-maplibre-kit\/geometry$/,
@@ -71,6 +79,10 @@ function resolveDevAliases() {
       replacement: fileURLToPath(
         new URL('./src/plugins/map-feature-multi-select.ts', import.meta.url)
       ),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins\/map-dxf-export$/,
+      replacement: fileURLToPath(new URL('./src/plugins/map-dxf-export.ts', import.meta.url)),
     },
     {
       find: '@',
