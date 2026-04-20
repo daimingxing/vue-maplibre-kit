@@ -819,42 +819,99 @@ const mapDxfExportPlugin = createMapDxfExportPlugin({
     // 默认下载文件名。
     fileName: DXF_DEFAULT_FILE_NAME,
 
+    // 图层级颜色：给“这一层里的大多数实体”先设一个默认色。
+    // 适合做“面统一灰色、主线统一蓝色、洞点统一红色”这类批量规则。
+    /* layerTrueColorResolver: (layerName, sourceId) => {
+      // 这里演示“按 source + 图层名关键词”做页面级默认着色。
+      // 返回值必须是 #RRGGBB；返回 undefined 表示当前图层不在这里指定颜色。
+
+      // 主业务 source 默认走蓝色系，便于在 CAD 里和其他来源快速区分。
+      if (sourceId === SOURCE_IDS.primary) {
+        // 面图层默认灰色
+        if (layerName.includes("Polygon")) {
+          return "#FF3300";
+        }
+
+        // 线图层默认蓝色
+        if (layerName.includes("LineString") || layerName.includes("Line")) {
+          return "#0066FF";
+        }
+      }
+
+      // 洞点 / 孔位这类特殊点要素，图层默认给红色，方便导出后快速定位。
+      if (layerName.includes("Point") && layerName.includes("hole")) {
+        return "#FF3300";
+      }
+
+      // 没命中规则就交给封装层后续逻辑处理。
+      return undefined;
+    }, */
+
+    // 要素级颜色：用于“局部覆写”。
+    // 它的优先级高于图层级颜色；一旦这里返回颜色，当前要素就不再沿用图层默认色。
+    // 一般不配特定要素颜色。因为会导致cad软件里图层变色不能控制这个要素的颜色。
+    /* featureTrueColorResolver: (feature, sourceId, layerName) => {
+      // 先把业务属性统一转成字符串，避免属性缺失时出现 null / undefined 干扰判断。
+      const mark = String(feature.properties?.mark ?? "");
+      const name = String(feature.properties?.name ?? "");
+
+      // 示例 1：hole 要素不管所在图层原本是什么颜色，都强制覆写成亮红色。
+      // 这就是“局部覆写”的核心：只改当前命中的要素，不影响同图层其他实体。
+      if (mark === "hole") {
+        return "#FF0000";
+      }
+
+      // 示例 2：主业务 source 里的重点线要素，额外提亮成橙色。
+      // 这里故意同时结合 sourceId、图层名、业务属性做判断，演示规则可以非常细。
+      if (
+        sourceId === SOURCE_IDS.primary &&
+        layerName.includes("Line") &&
+        name.includes("主")
+      ) {
+        return "#FF9900";
+      }
+
+      // 示例 3：如果后续你们有 status / level / risk 之类字段，也可以继续在这里细分。
+      // 没命中则返回 undefined，表示当前要素继续沿用所属图层的默认色。
+      return undefined;
+    }, */
+
     // 要素过滤器：true 保留，false 排除。
-    // featureFilter: (feature: MapCommonFeature, sourceId: string): boolean => {
-    //   // 只导出主业务 source，其他来源全部跳过。
-    //   if (sourceId !== SOURCE_IDS.primary) {
-    //     return false;
-    //   }
+    /* featureFilter: (feature: MapCommonFeature, sourceId: string): boolean => {
+      // 只导出主业务 source，其他来源全部跳过。
+      if (sourceId !== SOURCE_IDS.primary) {
+        return false;
+      }
 
-    //   // 点要素先不导出，示例里只保留线和面。
-    //   if (feature.geometry.type === "Point") {
-    //     return false;
-    //   }
+      // 点要素先不导出，示例里只保留线和面。
+      if (feature.geometry.type === "Point") {
+        return false;
+      }
 
-    //   // 这里演示按业务属性继续细分筛选。
-    //   // mark === 'hole' 的要素本次不导出。
-    //   const mark = String(feature.properties?.mark ?? "");
-    //   if (mark === "hole") {
-    //     return false;
-    //   }
+      // 这里演示按业务属性继续细分筛选。
+      // mark === 'hole' 的要素本次不导出。
+      const mark = String(feature.properties?.mark ?? "");
+      if (mark === "hole") {
+        return false;
+      }
 
-    //   // 走到这里说明当前要素满足导出条件。
-    //   return true;
-    // },
+      // 走到这里说明当前要素满足导出条件。
+      return true;
+    }, */
 
     // 图层名解析器：决定当前要素写入 DXF 时落到哪个图层。
-    // layerNameResolver: (feature: MapCommonFeature, sourceId: string): string => {
-    //   // DXF 里的“图层”可以理解成 CAD 中的分类目录。
-    //   // 同一个图层里的实体会被放在一起，便于后续单独开关显示、选择、改样式。
+    /* layerNameResolver: (feature: MapCommonFeature, sourceId: string): string => {
+      // DXF 里的“图层”可以理解成 CAD 中的分类目录。
+      // 同一个图层里的实体会被放在一起，便于后续单独开关显示、选择、改样式。
 
-    //   // 这里先取业务标记；没有 mark 时给一个兜底值，避免图层名出现空段。
-    //   const mark = String(feature.properties?.mark ?? "normal");
+      // 这里先取业务标记；没有 mark 时给一个兜底值，避免图层名出现空段。
+      const mark = String(feature.properties?.mark ?? "normal");
 
-    //   // 这个示例按“sourceId + 几何类型 + mark”分层。
-    //   // 例如：primary_Line_main、primary_Polygon_area、secondary_Point_hole。
-    //   // 这样导出到 CAD 后，业务人员一眼就能看出每层分别装的是什么数据。
-    //   return `${sourceId}_${feature.geometry.type}_${mark}`;
-    // },
+      // 这个示例按“sourceId + 几何类型 + mark”分层。
+      // 例如：primary_Line_main、primary_Polygon_area、secondary_Point_hole。
+      // 这样导出到 CAD 后，业务人员一眼就能看出每层分别装的是什么数据。
+      return `${sourceId}_${feature.geometry.type}_${mark}`;
+    }, */
   },
 
   // 内置控件配置。
