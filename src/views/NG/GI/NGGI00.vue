@@ -443,44 +443,10 @@ const LAYER_IDS = {
 } as const;
 
 /**
- * 正式业务图层的字段规则示例。
- * 业务层只需要声明：
- * 1. 哪些字段只读
- * 2. 哪些字段属于稳定业务字段
- * 3. 哪些字段不该进入业务属性面板
- *
- * 当前命中的图层会决定面板态与保存/删除权限。
- */
-const LAYER_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
-  readonlyKeys: ["id"],
-  fixedKeys: ["mark"],
-  hiddenKeys: ["marker-color", "marker-size", "marker-symbol"],
-};
-
-/**
- * Draw 控件的字段规则示例。
- * 绘制要素进入属性面板前，同样会先按这里的规则收口。
- */
-const DRAW_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
-  fixedKeys: ["bizName"],
-  readonlyKeys: ["bizCode"],
-};
-
-/**
- * Measure 控件的字段规则示例。
- * 像距离、面积这类系统测量字段会被底层额外隐藏，
- * 这里主要声明业务自己关心的字段规则。
- */
-const MEASURE_PROPERTY_POLICY: BusinessKit.MapFeaturePropertyPolicy = {
-  fixedKeys: ["label"],
-  readonlyKeys: ["taskCode"],
-};
-
-/**
  * 普通业务源右键面板提示文案。
  */
 const MAP_PROPERTY_PANEL_NOTE =
-  "上方列表只展示当前命中图层允许暴露的业务字段。`id` 是只读字段不能修改，`mark` 被声明为稳定字段可改但不可删；像 marker-color 这类样式辅助字段会被隐藏到下方调试快照。新增的临时字段默认允许删除。";
+  "上方列表会先继承数据源默认规则：`name` 在本页默认只读，`id` 因为是 promoteId 也会被底层强保护；部分图层再局部把 `mark` 或 `name` 覆写成稳定字段。像 marker-color 这类样式辅助字段会被隐藏到下方调试快照。新增的临时字段默认允许删除。";
 
 /**
  * 线草稿右键面板提示文案。
@@ -794,8 +760,14 @@ const mapControls: BusinessKit.MapControlsConfig = {
     },
 
     // TerraDraw 业务属性治理示例。
-    // 业务层只需要在控件配置里声明稳定字段或只读字段，不需要自己过滤引擎系统字段。
-    propertyPolicy: DRAW_PROPERTY_POLICY,
+    // 这里直接把规则内联写在配置现场，方便业务层阅读示例时不用来回跳。
+    // `fixedKeys` 表示稳定业务字段：可见、可改、默认不可删。
+    // `readonlyKeys` 表示只读字段：可见、不可改、不可删。
+    // 这份对象仍然保留 `BusinessKit.MapFeaturePropertyPolicy` 类型约束。
+    propertyPolicy: {
+      fixedKeys: ["bizName"],
+      readonlyKeys: ["bizCode"],
+    } satisfies BusinessKit.MapFeaturePropertyPolicy,
 
     // 统一封装的业务交互入口
     interactive: {
@@ -983,7 +955,10 @@ const mapControls: BusinessKit.MapControlsConfig = {
 
     // Measure 业务属性治理示例。
     // 测量系统字段会由底层自动隐藏，这里只补充业务字段规则。
-    propertyPolicy: MEASURE_PROPERTY_POLICY,
+    propertyPolicy: {
+      fixedKeys: ["label"],
+      readonlyKeys: ["taskCode"],
+    } satisfies BusinessKit.MapFeaturePropertyPolicy,
 
     // ==========================================
     // Measure 业务层调用示例
@@ -1282,8 +1257,12 @@ const primaryBusinessLayers = [
   // 1. 创建业务点图层（通常用于展示设备节点、站点等点状数据）
   createCircleBusinessLayer({
     layerId: LAYER_IDS.circle,
-    // 普通点图层命中后，属性面板与保存/删除都复用这份图层级规则。
-    propertyPolicy: LAYER_PROPERTY_POLICY,
+    
+    // 图层级规则只写“相对 source 默认规则的差异项”即可。
+    // 这里演示：当前图层在继承 source 默认规则的基础上，额外把 mark 声明为稳定字段。
+    propertyPolicy: {
+      fixedKeys: ["mark"],
+    } satisfies BusinessKit.MapFeaturePropertyPolicy,
     // 样式配置：指定该图层的绘制表现（颜色、大小、显隐等）
     // 如果不传 style，底层会自动回退使用 createCircleLayerStyle() 生成的默认样式
     style: {
@@ -1303,7 +1282,11 @@ const primaryBusinessLayers = [
   // 2. 创建另一个业务点图层（展示另一类点状数据，通过 where 条件区分）
   createCircleBusinessLayer({
     layerId: LAYER_IDS.circleDec,
-    propertyPolicy: LAYER_PROPERTY_POLICY,
+    // 这里演示“layer 局部覆写 source 默认规则”：
+    // source 默认把 name 设为只读，这个图层则显式把它改成稳定字段。
+    propertyPolicy: {
+      fixedKeys: ["name", "mark"],
+    } satisfies BusinessKit.MapFeaturePropertyPolicy,
     // 样式配置：指定该图层的绘制表现（颜色、大小、显隐等）
     // 如果不传 style，底层会自动回退使用 createCircleLayerStyle() 生成的默认样式
     style: {
@@ -1320,7 +1303,9 @@ const primaryBusinessLayers = [
   // 3. 创建业务线图层（通常用于展示管道、道路等线状数据）
   createLineBusinessLayer({
     layerId: LAYER_IDS.primaryLine,
-    propertyPolicy: LAYER_PROPERTY_POLICY,
+    propertyPolicy: {
+      fixedKeys: ["mark"],
+    } satisfies BusinessKit.MapFeaturePropertyPolicy,
     style: {
       layout: lineLayout,
       paint: linePaint,
@@ -1344,7 +1329,9 @@ const primaryBusinessLayers = [
   // 5. 创建业务符号图层（通常用于展示图标 icon 或文字标签 text）
   createSymbolBusinessLayer({
     layerId: LAYER_IDS.symbol,
-    propertyPolicy: LAYER_PROPERTY_POLICY,
+    propertyPolicy: {
+      fixedKeys: ["mark"],
+    } satisfies BusinessKit.MapFeaturePropertyPolicy,
     style: {
       layout: symbolLayout,
       paint: symbolPaint,
@@ -1360,7 +1347,9 @@ const primaryBusinessLayers = [
 const secondaryBusinessLayers = [
   createLineBusinessLayer({
     layerId: LAYER_IDS.secondaryLine,
-    propertyPolicy: LAYER_PROPERTY_POLICY,
+    propertyPolicy: {
+      fixedKeys: ["mark"],
+    } satisfies BusinessKit.MapFeaturePropertyPolicy,
     style: {
       layout: lineLayout, // 复用前面解构出来的 lineLayout
       paint: linePaint, // 复用前面解构出来的 linePaint
@@ -1386,6 +1375,13 @@ const primaryBusinessSource = createMapBusinessSource({
   sourceId: SOURCE_IDS.primary,
   data: test_geojson,
   promoteId: "id", // 指定用作要素唯一标识的属性名
+
+  // source 级规则会成为当前数据源下所有图层的默认治理策略。
+  // 当前页面使用 `promoteId: "id"`，所以 `id` 本来就会被底层强保护。
+  propertyPolicy: {
+    readonlyKeys: ["name"],
+    hiddenKeys: ["marker-color", "marker-size", "marker-symbol"],
+  } satisfies BusinessKit.MapFeaturePropertyPolicy,
   layers: primaryBusinessLayers,
 });
 
@@ -1393,6 +1389,12 @@ const secondaryBusinessSource = createMapBusinessSource({
   sourceId: SOURCE_IDS.secondary,
   data: test_geojson_secondary,
   promoteId: "id",
+
+  // source 级规则会成为当前数据源下所有图层的默认治理策略。
+  propertyPolicy: {
+    readonlyKeys: ["name"],
+    hiddenKeys: ["marker-color", "marker-size", "marker-symbol"],
+  } satisfies BusinessKit.MapFeaturePropertyPolicy,
   layers: secondaryBusinessLayers,
 });
 

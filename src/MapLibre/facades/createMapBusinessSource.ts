@@ -122,6 +122,8 @@ type MapBusinessSourceBaseOptions = {
   data: Ref<MapCommonFeatureCollection>;
   /** 透传给 `MglGeoJsonSource` 的扩展 source 配置。 */
   sourceOptions?: MapBusinessSourceOptions;
+  /** 当前 source 的默认属性治理规则；layer 未声明时会继承这里的配置。 */
+  propertyPolicy?: MapFeaturePropertyPolicy;
   /** 当前 source 下的业务图层描述；支持直接传数组、ref / computed 或 getter。 */
   layers?: MapBusinessSourceLayersInput;
   /** 是否同步补齐顶层 `feature.id`。 */
@@ -244,6 +246,138 @@ interface NormalizedBusinessSourceSnapshot {
   validationMessage: string;
   /** 当前要素索引表。 */
   featureIndexMap: Map<MapFeatureId, number>;
+}
+
+/**
+ * 统一去重并清理空字符串键。
+ * @param keys 原始键列表
+ * @returns 干净的键数组；无有效值时返回 undefined
+ */
+function normalizePropertyPolicyKeys(keys?: readonly string[] | null): string[] | undefined {
+  const nextKeys = Array.from(
+    new Set((keys || []).filter((key) => typeof key === 'string' && key.trim() !== ''))
+  );
+
+  return nextKeys.length ? nextKeys : undefined;
+}
+
+/**
+ * 收集一份策略里显式声明过的全部字段。
+ * 只要 layer 策略声明了某个字段，就认为它接管了该字段在 source 默认策略中的归属。
+ *
+ * @param policy 当前属性治理规则
+ * @returns 当前策略声明过的字段集合
+ */
+function collectDeclaredPropertyPolicyKeys(
+  policy?: MapFeaturePropertyPolicy | null
+): Set<string> {
+  const declaredKeys = new Set<string>();
+
+  normalizePropertyPolicyKeys(policy?.fixedKeys)?.forEach((key) => declaredKeys.add(key));
+  normalizePropertyPolicyKeys(policy?.hiddenKeys)?.forEach((key) => declaredKeys.add(key));
+  normalizePropertyPolicyKeys(policy?.readonlyKeys)?.forEach((key) => declaredKeys.add(key));
+  normalizePropertyPolicyKeys(policy?.removableKeys)?.forEach((key) => declaredKeys.add(key));
+  Object.keys(policy?.rules || {}).forEach((key) => {
+    if (key.trim() !== '') {
+      declaredKeys.add(key);
+    }
+  });
+
+  return declaredKeys;
+}
+
+/**
+ * 合并 source 默认字段列表与 layer 局部字段列表。
+ * 如果 layer 已显式声明某个字段，则先从 source 默认列表中移除，再以 layer 声明为准。
+ *
+ * @param sourceKeys source 级默认字段列表
+ * @param layerKeys layer 级字段列表
+ * @param overriddenKeys layer 已接管的字段集合
+ * @returns 合并后的字段列表；为空时返回 undefined
+ */
+function mergePropertyPolicyKeys(
+  sourceKeys: readonly string[] | undefined,
+  layerKeys: readonly string[] | undefined,
+  overriddenKeys: ReadonlySet<string>
+): string[] | undefined {
+  const inheritedKeys = (sourceKeys || []).filter((key) => !overriddenKeys.has(key));
+  return normalizePropertyPolicyKeys([...inheritedKeys, ...(layerKeys || [])]);
+}
+
+/**
+ * 合并 source 默认属性治理规则与 layer 局部规则。
+ *
+ * 合并原则：
+ * 1. layer 未声明的字段继续继承 source 默认规则
+ * 2. layer 一旦显式声明某个字段，就接管该字段在 source 中的归属
+ * 3. 同键 rules 采用“source 默认值 + layer 局部覆写”的浅合并
+ *
+ * @param sourcePolicy source 级默认规则
+ * @param layerPolicy layer 级局部规则
+ * @returns 当前命中的最终有效规则；没有任何规则时返回 null
+ */
+function mergeMapFeaturePropertyPolicy(
+  sourcePolicy?: MapFeaturePropertyPolicy | null,
+  layerPolicy?: MapFeaturePropertyPolicy | null
+): MapFeaturePropertyPolicy | null {
+  if (!sourcePolicy && !layerPolicy) {
+    return null;
+  }
+
+  const overriddenKeys = collectDeclaredPropertyPolicyKeys(layerPolicy);
+  const nextPolicy: MapFeaturePropertyPolicy = {};
+  const fixedKeys = mergePropertyPolicyKeys(
+    sourcePolicy?.fixedKeys,
+    layerPolicy?.fixedKeys,
+    overriddenKeys
+  );
+  const hiddenKeys = mergePropertyPolicyKeys(
+    sourcePolicy?.hiddenKeys,
+    layerPolicy?.hiddenKeys,
+    overriddenKeys
+  );
+  const readonlyKeys = mergePropertyPolicyKeys(
+    sourcePolicy?.readonlyKeys,
+    layerPolicy?.readonlyKeys,
+    overriddenKeys
+  );
+  const removableKeys = mergePropertyPolicyKeys(
+    sourcePolicy?.removableKeys,
+    layerPolicy?.removableKeys,
+    overriddenKeys
+  );
+
+  if (fixedKeys) {
+    nextPolicy.fixedKeys = fixedKeys;
+  }
+  if (hiddenKeys) {
+    nextPolicy.hiddenKeys = hiddenKeys;
+  }
+  if (readonlyKeys) {
+    nextPolicy.readonlyKeys = readonlyKeys;
+  }
+  if (removableKeys) {
+    nextPolicy.removableKeys = removableKeys;
+  }
+
+  const nextRules = new Map<string, NonNullable<MapFeaturePropertyPolicy['rules']>[string]>();
+  Object.entries(sourcePolicy?.rules || {}).forEach(([key, rule]) => {
+    if (!overriddenKeys.has(key)) {
+      nextRules.set(key, { ...rule });
+    }
+  });
+  Object.entries(layerPolicy?.rules || {}).forEach(([key, rule]) => {
+    nextRules.set(key, {
+      ...(sourcePolicy?.rules?.[key] || {}),
+      ...rule,
+    });
+  });
+
+  if (nextRules.size) {
+    nextPolicy.rules = Object.fromEntries(nextRules.entries());
+  }
+
+  return Object.keys(nextPolicy).length ? nextPolicy : null;
 }
 
 /**
@@ -529,7 +663,8 @@ function syncBusinessSourceProps(
  * @returns 标准化后的业务 source 门面
  */
 export function createMapBusinessSource(options: CreateMapBusinessSourceOptions): MapBusinessSource {
-  const { sourceId, data, sourceOptions = {}, layers = [] } = options;
+  const { sourceId, data, sourceOptions = {}, layers = [], propertyPolicy: sourcePropertyPolicy } =
+    options;
   const protectedKeys = resolveBusinessSourceProtectedKeys(options);
   const sourceProps = reactive({}) as MapBusinessSourceProps;
   const snapshotRef = ref<NormalizedBusinessSourceSnapshot>(
@@ -684,13 +819,19 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
 
   /**
    * 按 layerId 解析属性治理规则。
+   * source 级规则会作为默认值参与合并；
+   * layer 只要显式声明了某个字段，就会接管该字段在 source 默认规则中的归属。
+   *
    * @param layerId 当前命中的图层 ID
    * @returns 命中的属性治理规则；未声明时返回 null
    */
   const resolvePropertyPolicy = (
     layerId: string | null | undefined
   ): MapFeaturePropertyPolicy | null => {
-    return getLayer(layerId)?.propertyPolicy || null;
+    return mergeMapFeaturePropertyPolicy(
+      sourcePropertyPolicy,
+      layerId ? getLayer(layerId)?.propertyPolicy || null : null
+    );
   };
 
   /**
