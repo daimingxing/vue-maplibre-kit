@@ -164,13 +164,11 @@ import {
   MAP_PROPERTY_PANEL_NOTE,
   MEASURE_PROPERTY_PANEL_NOTE,
   TERRADRAW_CONTEXT_MENU_SUMMARY_TEXT,
-  buildMaterializedIntersectionFeature,
   buildIntersectionCandidates,
   buildSelectionChangeSummary,
   buildSelectionSummaryRows,
   buildSelectionSummaryText,
   createSelectionPanelState,
-  getFeatureCollectionFeatures,
   type DxfSummaryOptions,
   type SelectionSummaryRow,
 } from "./components/NGGI00DemoPanel.shared";
@@ -263,12 +261,6 @@ const LAYER_IDS = {
 } as const;
 
 /**
- * 交点正式点示例使用的 feature-state 键名。
- * 点击交点后，最新生成的正式点会打开这个状态分支，用更醒目的样式提示“这是刚刚落下来的点”。
- */
-const INTERSECTION_POINT_STATE_KEY = "intersectionActive";
-
-/**
  * 修改样式示例统一使用的 feature-state 键名。
  * 这里故意使用 feature-state，而不是直接改 GeoJSON 数据。
  * 样式配置里会直接把它写成 `demoStyled`，方便业务层照着示例抄；
@@ -313,10 +305,6 @@ const test_geojson = ref<MapCommonFeatureCollection>(mapGeojson as MapCommonFeat
 const test_geojson_secondary = ref<MapCommonFeatureCollection>(
   mapGeojson2 as MapCommonFeatureCollection,
 );
-const intersection_point_geojson = ref<MapCommonFeatureCollection>({
-  type: "FeatureCollection",
-  features: [],
-});
 
 /**
  * 当前页面持有的地图组件公开实例引用。
@@ -973,51 +961,6 @@ const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
       },
       selected: 3,
       order: ["demoStyled", "selected"],
-      default: 2,
-    }),
-  },
-});
-
-/**
- * 交点正式点图层样式配置。
- * 这组样式专门给“点击交点后生成的正式点要素”使用：
- * 1. 默认态就比普通业务点更醒目
- * 2. hover / selected 继续沿用普通交互语义
- * 3. 最新一次生成的点会额外命中 `intersectionActive` 状态，形成强调效果
- */
-const { layout: intersectionPointLayout, paint: intersectionPointPaint } = createCircleLayerStyle({
-  paint: {
-    "circle-color": createFeatureStateExpression({
-      states: {
-        [INTERSECTION_POINT_STATE_KEY]: "#facc15",
-      },
-      selected: "#f97316",
-      hover: "#fb7185",
-      order: [INTERSECTION_POINT_STATE_KEY, "selected", "hover"],
-      default: "#dc2626",
-    }),
-    "circle-radius": createFeatureStateExpression({
-      states: {
-        [INTERSECTION_POINT_STATE_KEY]: 10,
-      },
-      selected: 9,
-      order: [INTERSECTION_POINT_STATE_KEY, "selected"],
-      default: 7,
-    }),
-    "circle-stroke-color": createFeatureStateExpression({
-      states: {
-        [INTERSECTION_POINT_STATE_KEY]: "#7c2d12",
-      },
-      selected: "#7c2d12",
-      order: [INTERSECTION_POINT_STATE_KEY, "selected"],
-      default: "#ffffff",
-    }),
-    "circle-stroke-width": createFeatureStateExpression({
-      states: {
-        [INTERSECTION_POINT_STATE_KEY]: 4,
-      },
-      selected: 3,
-      order: [INTERSECTION_POINT_STATE_KEY, "selected"],
       default: 2,
     }),
   },
