@@ -151,6 +151,9 @@ export type { TerradrawLineDecorationStyle } from './MapLibre/shared/mapLibre-co
 /** 地图根组件公开实例类型。 */
 export type { MapLibreInitExpose } from './MapLibre/core/mapLibre-init.types';
 
+/** 地图根组件底层逃生句柄类型。 */
+export type { MapLibreRawHandles } from './MapLibre/core/mapLibre-init.types';
+
 /** 地图初始化配置类型。业务层声明 mapOptions 时优先使用。 */
 export type { MapOptions } from 'maplibre-gl';
 

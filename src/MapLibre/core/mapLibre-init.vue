@@ -130,7 +130,13 @@ import type {
   ResolvedTerradrawSnapOptions,
   MapPluginStateChangePayload,
 } from '../plugins/types';
-import type { MapFeatureStatePatch, MapFeatureStateTarget } from './mapLibre-init.types';
+import {
+  createMapLibreRawHandles,
+  type MapFeatureStatePatch,
+  type MapFeatureStateTarget,
+  type MapLibreInitExpose,
+  type MapLibreRawHandles,
+} from './mapLibre-init.types';
 
 type MapLibreComponentOptions = Partial<MapOptions & { mapStyle: string | object }>;
 type DrawControlConstructorOptions = ConstructorParameters<typeof MaplibreTerradrawControl>[0];
@@ -587,8 +593,24 @@ const measureControlLifecycle = useTerradrawControlLifecycle({
 const measureControlRef = measureControlLifecycle.controlRef;
 const measureLineDecorationLayerProps = measureControlLifecycle.lineDecorationLayerProps;
 
+/**
+ * 底层逃生句柄集合。
+ * 这里不再额外平铺 TerraDraw 一级字段；业务层需要时继续从 control.getTerraDrawInstance() 取引擎即可，
+ * 这样能把逃生面控制在最小范围内。
+ */
+const rawHandles: MapLibreRawHandles = createMapLibreRawHandles({
+  mapInstance: map,
+  getDrawControl,
+  getMeasureControl,
+});
+
 // 将底层控件实例和更业务化的快照获取方法同时暴露给父组件（外界）。
-defineExpose({
+// 这里显式使用公开接口收口 expose 类型，避免编辑器按 getter 的运行时展开结果
+// 推导模板 ref，进而把 mapRef 误判成与 MapLibreInitExpose 不兼容的结构。
+defineExpose<MapLibreInitExpose>({
+  /** 底层逃生句柄集合 */
+  rawHandles,
+  // 兼容期继续保留旧的 getXxx expose，避免业务页和示例一次性全部切换。
   /** 获取底层绘图控件实例 */
   getDrawControl,
   /** 获取底层测量控件实例 */

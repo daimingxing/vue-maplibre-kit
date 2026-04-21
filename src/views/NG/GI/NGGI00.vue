@@ -22,6 +22,11 @@
             >
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
+            <ElButton style="background: white; width: 130px" @click="runRawApiDemo">
+              rawHandles示例
+            </ElButton>
+          </mgl-custom-control>
+          <mgl-custom-control position="top-right" :noClasses="false">
             <ElButton style="background: white; width: 120px" @click="changeStyle">
               切换样式
             </ElButton>
@@ -173,6 +178,7 @@ import {
 } from "vue-maplibre-kit/plugins/map-dxf-export";
 import { createMapFeatureMultiSelectPlugin } from "vue-maplibre-kit/plugins/map-feature-multi-select";
 import { createMapFeatureSnapPlugin } from "vue-maplibre-kit/plugins/map-feature-snap";
+import type { GeoJSONSource } from "maplibre-gl";
 
 // 业务 source 工厂统一从分组入口读取，避免业务页面在根入口平铺查找。
 const { createMapBusinessSource, createMapBusinessSourceRegistry } = businessSources;
@@ -241,6 +247,28 @@ const LAYER_IDS = {
  * 按钮逻辑则统一复用这个常量，避免多处散落字符串。
  */
 const DEMO_STYLE_STATE_KEY = "demoStyled";
+
+/**
+ * raw API 示例统一使用的 source / layer / feature 标识。
+ * 这里集中管理字符串，避免示例逻辑里散落硬编码 ID。
+ */
+const RAW_DEMO_IDS = {
+  source: "nggi00_raw_demo_source",
+  layer: "nggi00_raw_demo_layer",
+  feature: "nggi00_raw_demo_feature",
+} as const;
+
+/**
+ * raw API 示例统一使用的颜色状态。
+ * 按钮重复点击时会在这两种颜色之间切换，方便直观看到“只用底层 API 改样式”的效果。
+ */
+const RAW_DEMO_COLORS = {
+  idle: "#1677ff",
+  active: "#fa541c",
+} as const;
+
+/** raw API 示例统一复用公开实例上的原始地图类型，避免与宿主类型来源分叉。 */
+type RawDemoMap = NonNullable<BusinessKit.MapLibreInitExpose["rawHandles"]["map"]>;
 
 import sendIcon from "./assets/send.svg";
 // import segment_stretch_test from './assets/segment-stretch.svg';
@@ -768,7 +796,6 @@ const mapControls: BusinessKit.MapControlsConfig = {
   },
 };
 
-
 // ==========================================
 // 图层样式配置实例 (Layer Configurations)
 // ==========================================
@@ -954,7 +981,7 @@ const primaryBusinessLayers = [
   // 1. 创建业务点图层（通常用于展示设备节点、站点等点状数据）
   createCircleBusinessLayer({
     layerId: LAYER_IDS.circle,
-    
+
     // 图层级规则只写“相对 source 默认规则的差异项”即可。
     // 这里演示：当前图层在继承 source 默认规则的基础上，额外把 mark 声明为稳定字段。
     propertyPolicy: {
@@ -1456,7 +1483,6 @@ const hasLineDraftFeatures = computed(() => {
   return lineDraftPreview.hasFeatures.value;
 });
 
-
 /**
  * ==========================
  * 业务操作：获取测绘数据
@@ -1502,7 +1528,6 @@ const getMeasureData = () => {
   console.log("--- 测量的 GeoJSON 数据 ---", JSON.stringify(features, null, 2));
   ElMessage.success(`成功获取 ${features.length} 个测量图形数据，请查看控制台`);
 };
-
 
 // ==========================================
 // 闪烁特效逻辑示例
@@ -2207,7 +2232,7 @@ const openMapFeatureContextMenu = (context: BusinessKit.MapLayerInteractiveConte
    * const featureRef = featureQuery.getFeatureRef(context);
    * const latestFeature = featureQuery.resolveFeature(featureRef);
    * 适合需要直接处理底层 context / 自定义状态结构时使用。
-  */
+   */
   const currentSelectionMode = context.selectionMode || selectionMode.value;
   const summaryRows =
     currentSelectionMode === "multiple"
@@ -2231,9 +2256,7 @@ const openMapFeatureContextMenu = (context: BusinessKit.MapLayerInteractiveConte
   contextMenuState.note = resolvePropertyPanelNote(editorTarget);
   contextMenuState.visible = true;
   selectionPanelState.contextMenuSummary =
-    summaryRows.length > 0
-      ? buildSelectionSummaryText(summaryRows)
-      : MAP_CONTEXT_MENU_SUMMARY_TEXT;
+    summaryRows.length > 0 ? buildSelectionSummaryText(summaryRows) : MAP_CONTEXT_MENU_SUMMARY_TEXT;
 };
 
 /**
@@ -2642,6 +2665,190 @@ const handleRemovePropertyItem = (payload: FeaturePropertyEditorRemovePayload) =
 
   syncSavedPropertiesToPanels(result.editorState);
   ElMessage.success(result.message);
+};
+
+// ==========================================
+// 调用mapLibre、terradraw等底层能力的示例
+// ==========================================
+
+/**
+ * 创建 raw API 示例使用的空 GeoJSON 数据。
+ * @returns 可直接交给 GeoJSONSource 的空要素集合
+ */
+const createRawDemoData = (): MapCommonFeatureCollection => {
+  return {
+    type: "FeatureCollection",
+    features: [],
+  };
+};
+
+/**
+ * 创建 raw API 示例使用的点要素。
+ * @param lng 点位经度
+ * @param lat 点位纬度
+ * @param color 当前要素颜色
+ * @returns 最小可运行的演示要素
+ */
+const createRawDemoFeature = (lng: number, lat: number, color: string): MapCommonFeature => {
+  return {
+    type: "Feature",
+    id: RAW_DEMO_IDS.feature,
+    properties: {
+      name: "raw-demo-point",
+      color,
+    },
+    geometry: {
+      type: "Point",
+      coordinates: [lng, lat],
+    },
+  };
+};
+
+/**
+ * 读取当前可用的原始地图实例。
+ * 这里会先输出 rawHandles，再返回其中可直接操作的原始地图对象。
+ * @returns 已就绪的原始地图；未就绪时返回 null
+ */
+const getRawDemoMap = (): RawDemoMap | null => {
+  const rawHandles = mapInitRef.value?.rawHandles;
+  if (!rawHandles) {
+    ElMessage.warning("地图组件尚未初始化完成");
+    return null;
+  }
+
+  const drawEngine = rawHandles.drawControl?.getTerraDrawInstance();
+  const measureEngine = rawHandles.measureControl?.getTerraDrawInstance();
+
+  console.log("[NGGI00 示例] rawHandles", {
+    map: rawHandles.map,
+    mapInstance: rawHandles.mapInstance,
+    drawControl: rawHandles.drawControl,
+    measureControl: rawHandles.measureControl,
+    drawEngine,
+    measureEngine,
+  });
+
+  const rawMap = rawHandles.map;
+  const mapLoaded = rawHandles.mapInstance.isLoaded;
+
+  if (!rawMap || !mapLoaded || !rawMap.isStyleLoaded()) {
+    // source / layer 增删依赖样式树可用，因此这里把“已挂载但样式未就绪”也视为不可执行状态。
+    ElMessage.warning("地图样式尚未加载完成，请稍后再试");
+    return null;
+  }
+
+  return rawMap;
+};
+
+/**
+ * 确保 raw API 示例数据源已注册。
+ * @param map 原始地图实例
+ * @returns 可直接读写的 GeoJSONSource；异常时返回 null
+ */
+const ensureRawDemoSource = (map: RawDemoMap): GeoJSONSource | null => {
+  const currentSource = map.getSource(RAW_DEMO_IDS.source) as GeoJSONSource | undefined;
+  if (currentSource) {
+    return currentSource;
+  }
+
+  map.addSource(RAW_DEMO_IDS.source, {
+    type: "geojson",
+    data: createRawDemoData(),
+  });
+
+  return (map.getSource(RAW_DEMO_IDS.source) as GeoJSONSource | undefined) || null;
+};
+
+/**
+ * 确保 raw API 示例图层已注册。
+ * @param map 原始地图实例
+ */
+const ensureRawDemoLayer = (map: RawDemoMap): void => {
+  if (map.getLayer(RAW_DEMO_IDS.layer)) {
+    return;
+  }
+
+  map.addLayer({
+    id: RAW_DEMO_IDS.layer,
+    type: "circle",
+    source: RAW_DEMO_IDS.source,
+    paint: {
+      "circle-radius": 10,
+      "circle-stroke-width": 2,
+      "circle-stroke-color": "#ffffff",
+      // 图层颜色直接读 feature.properties.color，方便演示“只改要素数据就能改样式”。
+      "circle-color": ["coalesce", ["get", "color"], RAW_DEMO_COLORS.idle],
+    },
+  });
+};
+
+/**
+ * 使用原始 MapLibre API 演示：
+ * 1. 增加数据源
+ * 2. 增加图层
+ * 3. 增加一个点要素
+ * 4. 再次点击时切换该要素颜色
+ */
+const runRawApiDemo = async (): Promise<void> => {
+  const map = getRawDemoMap();
+  if (!map) {
+    return;
+  }
+
+  const source = ensureRawDemoSource(map);
+  if (!source) {
+    ElMessage.warning("raw 示例数据源创建失败");
+    return;
+  }
+
+  ensureRawDemoLayer(map);
+
+  const sourceData = await source.getData();
+  const nextData: MapCommonFeatureCollection =
+    sourceData.type === "FeatureCollection"
+      ? {
+          type: "FeatureCollection",
+          // getData() 读到的是运行时快照；这里复制一份数组，避免直接改原对象引用。
+          features: [...(sourceData.features as MapCommonFeature[])],
+        }
+      : createRawDemoData();
+
+  const featureIndex = nextData.features.findIndex(
+    (feature) => feature.id === RAW_DEMO_IDS.feature,
+  );
+
+  if (featureIndex < 0) {
+    const center = map.getCenter();
+    nextData.features.push(createRawDemoFeature(center.lng, center.lat, RAW_DEMO_COLORS.idle));
+    source.setData(nextData);
+    console.log("[NGGI00 示例] raw API 已添加 source、layer、feature", nextData);
+    ElMessage.success("raw API 示例已创建数据源、图层和一个点要素");
+    return;
+  }
+
+  const currentFeature = nextData.features[featureIndex];
+  const currentColor =
+    typeof currentFeature.properties?.color === "string"
+      ? currentFeature.properties.color
+      : RAW_DEMO_COLORS.idle;
+  const nextColor =
+    currentColor === RAW_DEMO_COLORS.active ? RAW_DEMO_COLORS.idle : RAW_DEMO_COLORS.active;
+
+  nextData.features[featureIndex] = {
+    ...currentFeature,
+    properties: {
+      ...(currentFeature.properties || {}),
+      color: nextColor,
+    },
+  };
+
+  source.setData(nextData);
+  console.log("[NGGI00 示例] raw API 已切换要素颜色", {
+    featureId: RAW_DEMO_IDS.feature,
+    color: nextColor,
+    data: nextData,
+  });
+  ElMessage.success(`raw API 已把示例要素颜色切换为 ${nextColor}`);
 };
 </script>
 

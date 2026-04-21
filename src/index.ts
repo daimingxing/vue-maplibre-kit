@@ -23,6 +23,9 @@ export type { MapFeatureStateTarget } from './MapLibre/core/mapLibre-init.types'
 /** 地图根组件公开实例类型。业务层拿 `mapRef` 时通常会用到它。 */
 export type { MapLibreInitExpose } from './MapLibre/core/mapLibre-init.types';
 
+/** 地图根组件底层逃生句柄类型。需要约束 rawHandles 时使用。 */
+export type { MapLibreRawHandles } from './MapLibre/core/mapLibre-init.types';
+
 /** 地图插件定义入口。自定义插件时先从这里声明插件描述。 */
 export { defineMapPlugin } from './MapLibre/plugins/types';
 

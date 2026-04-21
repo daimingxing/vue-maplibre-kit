@@ -1,7 +1,15 @@
 import { ref } from 'vue';
 import { describe, expect, it } from 'vitest';
+import type {
+  MaplibreMeasureControl,
+  MaplibreTerradrawControl,
+} from '@watergis/maplibre-gl-terradraw';
+import type { TerraDraw } from 'terra-draw';
 import type { FeatureProperties, MapFeatureId } from '../composables/useMapDataUpdate';
-import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
+import {
+  createMapLibreRawHandles,
+  type MapLibreInitExpose,
+} from '../core/mapLibre-init.types';
 import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/useLineDraftPreviewController';
 import {
   LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS,
@@ -18,6 +26,7 @@ import {
   saveFeaturePropertiesInCollection,
 } from '../shared/map-feature-data';
 import type { TerradrawFeature } from '../shared/mapLibre-controls-types';
+import type { MapInstance } from 'vue-maplibre-gl';
 import {
   createMapBusinessSource,
   createMapBusinessSourceRegistry,
@@ -28,6 +37,9 @@ import { useMapFeaturePropertyEditor } from './useMapFeaturePropertyEditor';
 
 /** 线草稿插件类型常量。 */
 const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
+
+/** TerraDraw 测试替身统一使用的最小实例形状。 */
+type TerradrawStub = Pick<TerraDraw, 'hasFeature' | 'getSnapshotFeature' | 'updateFeatureProperties'>;
 
 /**
  * 创建测试用点要素。
@@ -112,6 +124,50 @@ function createBusinessSourceHarness(): {
 }
 
 /**
+ * 创建绘图控件测试替身。
+ * 这里仅实现当前用例实际会访问的 `getTerraDrawInstance()`，
+ * 其余控件能力不参与本组测试，避免再用 `as any` 直接跳过类型约束。
+ *
+ * @param terradraw TerraDraw 最小替身
+ * @returns 可供公开实例复用的绘图控件替身
+ */
+function createDrawControlStub(
+  terradraw: TerradrawStub | null | undefined
+): MaplibreTerradrawControl | null {
+  if (!terradraw) {
+    return null;
+  }
+
+  const control = {
+    getTerraDrawInstance: () => terradraw,
+  } satisfies Pick<MaplibreTerradrawControl, 'getTerraDrawInstance'>;
+
+  return control as unknown as MaplibreTerradrawControl;
+}
+
+/**
+ * 创建测量控件测试替身。
+ * 测量控件与绘图控件在本组测试里只共享 `getTerraDrawInstance()` 这一入口，
+ * 因此这里同样返回最小可用替身。
+ *
+ * @param terradraw TerraDraw 最小替身
+ * @returns 可供公开实例复用的测量控件替身
+ */
+function createMeasureControlStub(
+  terradraw: TerradrawStub | null | undefined
+): MaplibreMeasureControl | null {
+  if (!terradraw) {
+    return null;
+  }
+
+  const control = {
+    getTerraDrawInstance: () => terradraw,
+  } satisfies Pick<MaplibreMeasureControl, 'getTerraDrawInstance'>;
+
+  return control as unknown as MaplibreMeasureControl;
+}
+
+/**
  * 创建带线草稿插件的测试地图公开实例。
  * @param api 线草稿插件 API
  * @param drawTerradraw 绘制控件实例
@@ -120,17 +176,16 @@ function createBusinessSourceHarness(): {
  */
 function createMapExpose(
   api?: LineDraftPreviewPluginApi | null,
-  drawTerradraw?: {
-    hasFeature: (featureId: MapFeatureId) => boolean;
-    getSnapshotFeature: (featureId: MapFeatureId) => TerradrawFeature | null;
-    updateFeatureProperties: (featureId: MapFeatureId, patch: FeatureProperties) => void;
-  } | null,
-  measureTerradraw?: {
-    hasFeature: (featureId: MapFeatureId) => boolean;
-    getSnapshotFeature: (featureId: MapFeatureId) => TerradrawFeature | null;
-    updateFeatureProperties: (featureId: MapFeatureId, patch: FeatureProperties) => void;
-  } | null
+  drawTerradraw?: TerradrawStub | null,
+  measureTerradraw?: TerradrawStub | null
 ): MapLibreInitExpose {
+  const mapInstance = {
+    component: undefined,
+    map: undefined,
+    isMounted: false,
+    isLoaded: false,
+    language: undefined,
+  } as MapInstance;
   const pluginHost: MapPluginHostExpose = {
     has: (pluginId) => pluginId === 'lineDraftPreview' && Boolean(api),
     getApi: <TApi = unknown>() => (api as TApi | null) || null,
@@ -147,18 +202,13 @@ function createMapExpose(
   };
 
   return {
-    getDrawControl: () =>
-      drawTerradraw
-        ? ({
-            getTerraDrawInstance: () => drawTerradraw,
-          } as any)
-        : null,
-    getMeasureControl: () =>
-      measureTerradraw
-        ? ({
-            getTerraDrawInstance: () => measureTerradraw,
-          } as any)
-        : null,
+    rawHandles: createMapLibreRawHandles({
+      mapInstance,
+      getDrawControl: () => createDrawControlStub(drawTerradraw),
+      getMeasureControl: () => createMeasureControlStub(measureTerradraw),
+    }),
+    getDrawControl: () => createDrawControlStub(drawTerradraw),
+    getMeasureControl: () => createMeasureControlStub(measureTerradraw),
     getDrawFeatures: () => null,
     getMeasureFeatures: () => null,
     getSelectedMapFeature: () => null,

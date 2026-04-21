@@ -1,7 +1,10 @@
 import { ref } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import type { FeatureProperties, MapFeatureId } from '../composables/useMapDataUpdate';
-import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
+import {
+  createMapLibreRawHandles,
+  type MapLibreInitExpose,
+} from '../core/mapLibre-init.types';
 import type {
   MapLayerSelectedFeature,
   MapSelectionState,
@@ -10,6 +13,7 @@ import type {
 import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/useLineDraftPreviewController';
 import type { MapPluginHostExpose, MapSelectionService } from '../plugins/types';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
+import type { MapInstance } from 'vue-maplibre-gl';
 import { useBusinessMap } from './useBusinessMap';
 import {
   createMapBusinessSource,
@@ -235,6 +239,13 @@ function createMapExpose(options: {
   selectionService?: MapSelectionService | null;
 } = {}): MapLibreInitExpose {
   const { lineDraftApi = null, lineDraftState = null, selectionService = null } = options;
+  const mapInstance = {
+    component: undefined,
+    map: undefined,
+    isMounted: false,
+    isLoaded: false,
+    language: undefined,
+  } as MapInstance;
   const pluginHost: MapPluginHostExpose = {
     has: (pluginId) => pluginId === 'lineDraftPreview' && Boolean(lineDraftApi),
     getApi: <TApi = unknown>() => (lineDraftApi as TApi | null) || null,
@@ -251,6 +262,11 @@ function createMapExpose(options: {
   };
 
   return {
+    rawHandles: createMapLibreRawHandles({
+      mapInstance,
+      getDrawControl: () => null,
+      getMeasureControl: () => null,
+    }),
     getDrawControl: () => null,
     getMeasureControl: () => null,
     getDrawFeatures: () => [] as TerradrawFeature[],

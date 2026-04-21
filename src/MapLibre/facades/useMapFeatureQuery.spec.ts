@@ -1,6 +1,9 @@
 import { ref } from 'vue';
 import { describe, expect, it } from 'vitest';
-import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
+import {
+  createMapLibreRawHandles,
+  type MapLibreInitExpose,
+} from '../core/mapLibre-init.types';
 import type { MapPluginHostExpose } from '../plugins/types';
 import type {
   MapLayerInteractiveContext,
@@ -9,6 +12,7 @@ import type {
   TerradrawFeature,
 } from '../shared/mapLibre-controls-types';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
+import type { MapInstance } from 'vue-maplibre-gl';
 import {
   createMapBusinessSource,
   createMapBusinessSourceRegistry,
@@ -187,6 +191,13 @@ function createSelectedFeatureRecord(options: {
  * @returns 可供 useMapFeatureQuery 直接消费的公开实例
  */
 function createMapExpose(): MapLibreInitExpose {
+  const mapInstance = {
+    component: undefined,
+    map: undefined,
+    isMounted: false,
+    isLoaded: false,
+    language: undefined,
+  } as MapInstance;
   const pluginHost: MapPluginHostExpose = {
     has: () => false,
     getApi: () => null,
@@ -195,6 +206,11 @@ function createMapExpose(): MapLibreInitExpose {
   };
 
   return {
+    rawHandles: createMapLibreRawHandles({
+      mapInstance,
+      getDrawControl: () => null,
+      getMeasureControl: () => null,
+    }),
     getDrawControl: () => null,
     getMeasureControl: () => null,
     getDrawFeatures: () => [] as TerradrawFeature[],
