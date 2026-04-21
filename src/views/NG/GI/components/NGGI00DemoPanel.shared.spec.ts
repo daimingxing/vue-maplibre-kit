@@ -32,6 +32,7 @@ describe("NGGI00DemoPanel.shared", () => {
     expect(DXF_DEFAULT_CRS_CONFIG_PATH_TEXT).toContain("createMapDxfExportPlugin");
     expect(DXF_DEFAULT_TRUE_COLOR_CONFIG_PATH_TEXT).toContain("DEFAULT_DXF_TRUE_COLOR_RULES");
     expect(DXF_OVERRIDE_GUIDE_TEXT).toContain("downloadDxf(overrides)");
+    expect(DXF_OVERRIDE_GUIDE_TEXT).toContain("setMapGlobalConfig");
     expect(DXF_PLUGIN_OPTIONS_GUIDE_TEXT).toContain("mapDxfExportPlugin 可配项");
     expect(DXF_CALLBACK_GUIDE_TEXT).toContain("featureFilter");
   });

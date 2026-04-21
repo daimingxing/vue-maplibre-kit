@@ -1,6 +1,7 @@
 import { computed, watch, type ComputedRef } from 'vue';
 import { cloneDeep } from 'lodash-es';
 import { createFillLayerStyle, createLineLayerStyle } from '../../shared/map-layer-style-config';
+import { getMapGlobalLineDraftDefaults } from '../../shared/map-global-config';
 import type {
   MapLayerInteractiveContext,
   MapLayerInteractiveOptions,
@@ -100,6 +101,46 @@ interface UseLineDraftPreviewControllerOptions {
 }
 
 /**
+ * 合并线草稿样式覆写配置。
+ * 只对 line / fill 的 layout、paint 做浅合并，避免把插件样式默认值做成深层隐式规则。
+ *
+ * @param localOverrides 实例局部样式覆写
+ * @returns 合并后的样式覆写配置
+ */
+function resolveLineDraftStyleOverrides(
+  localOverrides: LineDraftPreviewOptions['styleOverrides']
+): NonNullable<LineDraftPreviewOptions['styleOverrides']> {
+  const globalOverrides = getMapGlobalLineDraftDefaults()?.styleOverrides;
+
+  return {
+    line: {
+      ...(globalOverrides?.line || {}),
+      ...(localOverrides?.line || {}),
+      layout: {
+        ...(globalOverrides?.line?.layout || {}),
+        ...(localOverrides?.line?.layout || {}),
+      },
+      paint: {
+        ...(globalOverrides?.line?.paint || {}),
+        ...(localOverrides?.line?.paint || {}),
+      },
+    },
+    fill: {
+      ...(globalOverrides?.fill || {}),
+      ...(localOverrides?.fill || {}),
+      layout: {
+        ...(globalOverrides?.fill?.layout || {}),
+        ...(localOverrides?.fill?.layout || {}),
+      },
+      paint: {
+        ...(globalOverrides?.fill?.paint || {}),
+        ...(localOverrides?.fill?.paint || {}),
+      },
+    },
+  };
+}
+
+/**
  * 线草稿预览插件控制器。
  * 负责将“临时草稿数据管理、样式覆写、交互继承、对外 API”打包成一个可复用插件。
  * @param options 插件初始化选项
@@ -115,6 +156,9 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
     toFeatureSnapshot,
     onStateChange,
   } = options;
+  const resolvedStyleOverrides = computed(() =>
+    resolveLineDraftStyleOverrides(getOptions()?.styleOverrides)
+  );
 
   /**
    * 当前线草稿预览是否启用。
@@ -140,10 +184,10 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
         ],
         'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 6, 4],
         'line-dasharray': [1.5, 1.2],
-        ...((getOptions()?.styleOverrides?.line?.paint || {}) as any),
+        ...((resolvedStyleOverrides.value.line?.paint || {}) as any),
       },
       layout: {
-        ...((getOptions()?.styleOverrides?.line?.layout || {}) as any),
+        ...((resolvedStyleOverrides.value.line?.layout || {}) as any),
       },
     })
   );
@@ -155,10 +199,10 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
   const fillStyle = computed(() =>
     createFillLayerStyle({
       layout: {
-        ...((getOptions()?.styleOverrides?.fill?.layout || {}) as any),
+        ...((resolvedStyleOverrides.value.fill?.layout || {}) as any),
       },
       paint: {
-        ...((getOptions()?.styleOverrides?.fill?.paint || {}) as any),
+        ...((resolvedStyleOverrides.value.fill?.paint || {}) as any),
       },
     })
   );

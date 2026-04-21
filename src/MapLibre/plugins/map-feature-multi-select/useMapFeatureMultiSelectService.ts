@@ -3,6 +3,7 @@ import type {
   MapSelectionState,
   ResolvedMapSelectionToolOptions,
 } from '../../shared/mapLibre-controls-types';
+import { getMapGlobalMultiSelectDefaults } from '../../shared/map-global-config';
 import type { MapSelectionBindingController, MapSelectionService } from '../types';
 import type { MapFeatureMultiSelectOptions, ResolvedMapFeatureMultiSelectOptions } from './types';
 
@@ -22,11 +23,14 @@ const defaultSelectionState: MapSelectionState = {
 function normalizeMapFeatureMultiSelectOptions(
   rawOptions: MapFeatureMultiSelectOptions | null | undefined
 ): ResolvedMapFeatureMultiSelectOptions {
+  const globalDefaults = getMapGlobalMultiSelectDefaults();
+
   return {
-    enabled: rawOptions?.enabled !== false,
-    position: rawOptions?.position || 'top-right',
-    deactivateBehavior: rawOptions?.deactivateBehavior || 'clear',
-    closeOnEscape: rawOptions?.closeOnEscape !== false,
+    enabled: rawOptions?.enabled ?? globalDefaults?.enabled ?? true,
+    position: rawOptions?.position ?? globalDefaults?.position ?? 'top-right',
+    deactivateBehavior:
+      rawOptions?.deactivateBehavior ?? globalDefaults?.deactivateBehavior ?? 'clear',
+    closeOnEscape: rawOptions?.closeOnEscape ?? globalDefaults?.closeOnEscape ?? true,
     targetLayerIds: rawOptions?.targetLayerIds || null,
     excludeLayerIds: [...(rawOptions?.excludeLayerIds || [])],
     canSelect: rawOptions?.canSelect,

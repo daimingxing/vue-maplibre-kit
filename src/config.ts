@@ -1,0 +1,190 @@
+import type {
+  CircleLayerSpecification,
+  ControlPosition,
+  FillLayerSpecification,
+  LineLayerSpecification,
+  MapOptions,
+  RasterLayerSpecification,
+  SymbolLayerSpecification,
+} from 'maplibre-gl';
+import type {
+  MapControlsConfig,
+  MapSelectionDeactivateBehavior,
+  TerradrawSnapSharedOptions,
+} from './MapLibre/shared/mapLibre-controls-types';
+import type { MapFeatureSnapPreviewOptions } from './MapLibre/plugins/map-feature-snap/types';
+import type { LineDraftPreviewStyleOverrides } from './MapLibre/plugins/line-draft-preview/types';
+import type { MapDxfExportTaskOptions } from './MapLibre/plugins/map-dxf-export/types';
+import type { MapLayerStyleOverrides } from './MapLibre/shared/map-layer-style-config';
+import { cloneDeep } from 'lodash-es';
+
+/** 地图初始化全局默认配置类型。 */
+export type MapKitGlobalMapOptions = Partial<MapOptions & { mapStyle: string | object }>;
+
+/** 地图控件全局默认配置类型。 */
+export type MapKitGlobalControls = MapControlsConfig;
+
+/** 全局点图层样式默认值。 */
+export type MapCircleLayerStyleDefaults = MapLayerStyleOverrides<
+  CircleLayerSpecification['layout'],
+  CircleLayerSpecification['paint']
+>;
+
+/** 全局线图层样式默认值。 */
+export type MapLineLayerStyleDefaults = MapLayerStyleOverrides<
+  LineLayerSpecification['layout'],
+  LineLayerSpecification['paint']
+>;
+
+/** 全局面图层样式默认值。 */
+export type MapFillLayerStyleDefaults = MapLayerStyleOverrides<
+  FillLayerSpecification['layout'],
+  FillLayerSpecification['paint']
+>;
+
+/** 全局符号图层样式默认值。 */
+export type MapSymbolLayerStyleDefaults = MapLayerStyleOverrides<
+  SymbolLayerSpecification['layout'],
+  SymbolLayerSpecification['paint']
+>;
+
+/** 全局栅格图层样式默认值。 */
+export type MapRasterLayerStyleDefaults = MapLayerStyleOverrides<
+  RasterLayerSpecification['layout'],
+  RasterLayerSpecification['paint']
+>;
+
+/** 地图吸附插件全局默认配置。 */
+export interface MapFeatureSnapGlobalDefaults {
+  /** 全局默认吸附范围。 */
+  defaultTolerancePx?: number;
+  /** 全局吸附预览样式。 */
+  preview?: MapFeatureSnapPreviewOptions;
+  /** TerraDraw / Measure 吸附默认值。 */
+  terradraw?: {
+    /** Draw / Measure 共用默认值。 */
+    defaults?: TerradrawSnapSharedOptions;
+    /** Draw 控件默认值。 */
+    draw?: TerradrawSnapSharedOptions | boolean;
+    /** Measure 控件默认值。 */
+    measure?: TerradrawSnapSharedOptions | boolean;
+  };
+}
+
+/** 线草稿预览插件全局默认配置。 */
+export interface LineDraftPreviewGlobalDefaults {
+  /** 全局线草稿样式覆写。 */
+  styleOverrides?: LineDraftPreviewStyleOverrides;
+}
+
+/** 要素多选插件全局默认配置。 */
+export interface MapFeatureMultiSelectGlobalDefaults {
+  /** 是否启用多选插件。 */
+  enabled?: boolean;
+  /** 控件显示位置。 */
+  position?: ControlPosition;
+  /** 退出多选后的处理策略。 */
+  deactivateBehavior?: MapSelectionDeactivateBehavior;
+  /** 是否允许使用 Esc 退出。 */
+  closeOnEscape?: boolean;
+}
+
+/** DXF 导出插件全局默认配置。 */
+export interface MapDxfExportGlobalDefaults {
+  /** 全局 DXF 任务默认值。 */
+  defaults?: MapDxfExportTaskOptions;
+  /** 全局 DXF 控件默认值。 */
+  control?: {
+    /** 是否渲染控件。 */
+    enabled?: boolean;
+    /** 控件显示位置。 */
+    position?: ControlPosition;
+    /** 控件文案。 */
+    label?: string;
+  };
+}
+
+/** 地图全局默认配置。 */
+export interface MapKitGlobalConfig {
+  /** 地图初始化全局默认配置。 */
+  mapOptions?: MapKitGlobalMapOptions;
+  /** 地图控件全局默认配置。 */
+  mapControls?: MapKitGlobalControls;
+  /** 地图插件全局默认配置。 */
+  plugins?: {
+    /** 吸附插件全局默认配置。 */
+    snap?: MapFeatureSnapGlobalDefaults;
+    /** 线草稿插件全局默认配置。 */
+    lineDraft?: LineDraftPreviewGlobalDefaults;
+    /** 多选插件全局默认配置。 */
+    multiSelect?: MapFeatureMultiSelectGlobalDefaults;
+    /** DXF 插件全局默认配置。 */
+    dxfExport?: MapDxfExportGlobalDefaults;
+  };
+  /** 图层样式工厂全局默认配置。 */
+  styles?: {
+    /** 点图层样式默认值。 */
+    circle?: MapCircleLayerStyleDefaults;
+    /** 线图层样式默认值。 */
+    line?: MapLineLayerStyleDefaults;
+    /** 面图层样式默认值。 */
+    fill?: MapFillLayerStyleDefaults;
+    /** 符号图层样式默认值。 */
+    symbol?: MapSymbolLayerStyleDefaults;
+    /** 栅格图层样式默认值。 */
+    raster?: MapRasterLayerStyleDefaults;
+  };
+}
+
+/** 空全局配置快照。 */
+const EMPTY_MAP_GLOBAL_CONFIG = Object.freeze({}) as Readonly<MapKitGlobalConfig>;
+
+/** 当前应用级全局配置快照。 */
+let currentMapGlobalConfig: Readonly<MapKitGlobalConfig> = EMPTY_MAP_GLOBAL_CONFIG;
+
+/**
+ * 深拷贝并冻结全局配置顶层快照。
+ * @param config 原始全局配置
+ * @returns 可安全复用的快照对象
+ */
+function freezeMapGlobalConfig(config: MapKitGlobalConfig): Readonly<MapKitGlobalConfig> {
+  return Object.freeze(cloneDeep(config)) as Readonly<MapKitGlobalConfig>;
+}
+
+/**
+ * 定义地图全局默认配置。
+ * 该函数只提供类型辅助，不产生任何运行时副作用。
+ *
+ * @param config 全局默认配置
+ * @returns 原样返回配置对象
+ */
+export function defineMapGlobalConfig(config: MapKitGlobalConfig): MapKitGlobalConfig {
+  return config;
+}
+
+/**
+ * 注册地图全局默认配置。
+ * 第一版按“整份替换”处理，不做 patch 合并。
+ *
+ * @param config 全局默认配置
+ * @returns 最新注册的只读配置快照
+ */
+export function setMapGlobalConfig(config: MapKitGlobalConfig): Readonly<MapKitGlobalConfig> {
+  currentMapGlobalConfig = freezeMapGlobalConfig(config);
+  return currentMapGlobalConfig;
+}
+
+/**
+ * 读取当前地图全局默认配置。
+ * @returns 最新注册的只读配置快照；未注册时返回空对象
+ */
+export function getMapGlobalConfig(): Readonly<MapKitGlobalConfig> {
+  return currentMapGlobalConfig;
+}
+
+/**
+ * 清空当前地图全局默认配置。
+ */
+export function resetMapGlobalConfig(): void {
+  currentMapGlobalConfig = EMPTY_MAP_GLOBAL_CONFIG;
+}

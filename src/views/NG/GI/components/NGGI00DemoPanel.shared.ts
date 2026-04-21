@@ -129,7 +129,7 @@ export const DXF_DEFAULT_TRUE_COLOR_CONFIG_PATH_TEXT =
 
 /** DXF 局部覆写示例说明。 */
 export const DXF_OVERRIDE_GUIDE_TEXT =
-  "右上角插件自带的“导出DXF”按钮会按“全局默认 -> 页面 defaults -> 单次 overrides”合并配置。当前页面额外提供的“导出主业务DXF”按钮，只在本次任务里覆写 sourceIds、fileName 和 layerNameResolver；后续如果业务要按页面或单次任务改 CRS、图层色或特定要素色，也继续通过 defaults 或 downloadDxf(overrides) 覆盖即可。";
+  "右上角插件自带的“导出DXF”按钮会按“全局默认 -> 页面 defaults -> 单次 overrides”合并配置。应用启动阶段可先通过 setMapGlobalConfig({ plugins: { dxfExport: { defaults, control } } }) 注册全局默认值；当前页面额外提供的“导出主业务DXF”按钮，只在本次任务里覆写 sourceIds、fileName 和 layerNameResolver；后续如果业务要按页面或单次任务改 CRS、图层色或特定要素色，也继续通过 defaults 或 downloadDxf(overrides) 覆盖即可。";
 
 /** DXF 插件根配置速查说明。 */
 export const DXF_PLUGIN_OPTIONS_GUIDE_TEXT = [

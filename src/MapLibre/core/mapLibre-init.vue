@@ -137,6 +137,7 @@ import {
   type MapLibreInitExpose,
   type MapLibreRawHandles,
 } from './mapLibre-init.types';
+import { resolveMapControls, resolveMapInitOptions } from './mapLibre-init.config';
 
 type MapLibreComponentOptions = Partial<MapOptions & { mapStyle: string | object }>;
 type DrawControlConstructorOptions = ConstructorParameters<typeof MaplibreTerradrawControl>[0];
@@ -215,10 +216,10 @@ function getTerradrawPropertyPolicy(
   controlType: TerradrawControlType
 ): MapFeaturePropertyPolicy | null {
   if (controlType === 'measure') {
-    return props.controls.MaplibreMeasureControl?.propertyPolicy || null;
+    return controls.value.MaplibreMeasureControl?.propertyPolicy || null;
   }
 
-  return props.controls.MaplibreTerradrawControl?.propertyPolicy || null;
+  return controls.value.MaplibreTerradrawControl?.propertyPolicy || null;
 }
 
 /**
@@ -258,15 +259,12 @@ const defaultOptions = {
   center: [114.305556, 22.543056] as [number, number],
   zoom: 0,
   attributionControl: false,
-};
+} satisfies MapLibreComponentOptions;
 
 // 合并默认配置和业务层传入的配置。
 // Vue-maplibre-gl 底层认的是 mapStyle，但 Mapbox 原生叫 style，这里做一下兼容。
 const mergedOptions = computed(() => {
-  const options = {
-    ...defaultOptions,
-    ...props.mapOptions,
-  } as MapLibreComponentOptions;
+  const options = resolveMapInitOptions(defaultOptions, props.mapOptions) as MapLibreComponentOptions;
 
   // 兼容原生的 style 属性到 vue-maplibre-gl 的 mapStyle
   if (options.style && !options.mapStyle) {
@@ -275,6 +273,12 @@ const mergedOptions = computed(() => {
 
   return options;
 });
+
+/**
+ * 读取当前地图最终生效的控件配置。
+ * 合并顺序固定为：库内空对象 -> 全局控件默认值 -> 页面局部覆写。
+ */
+const controls = computed(() => resolveMapControls(props.controls));
 
 // 初始化地图实例引用。
 // 后续普通图层交互、吸附模块、绘图控件和测量控件都统一复用这一个 map 句柄。
@@ -498,7 +502,7 @@ function syncDrawSnapping(localSnapConfig: TerradrawSnapSharedOptions | boolean 
     drawInstance: drawControlRef.value?.getTerraDrawInstance?.(),
     taskKey: 'draw-snapping',
     retryTask: () => {
-      syncDrawSnapping(props.controls.MaplibreTerradrawControl?.snapping);
+      syncDrawSnapping(controls.value.MaplibreTerradrawControl?.snapping);
     },
     localSnapConfig,
     resolveSnapOptions: (nextLocalSnapConfig) => {
@@ -520,7 +524,7 @@ function syncMeasureSnapping(
     drawInstance: measureControlRef.value?.getTerraDrawInstance?.(),
     taskKey: 'measure-snapping',
     retryTask: () => {
-      syncMeasureSnapping(props.controls.MaplibreMeasureControl?.snapping);
+      syncMeasureSnapping(controls.value.MaplibreMeasureControl?.snapping);
     },
     localSnapConfig,
     resolveSnapOptions: (nextLocalSnapConfig) => {
@@ -538,14 +542,14 @@ const drawControlLifecycle = useTerradrawControlLifecycle({
   getMapInstance: () => map,
   getSnapBinding: () => pluginHost.getMapSnapService()?.getBinding() || null,
   controlType: 'draw',
-  getConfig: () => props.controls.MaplibreTerradrawControl,
+  getConfig: () => controls.value.MaplibreTerradrawControl,
   Control: MaplibreTerradrawControl,
   defaultPosition: 'top-left',
   prepareOptions: prepareDrawControlOptions,
   getSnappingWatchSource: () => {
     const resolvedSnapOptions = resolveTerradrawSnapOptions(
       'draw',
-      props.controls.MaplibreTerradrawControl?.snapping
+      controls.value.MaplibreTerradrawControl?.snapping
     );
     return {
       enabled: resolvedSnapOptions.enabled,
@@ -555,7 +559,7 @@ const drawControlLifecycle = useTerradrawControlLifecycle({
     };
   },
   syncSnapping: () => {
-    syncDrawSnapping(props.controls.MaplibreTerradrawControl?.snapping);
+    syncDrawSnapping(controls.value.MaplibreTerradrawControl?.snapping);
   },
   clearReadySync: terradrawReadySyncManager.clear,
 });
@@ -569,14 +573,14 @@ const measureControlLifecycle = useTerradrawControlLifecycle({
   getMapInstance: () => map,
   getSnapBinding: () => pluginHost.getMapSnapService()?.getBinding() || null,
   controlType: 'measure',
-  getConfig: () => props.controls.MaplibreMeasureControl,
+  getConfig: () => controls.value.MaplibreMeasureControl,
   Control: MaplibreMeasureControl,
   defaultPosition: 'top-right',
   prepareOptions: prepareMeasureControlOptions,
   getSnappingWatchSource: () => {
     const resolvedSnapOptions = resolveTerradrawSnapOptions(
       'measure',
-      props.controls.MaplibreMeasureControl?.snapping
+      controls.value.MaplibreMeasureControl?.snapping
     );
     return {
       enabled: resolvedSnapOptions.enabled,
@@ -586,7 +590,7 @@ const measureControlLifecycle = useTerradrawControlLifecycle({
     };
   },
   syncSnapping: () => {
-    syncMeasureSnapping(props.controls.MaplibreMeasureControl?.snapping);
+    syncMeasureSnapping(controls.value.MaplibreMeasureControl?.snapping);
   },
   clearReadySync: terradrawReadySyncManager.clear,
 });

@@ -27,6 +27,10 @@
       "types": "./dist/business.d.ts",
       "import": "./dist/business.js"
     },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
     "./geometry": {
       "types": "./dist/geometry.d.ts",
       "import": "./dist/geometry.js"
