@@ -12,6 +12,12 @@ export { MapLineCorridorTool } from './MapLibre/shared/map-common-tools';
 /** 通用线测量工具类。需要测整条线长度或测线内区间长度时使用。 */
 export { MapLineMeasureTool } from './MapLibre/shared/map-common-tools';
 
+/** 交点转正式点要素工具。需要把临时交点落成正式点要素时使用。 */
+export { buildIntersectionPointFeature } from './MapLibre/shared/map-intersection-tools';
+
+/** 业务线交点计算工具。需要按 all 或 selected 范围收集交点时使用。 */
+export { collectLineIntersections } from './MapLibre/shared/map-intersection-tools';
+
 /** 来源引用键生成工具。需要把 sourceId 和 featureId 拼成稳定字符串键时使用。 */
 export { buildMapSourceFeatureRefKey } from './MapLibre/shared/map-common-tools';
 
@@ -65,3 +71,15 @@ export type { MapLineSegmentSelection } from './MapLibre/shared/map-common-tools
 
 /** 标准来源引用类型。跨 source 传递 sourceId 和 featureId 时使用。 */
 export type { MapSourceFeatureRef } from './MapLibre/shared/map-common-tools';
+
+/** 交点计算配置类型。声明交点收集入参时使用。 */
+export type { CollectLineIntersectionsOptions } from './MapLibre/shared/map-intersection-tools';
+
+/** 交点求交范围类型。区分 all 与 selected 两类范围时使用。 */
+export type { IntersectionScope } from './MapLibre/shared/map-intersection-tools';
+
+/** 参与求交的业务线候选类型。 */
+export type { MapIntersectionCandidate } from './MapLibre/shared/map-intersection-tools';
+
+/** 交点领域对象类型。 */
+export type { MapIntersectionPoint } from './MapLibre/shared/map-intersection-tools';

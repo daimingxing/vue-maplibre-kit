@@ -9,12 +9,15 @@ import {
   DXF_OVERRIDE_GUIDE_TEXT,
   DXF_PLUGIN_OPTIONS_GUIDE_TEXT,
   DXF_PRIMARY_ONLY_FILE_NAME,
+  buildMaterializedIntersectionFeature,
+  buildIntersectionCandidates,
   buildDxfResolvedOptionsText,
   buildLineDraftStatusText,
   buildLineOperationText,
   buildSelectionChangeSummary,
   buildSelectionGuideText,
   createSelectionPanelState,
+  getFeatureCollectionFeatures,
 } from "./NGGI00DemoPanel.shared";
 
 describe("NGGI00DemoPanel.shared", () => {
@@ -114,5 +117,172 @@ describe("NGGI00DemoPanel.shared", () => {
     expect(text).toContain("业务层局部覆写后：范围 = test_geojson_source");
     expect(text).toContain(`文件 = ${DXF_PRIMARY_ONLY_FILE_NAME}`);
     expect(text).toContain("图层名 = 按 sourceId + mark 生成");
+  });
+
+  it("会把业务 source 中的线要素转换成交点插件候选，并优先对齐业务属性 ID", () => {
+    const candidates = buildIntersectionCandidates([
+      {
+        sourceId: "primary-source",
+        layerId: "primary-line-layer",
+        features: [
+          {
+            type: "Feature",
+            id: 8,
+            properties: {
+              id: "line_1",
+              name: "主线",
+            },
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [0, 0],
+                [10, 10],
+              ],
+            },
+          },
+          {
+            type: "Feature",
+            id: "point_1",
+            properties: {
+              id: "point_1",
+            },
+            geometry: {
+              type: "Point",
+              coordinates: [5, 5],
+            },
+          },
+        ],
+      },
+      {
+        sourceId: "secondary-source",
+        layerId: "secondary-line-layer",
+        features: [
+          {
+            type: "Feature",
+            properties: {
+              id: "line_2",
+              name: "次线",
+            },
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [0, 10],
+                [10, 0],
+              ],
+            },
+          },
+          {
+            type: "Feature",
+            id: "line_3_top",
+            properties: {
+              name: "只存在顶层 ID 的线",
+            },
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [0, 20],
+                [10, 20],
+              ],
+            },
+          },
+          {
+            type: "Feature",
+            properties: {
+              name: "缺少 ID 的线",
+            },
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [0, 5],
+                [10, 5],
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(candidates).toHaveLength(3);
+    expect(candidates[0].ref).toEqual({
+      sourceId: "primary-source",
+      featureId: "line_1",
+      layerId: "primary-line-layer",
+    });
+    expect(candidates[1].ref).toEqual({
+      sourceId: "secondary-source",
+      featureId: "line_2",
+      layerId: "secondary-line-layer",
+    });
+    expect(candidates[2].ref).toEqual({
+      sourceId: "secondary-source",
+      featureId: "line_3_top",
+      layerId: "secondary-line-layer",
+    });
+  });
+
+  it("会安全读取 FeatureCollection 要素列表，并把交点上下文落成正式点要素", () => {
+    expect(getFeatureCollectionFeatures("mock.geojson")).toEqual([]);
+    expect(
+      getFeatureCollectionFeatures({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [0, 0],
+        },
+        properties: {
+          id: "single-point",
+        },
+      }),
+    ).toEqual([]);
+
+    expect(
+      getFeatureCollectionFeatures({
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [1, 2],
+            },
+            properties: {
+              id: "point_1",
+            },
+          },
+        ],
+      }),
+    ).toHaveLength(1);
+
+    const feature = buildMaterializedIntersectionFeature({
+      intersectionId: "intersection-a-b",
+      point: {
+        lng: 121.5,
+        lat: 31.2,
+      },
+      scope: "selected",
+      leftRef: {
+        sourceId: "primary-source",
+        featureId: "line-a",
+        layerId: "primary-line-layer",
+      },
+      rightRef: {
+        sourceId: "secondary-source",
+        featureId: "line-b",
+        layerId: "secondary-line-layer",
+      },
+      leftSegmentIndex: 0,
+      rightSegmentIndex: 1,
+      isEndpointHit: false,
+      participants: {
+        leftLabel: "主线",
+        rightLabel: "次线",
+      },
+    });
+
+    expect(feature.id).toBe("intersection-a-b");
+    expect(feature.properties?.id).toBe("intersection-a-b");
+    expect(feature.properties?.generatedKind).toBe("intersection-materialized");
+    expect(feature.properties?.leftFeatureId).toBe("line-a");
+    expect(feature.geometry.coordinates).toEqual([121.5, 31.2]);
   });
 });

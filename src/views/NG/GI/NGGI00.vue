@@ -44,6 +44,22 @@
               导出主业务DXF
             </ElButton>
           </mgl-custom-control>
+          <mgl-custom-control position="top-right" :noClasses="false">
+            <ElButton
+              style="background: white; width: 150px"
+              @click="refreshIntersectionPreviewDemo"
+            >
+              刷新交点示例
+            </ElButton>
+          </mgl-custom-control>
+          <mgl-custom-control position="top-right" :noClasses="false">
+            <ElButton
+              style="background: white; width: 190px"
+              @click="toggleIntersectionPreviewScope"
+            >
+              {{ intersectionScopeButtonText }}
+            </ElButton>
+          </mgl-custom-control>
         </template>
         <template #dataSource>
           <!--
@@ -148,10 +164,13 @@ import {
   MAP_PROPERTY_PANEL_NOTE,
   MEASURE_PROPERTY_PANEL_NOTE,
   TERRADRAW_CONTEXT_MENU_SUMMARY_TEXT,
+  buildMaterializedIntersectionFeature,
+  buildIntersectionCandidates,
   buildSelectionChangeSummary,
   buildSelectionSummaryRows,
   buildSelectionSummaryText,
   createSelectionPanelState,
+  getFeatureCollectionFeatures,
   type DxfSummaryOptions,
   type SelectionSummaryRow,
 } from "./components/NGGI00DemoPanel.shared";
@@ -170,6 +189,7 @@ import {
   createLineDraftPreviewPlugin,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
 } from "vue-maplibre-kit/plugins/line-draft-preview";
+import { createIntersectionPreviewPlugin } from "vue-maplibre-kit/plugins/intersection-preview";
 import {
   createMapDxfExportPlugin,
   type MapDxfExportOptions,
@@ -214,6 +234,7 @@ const {
 const SOURCE_IDS = {
   primary: "test_geojson_source",
   secondary: "test_geojson_source_secondary",
+  intersectionPoint: "intersection_point_source",
 } as const;
 
 /**
@@ -238,7 +259,14 @@ const LAYER_IDS = {
   symbol: "symbolLayer",
   secondaryLine: "lineLayerSecondary",
   secondaryFill: "fillLayerSecondary",
+  intersectionPoint: "intersectionPointLayer",
 } as const;
+
+/**
+ * 交点正式点示例使用的 feature-state 键名。
+ * 点击交点后，最新生成的正式点会打开这个状态分支，用更醒目的样式提示“这是刚刚落下来的点”。
+ */
+const INTERSECTION_POINT_STATE_KEY = "intersectionActive";
 
 /**
  * 修改样式示例统一使用的 feature-state 键名。
@@ -285,6 +313,10 @@ const test_geojson = ref<MapCommonFeatureCollection>(mapGeojson as MapCommonFeat
 const test_geojson_secondary = ref<MapCommonFeatureCollection>(
   mapGeojson2 as MapCommonFeatureCollection,
 );
+const intersection_point_geojson = ref<MapCommonFeatureCollection>({
+  type: "FeatureCollection",
+  features: [],
+});
 
 /**
  * 当前页面持有的地图组件公开实例引用。
@@ -947,6 +979,51 @@ const { layout: circleLayout, paint: circlePaint } = createCircleLayerStyle({
 });
 
 /**
+ * 交点正式点图层样式配置。
+ * 这组样式专门给“点击交点后生成的正式点要素”使用：
+ * 1. 默认态就比普通业务点更醒目
+ * 2. hover / selected 继续沿用普通交互语义
+ * 3. 最新一次生成的点会额外命中 `intersectionActive` 状态，形成强调效果
+ */
+const { layout: intersectionPointLayout, paint: intersectionPointPaint } = createCircleLayerStyle({
+  paint: {
+    "circle-color": createFeatureStateExpression({
+      states: {
+        [INTERSECTION_POINT_STATE_KEY]: "#facc15",
+      },
+      selected: "#f97316",
+      hover: "#fb7185",
+      order: [INTERSECTION_POINT_STATE_KEY, "selected", "hover"],
+      default: "#dc2626",
+    }),
+    "circle-radius": createFeatureStateExpression({
+      states: {
+        [INTERSECTION_POINT_STATE_KEY]: 10,
+      },
+      selected: 9,
+      order: [INTERSECTION_POINT_STATE_KEY, "selected"],
+      default: 7,
+    }),
+    "circle-stroke-color": createFeatureStateExpression({
+      states: {
+        [INTERSECTION_POINT_STATE_KEY]: "#7c2d12",
+      },
+      selected: "#7c2d12",
+      order: [INTERSECTION_POINT_STATE_KEY, "selected"],
+      default: "#ffffff",
+    }),
+    "circle-stroke-width": createFeatureStateExpression({
+      states: {
+        [INTERSECTION_POINT_STATE_KEY]: 4,
+      },
+      selected: 3,
+      order: [INTERSECTION_POINT_STATE_KEY, "selected"],
+      default: 2,
+    }),
+  },
+});
+
+/**
  * 4. 标签图层 (Symbol Layer) 样式配置
  * 用于渲染图标(Icon)和文字(Text)
  *
@@ -1435,11 +1512,107 @@ const mapDxfExportPlugin = createMapDxfExportPlugin({
 } as MapDxfExportOptions);
 
 /**
+ * 交点预览插件示例。
+ * 业务层示例重点不是“插件自己去扫描全图”，
+ * 而是明确告诉插件：
+ * 1. 哪些业务 source 允许参与求交
+ * 2. 哪些业务图层的线要参与求交
+ * 3. 命中交点后，业务层要如何消费交点上下文
+ */
+const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
+  // 是否启用整个交点插件。
+  // 设为 false 时，插件不会参与渲染，也不会计算交点。
+  enabled: true,
+
+  // 求交范围。
+  // selected：只计算“当前选中线”与候选线集合的交点。
+  // all：直接计算候选线集合内部的全部两两交点。
+  // 示例页默认先走 selected，便于观察“当前选中线对全图业务线求交”的交互体验。
+  scope: "selected",
+
+  // 交点预览图层默认是否显示。
+  // 设为 false 时，数据仍可计算，但图层默认不展示。
+  visible: true,
+
+  // 允许参与求交的业务 sourceId 列表。
+  // 这里不是“自动去这些 source 里找线”，而是让插件在候选线集合里再做一次 source 级过滤。
+  // 这样即使 getCandidates() 返回了更多数据，也只会留下这里声明过的 source。
+  targetSourceIds: [SOURCE_IDS.primary, SOURCE_IDS.secondary],
+
+  // 允许参与求交的业务 layerId 列表。
+  // 如果只想让某几个线图层参与求交，就把它们列在这里。
+  // 不传时，插件只按 targetSourceIds 过滤；传了以后，会继续按 layerId 再收紧一次范围。
+  targetLayerIds: [LAYER_IDS.primaryLine, LAYER_IDS.secondaryLine],
+
+  // 是否保留端点交点。
+  // true：线段在端点相接时，也算一个可操作交点。
+  // false：只保留严格落在线段内部的交点。
+  includeEndpoint: true,
+
+  // 交点坐标归一化保留的小数位。
+  // 它会影响交点临时 ID 的稳定性，以及“非常接近的两个点”是否会被视为同一个交点。
+  coordDigits: 6,
+
+  // 是否忽略同一条线自身的求交。
+  // true：不会把“同一条线自己的不同线段”拿来互相求交。
+  // 当前示例先保持 true，避免把自交/折点规则混进基础示例。
+  ignoreSelf: true,
+
+  // 由业务层提供“候选线集合”。
+  // 插件不直接读取整个 sourceRegistry，而是只消费这里返回的标准候选对象：
+  // 1. feature：真实线要素快照
+  // 2. ref：这条线在业务系统里的来源标识（sourceId / featureId / layerId）
+  // 后续交点上下文、消息提示、落点成正式点要素，都会依赖这个 ref 反查来源。
+  getCandidates: () => {
+    // 这里直接从业务 source 的最新 FeatureCollection 中抽取线要素。
+    // 这样能清楚表达：交点插件只消费“候选线”，至于候选线如何组织，完全由业务层自己决定。
+    //
+    // 下面这两个 source 输入项分别说明：
+    // 1. sourceId：告诉插件“这批线来自哪个业务 source”
+    // 2. layerId：告诉插件“这批线属于哪个业务图层”
+    // 3. features：传当前 source 最新的原始要素数组；helper 会只保留 LineString，并补齐稳定 featureRef
+    return buildIntersectionCandidates([
+      {
+        sourceId: SOURCE_IDS.primary,
+        layerId: LAYER_IDS.primaryLine,
+        features: primaryBusinessSource.sourceProps.data.features as BusinessKit.MapCommonFeature[],
+      },
+      {
+        sourceId: SOURCE_IDS.secondary,
+        layerId: LAYER_IDS.secondaryLine,
+        features: secondaryBusinessSource.sourceProps.data.features as BusinessKit.MapCommonFeature[],
+      },
+    ]);
+  },
+
+  // 单击交点后的业务回调。
+  // 这里拿到的是完整交点上下文：交点坐标、左右参与线、命中线段索引、是否端点命中等信息。
+  onClick: (context) => {
+    // 当前示例先只做消息提示和日志输出。
+    // 如果后续需要把交点落成正式点要素，可以直接在这里把 context 交给独立业务点 source 的写入逻辑。
+    console.log("[NGGI00 交点示例] 当前点击交点上下文", context);
+    ElMessage.success(
+      `已命中交点：${String(context.leftRef.featureId)} x ${String(context.rightRef.featureId)}`,
+    );
+  },
+
+  // 右键交点后的业务回调。
+  // 适合后续接右键菜单、交点详情面板、或“落点成正式点要素”等二级动作。
+  onContextMenu: (context) => {
+    console.log("[NGGI00 交点示例] 当前右键交点上下文", context);
+    ElMessage.info(
+      `交点范围：${context.scope}；坐标：${context.point.lng.toFixed(3)}, ${context.point.lat.toFixed(3)}`,
+    );
+  },
+});
+
+/**
  * 集中注册当前页面需要启用的地图能力扩展。
  */
 const mapPlugins = [
   mapFeatureSnapPlugin,
   lineDraftPreviewPlugin,
+  intersectionPreviewPlugin,
   mapFeatureMultiSelectPlugin,
   mapDxfExportPlugin,
 ];
@@ -1476,11 +1649,27 @@ const propertyEditor = businessMap.editor;
 const lineDraftPreview = businessMap.draft;
 
 /**
+ * 统一交点分组。
+ * 业务层通过 businessMap.intersection 读取交点数量、切换范围和手动刷新。
+ */
+const intersectionPreview = businessMap.intersection;
+
+/**
  * 当前页面是否存在线草稿要素。
  * 该状态直接来自线草稿能力门面，用于驱动示例面板与按钮显隐。
  */
 const hasLineDraftFeatures = computed(() => {
   return lineDraftPreview.hasFeatures.value;
+});
+
+/**
+ * 交点范围切换按钮文本。
+ * 这里把当前范围和交点数量一起展示，方便示例页直接观察 facade 的变化。
+ */
+const intersectionScopeButtonText = computed(() => {
+  const scopeText =
+    intersectionPreview.scope.value === "all" ? "全量业务线求交" : "当前选中线求交";
+  return `交点范围：${scopeText}（${intersectionPreview.count.value}）`;
 });
 
 /**
@@ -1947,6 +2136,37 @@ const downloadPrimaryBusinessSourceDxf = async (): Promise<void> => {
     console.error("[NGGI00 DXF 示例] 导出失败", error);
     ElMessage.error(getReadableErrorMessage(error));
   }
+};
+
+/**
+ * 手动刷新交点示例。
+ * 当业务层主动改了 source 数据，且希望立即重算交点时，可以直接调用这个门面动作。
+ */
+const refreshIntersectionPreviewDemo = (): void => {
+  const success = intersectionPreview.refresh();
+  if (!success) {
+    ElMessage.warning("交点插件尚未初始化完成");
+    return;
+  }
+
+  ElMessage.success(`交点已刷新，当前共 ${intersectionPreview.count.value} 个`);
+};
+
+/**
+ * 切换交点求交范围。
+ * selected 更适合跟随当前选中线逐条分析，
+ * all 更适合一次性观察当前页面所有业务线的交点分布。
+ */
+const toggleIntersectionPreviewScope = (): void => {
+  const nextScope = intersectionPreview.scope.value === "all" ? "selected" : "all";
+  const success = intersectionPreview.setScope(nextScope);
+  if (!success) {
+    ElMessage.warning("交点插件尚未初始化完成");
+    return;
+  }
+
+  const scopeText = nextScope === "all" ? "全量业务线求交" : "当前选中线求交";
+  ElMessage.success(`已切换为${scopeText}，当前共 ${intersectionPreview.count.value} 个`);
 };
 
 /**
