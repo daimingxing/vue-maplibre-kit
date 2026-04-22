@@ -1,5 +1,6 @@
 import {
   getMapGlobalConfig,
+  type IntersectionPreviewGlobalDefaults,
   type LineDraftPreviewGlobalDefaults,
   type MapDxfExportGlobalDefaults,
   type MapFeatureMultiSelectGlobalDefaults,
@@ -53,6 +54,16 @@ export function getMapGlobalSnapDefaults(): MapFeatureSnapGlobalDefaults | undef
  */
 export function getMapGlobalLineDraftDefaults(): LineDraftPreviewGlobalDefaults | undefined {
   return getMapGlobalConfig().plugins?.lineDraft;
+}
+
+/**
+ * 读取交点预览插件全局默认配置。
+ * @returns 交点预览插件全局默认配置
+ */
+export function getMapGlobalIntersectionDefaults():
+  | IntersectionPreviewGlobalDefaults
+  | undefined {
+  return getMapGlobalConfig().plugins?.intersection;
 }
 
 /**

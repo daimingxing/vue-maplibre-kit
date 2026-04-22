@@ -8,6 +8,8 @@ describe('useIntersectionPreview', () => {
       refresh: () => undefined,
       clear: () => undefined,
       materialize: () => true,
+      removeMaterialized: () => true,
+      updateMaterializedProperties: () => true,
       clearMaterialized: () => undefined,
       show: () => undefined,
       hide: () => undefined,
@@ -47,6 +49,8 @@ describe('useIntersectionPreview', () => {
     expect(preview.visible.value).toBe(true);
     expect(preview.scope.value).toBe('all');
     expect(preview.materialize()).toBe(true);
+    expect(preview.removeMaterialized('intersection-a')).toBe(true);
+    expect(preview.updateMaterializedProperties('intersection-a', { name: '已确认' })).toBe(true);
     expect(typeof preview.refresh).toBe('function');
   });
 });

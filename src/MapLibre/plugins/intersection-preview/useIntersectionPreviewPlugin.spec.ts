@@ -1,8 +1,11 @@
 import { ref } from 'vue';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MapPluginContext } from '../types';
 import type { MapLayerInteractiveContext } from '../../shared/mapLibre-controls-types';
 import type { MapCommonLineFeature, MapSourceFeatureRef } from '../../shared/map-common-tools';
+import { createMapBusinessSource, createMapBusinessSourceRegistry } from '../../facades/createMapBusinessSource';
+import { resetMapGlobalConfig, setMapGlobalConfig } from '../../../config';
+import { createLineBusinessLayer } from '../../facades/mapBusinessLayer';
 import type { IntersectionPreviewOptions } from './types';
 import {
   intersectionPreviewPlugin,
@@ -22,6 +25,10 @@ vi.mock('vue-maplibre-gl', () => ({
     name: 'MglGeoJsonSource',
   },
 }));
+
+afterEach(() => {
+  resetMapGlobalConfig();
+});
 
 /**
  * 创建测试用线要素。
@@ -87,6 +94,61 @@ function createPluginOptions(): IntersectionPreviewOptions {
       },
     ],
   };
+}
+
+/**
+ * 创建测试用 sourceRegistry。
+ * @returns 仅包含两条线 source 的业务注册表
+ */
+function createSourceRegistry() {
+  const primarySource = createMapBusinessSource({
+    sourceId: 'line-source',
+    data: ref({
+      type: 'FeatureCollection',
+      features: [
+        createLineFeature('line-a', [
+          [0, 0],
+          [10, 10],
+        ]),
+      ],
+    }),
+    promoteId: 'id',
+    layers: [
+      createLineBusinessLayer({
+        layerId: 'line-layer',
+        geometryTypes: ['LineString'],
+        style: {
+          layout: {},
+          paint: {},
+        },
+      }),
+    ],
+  });
+  const secondarySource = createMapBusinessSource({
+    sourceId: 'line-source-2',
+    data: ref({
+      type: 'FeatureCollection',
+      features: [
+        createLineFeature('line-b', [
+          [0, 10],
+          [10, 0],
+        ]),
+      ],
+    }),
+    promoteId: 'id',
+    layers: [
+      createLineBusinessLayer({
+        layerId: 'line-layer-2',
+        geometryTypes: ['LineString'],
+        style: {
+          layout: {},
+          paint: {},
+        },
+      }),
+    ],
+  });
+
+  return createMapBusinessSourceRegistry([primarySource, secondarySource]);
 }
 
 /**
@@ -223,5 +285,84 @@ describe('intersectionPreviewPlugin', () => {
     pluginInstance.getMapInteractivePatch?.()?.onSelectionChange?.({} as any);
 
     expect(pluginApi.getData().features).toHaveLength(1);
+  });
+
+  it('未传 getCandidates 时应自动从 sourceRegistry 提取目标线', () => {
+    const optionsRef = ref<IntersectionPreviewOptions>({
+      enabled: true,
+      visible: true,
+      scope: 'all',
+      sourceRegistry: createSourceRegistry(),
+      targetSourceIds: ['line-source', 'line-source-2'],
+      targetLayerIds: ['line-layer', 'line-layer-2'],
+    });
+
+    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error('未获取到交点插件 API');
+    }
+
+    expect(pluginApi.getData().features).toHaveLength(1);
+  });
+
+  it('应允许覆写预览层和正式交点层样式', () => {
+    const optionsRef = ref<IntersectionPreviewOptions>({
+      ...createPluginOptions(),
+      previewStyleOverrides: {
+        paint: {
+          'circle-color': '#111111',
+        },
+      },
+      materializedStyleOverrides: {
+        paint: {
+          'circle-radius': 12,
+        },
+      },
+    });
+
+    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const renderItems = pluginInstance.getRenderItems?.() || [];
+    const renderProps = renderItems[0]?.props;
+
+    expect(renderProps.style.paint['circle-color']).toBe('#111111');
+    expect(renderProps.materializedStyle.paint['circle-radius']).toBe(12);
+  });
+
+  it('应合并全局交点样式与实例样式，且实例优先级更高', () => {
+    setMapGlobalConfig({
+      plugins: {
+        intersection: {
+          previewStyleOverrides: {
+            paint: {
+              'circle-color': '#222222',
+              'circle-radius': 8,
+            },
+          },
+          materializedStyleOverrides: {
+            paint: {
+              'circle-radius': 9,
+            },
+          },
+        },
+      },
+    });
+
+    const optionsRef = ref<IntersectionPreviewOptions>({
+      ...createPluginOptions(),
+      previewStyleOverrides: {
+        paint: {
+          'circle-color': '#111111',
+        },
+      },
+    });
+
+    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const renderItems = pluginInstance.getRenderItems?.() || [];
+    const renderProps = renderItems[0]?.props;
+
+    expect(renderProps.style.paint['circle-color']).toBe('#111111');
+    expect(renderProps.style.paint['circle-radius']).toBe(8);
+    expect(renderProps.materializedStyle.paint['circle-radius']).toBe(9);
   });
 });

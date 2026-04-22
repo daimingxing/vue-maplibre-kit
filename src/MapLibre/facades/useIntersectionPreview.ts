@@ -1,5 +1,5 @@
 import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from 'vue';
-import type { MapCommonFeatureCollection } from '../shared/map-common-tools';
+import type { MapCommonFeatureCollection, MapCommonProperties } from '../shared/map-common-tools';
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
 import type {
   IntersectionPreviewContext,
@@ -34,6 +34,10 @@ export interface UseIntersectionPreviewResult {
   clear: () => boolean;
   /** 将指定交点写入正式交点点要素集合。 */
   materialize: (intersectionId?: string | null) => boolean;
+  /** 删除指定正式交点点要素。 */
+  removeMaterialized: (intersectionId?: string | null) => boolean;
+  /** 更新指定正式交点点要素的业务属性。 */
+  updateMaterializedProperties: (intersectionId: string, patch: MapCommonProperties) => boolean;
   /** 清空正式交点点要素集合。 */
   clearMaterialized: () => boolean;
   /** 显示当前交点图层。 */
@@ -120,6 +124,10 @@ export function useIntersectionPreview(
     refresh: () => runAction((api) => api.refresh()),
     clear: () => runAction((api) => api.clear()),
     materialize: (intersectionId = null) => runBooleanAction((api) => api.materialize(intersectionId)),
+    removeMaterialized: (intersectionId = null) =>
+      runBooleanAction((api) => api.removeMaterialized(intersectionId)),
+    updateMaterializedProperties: (intersectionId, patch) =>
+      runBooleanAction((api) => api.updateMaterializedProperties(intersectionId, patch)),
     clearMaterialized: () => runAction((api) => api.clearMaterialized()),
     show: () => runAction((api) => api.show()),
     hide: () => runAction((api) => api.hide()),

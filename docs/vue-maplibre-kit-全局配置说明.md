@@ -86,6 +86,7 @@ createApp(App).mount('#app');
   plugins?: {
     snap?: ...
     lineDraft?: ...
+    intersection?: ...
     multiSelect?: ...
     dxfExport?: ...
   }
@@ -107,6 +108,7 @@ createApp(App).mount('#app');
 | `config.mapControls` | 地图控件默认参数 |
 | `config.plugins.snap` | 吸附插件默认参数 |
 | `config.plugins.lineDraft` | 线草稿预览插件默认参数 |
+| `config.plugins.intersection` | 交点预览插件默认参数 |
 | `config.plugins.multiSelect` | 多选插件默认参数 |
 | `config.plugins.dxfExport` | DXF 导出插件默认参数 |
 | `config.styles.circle` | 点图层样式工厂默认值 |
@@ -879,6 +881,32 @@ config.plugins.lineDraft
 | --- | --- |
 | `inheritInteractiveFromLayerId` | 它依赖页面正式业务图层 ID，属于实例绑定信息。 |
 
+### 8.4 `plugins.intersection` 参数补充
+
+入口路径：
+
+```ts
+config.plugins.intersection
+```
+
+类型来源：
+
+- [src/config.ts](../src/config.ts)
+- [src/MapLibre/plugins/intersection-preview/types.ts](../src/MapLibre/plugins/intersection-preview/types.ts)
+
+参数表：
+
+| 参数路径 | 类型 / 取值 | 作用 |
+| --- | --- | --- |
+| `config.plugins.intersection.previewStyleOverrides.layout.*` | `CircleLayer layout` | 预览交点图层 layout 覆写；字段清单见本文 `11.2 styles.circle.layout`。 |
+| `config.plugins.intersection.previewStyleOverrides.paint.*` | `CircleLayer paint` | 预览交点图层 paint 覆写；字段清单见本文 `11.2 styles.circle.paint`。 |
+| `config.plugins.intersection.materializedStyleOverrides.layout.*` | `CircleLayer layout` | 正式交点图层 layout 覆写；字段清单见本文 `11.2 styles.circle.layout`。 |
+| `config.plugins.intersection.materializedStyleOverrides.paint.*` | `CircleLayer paint` | 正式交点图层 paint 覆写；字段清单见本文 `11.2 styles.circle.paint`。 |
+
+合并顺序：
+
+- `交点插件内置样式 -> config.plugins.intersection.* -> createIntersectionPreviewPlugin(options).*StyleOverrides`
+
 ---
 
 ## 9. `plugins.multiSelect` 全量参数表
@@ -1278,6 +1306,19 @@ export function applyMapGlobalConfig(): void {
         },
       },
       plugins: {
+        intersection: {
+          previewStyleOverrides: {
+            paint: {
+              'circle-radius': 6,
+            },
+          },
+          materializedStyleOverrides: {
+            paint: {
+              'circle-radius': 7,
+              'circle-color': '#1677ff',
+            },
+          },
+        },
         dxfExport: {
           defaults: {
             sourceCrs: 'EPSG:4326',

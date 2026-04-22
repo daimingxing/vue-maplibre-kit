@@ -4,13 +4,51 @@ import {
   collectLineIntersections,
   type IntersectionScope,
 } from '../../shared/map-intersection-tools';
-import type { MapCommonFeature } from '../../shared/map-common-tools';
+import type { MapCommonFeature, MapCommonProperties } from '../../shared/map-common-tools';
 import { useIntersectionPreviewStore } from './useIntersectionPreviewStore';
 import type {
   IntersectionPreviewContext,
   IntersectionPreviewState,
   UseIntersectionPreviewControllerOptions,
 } from './types';
+
+/** 正式交点系统保留属性。 */
+const MATERIALIZED_RESERVED_PROPERTY_KEYS = new Set([
+  'id',
+  'intersectionId',
+  'scope',
+  'isEndpointHit',
+  'leftSourceId',
+  'leftFeatureId',
+  'rightSourceId',
+  'rightFeatureId',
+  'leftSegmentIndex',
+  'rightSegmentIndex',
+  'generatedKind',
+]);
+
+/**
+ * 清洗正式交点的业务自定义属性。
+ * 系统保留字段始终由插件自己维护，业务层只允许补充额外属性。
+ *
+ * @param properties 原始属性对象
+ * @returns 仅保留业务自定义字段后的属性对象
+ */
+function sanitizeMaterializedProperties(
+  properties?: MapCommonProperties | null
+): MapCommonProperties {
+  const nextProperties: MapCommonProperties = {};
+
+  Object.entries(properties || {}).forEach(([propertyKey, propertyValue]) => {
+    if (MATERIALIZED_RESERVED_PROPERTY_KEYS.has(propertyKey)) {
+      return;
+    }
+
+    nextProperties[propertyKey] = propertyValue;
+  });
+
+  return nextProperties;
+}
 
 /**
  * 构建预览交点上下文。
@@ -38,11 +76,15 @@ function createPreviewIntersectionContext(
  * @returns 携带正式点要素的交点上下文
  */
 function createMaterializedIntersectionContext(
-  intersection: Parameters<typeof buildMaterializedIntersectionFeature>[0]
+  intersection: Parameters<typeof buildMaterializedIntersectionFeature>[0],
+  extraProperties: MapCommonProperties = {}
 ): IntersectionPreviewContext {
   return {
     ...intersection,
-    feature: buildMaterializedIntersectionFeature(intersection) as MapCommonFeature,
+    feature: buildMaterializedIntersectionFeature(
+      intersection,
+      sanitizeMaterializedProperties(extraProperties)
+    ) as MapCommonFeature,
   };
 }
 
@@ -59,6 +101,38 @@ export function useIntersectionPreviewController(
 ) {
   const store = useIntersectionPreviewStore();
   store.visible.value = options.getOptions()?.visible !== false;
+
+  /**
+   * 读取正式交点当前保留的业务自定义属性。
+   * @param context 当前正式交点上下文
+   * @returns 可继续复用的业务属性对象
+   */
+  const getMaterializedCustomProperties = (
+    context: IntersectionPreviewContext | null | undefined
+  ): MapCommonProperties => {
+    return sanitizeMaterializedProperties((context?.feature?.properties || null) as MapCommonProperties);
+  };
+
+  /**
+   * 解析当前交点首次落点时的默认业务属性。
+   * @param intersection 当前交点上下文
+   * @returns 当前交点应注入的默认业务属性
+   */
+  const resolveMaterializedProperties = (
+    intersection: IntersectionPreviewContext
+  ): MapCommonProperties => {
+    const propertyResolver = options.getOptions()?.materializedProperties;
+    if (!propertyResolver) {
+      return {};
+    }
+
+    const rawProperties =
+      typeof propertyResolver === 'function'
+        ? propertyResolver(intersection)
+        : propertyResolver;
+
+    return sanitizeMaterializedProperties(rawProperties);
+  };
 
   /**
    * 读取当前最新求交范围。
@@ -152,7 +226,10 @@ export function useIntersectionPreviewController(
       }
 
       nextMaterializedContextMap[intersectionId] =
-        createMaterializedIntersectionContext(latestPreviewContext);
+        createMaterializedIntersectionContext(
+          latestPreviewContext,
+          getMaterializedCustomProperties(nextMaterializedContextMap[intersectionId])
+        );
     });
 
     store.replaceMaterialized(nextMaterializedContextMap);
@@ -259,9 +336,70 @@ export function useIntersectionPreviewController(
       return false;
     }
 
+    const currentMaterializedContext = store.materializedContextMap.value[intersection.intersectionId];
+    const nextCustomProperties = currentMaterializedContext
+      ? getMaterializedCustomProperties(currentMaterializedContext)
+      : resolveMaterializedProperties(intersection);
+
     store.replaceMaterialized({
       ...store.materializedContextMap.value,
-      [intersection.intersectionId]: createMaterializedIntersectionContext(intersection),
+      [intersection.intersectionId]: createMaterializedIntersectionContext(
+        intersection,
+        nextCustomProperties
+      ),
+    });
+    options.onStateChange?.(buildState());
+    return true;
+  };
+
+  /**
+   * 删除指定正式交点点要素。
+   * @param intersectionId 目标交点 ID；不传时默认使用当前选中交点
+   * @returns 是否删除成功
+   */
+  const removeMaterialized = (
+    intersectionId: string | null = store.selectedId.value
+  ): boolean => {
+    if (!intersectionId || !store.materializedContextMap.value[intersectionId]) {
+      return false;
+    }
+
+    const nextContextMap = {
+      ...store.materializedContextMap.value,
+    };
+
+    delete nextContextMap[intersectionId];
+    store.replaceMaterialized(nextContextMap);
+    options.onStateChange?.(buildState());
+    return true;
+  };
+
+  /**
+   * 更新指定正式交点点要素的业务属性。
+   * @param intersectionId 目标交点 ID
+   * @param patch 业务属性补丁
+   * @returns 是否更新成功
+   */
+  const updateMaterializedProperties = (
+    intersectionId: string,
+    patch: MapCommonProperties
+  ): boolean => {
+    const currentContext = store.materializedContextMap.value[intersectionId];
+    if (!currentContext) {
+      return false;
+    }
+
+    const nextCustomProperties = {
+      ...getMaterializedCustomProperties(currentContext),
+      ...sanitizeMaterializedProperties(patch),
+    };
+
+    store.replaceMaterialized({
+      ...store.materializedContextMap.value,
+      [intersectionId]: createMaterializedIntersectionContext(
+        currentContext,
+        nextCustomProperties
+      ),
     });
     options.onStateChange?.(buildState());
     return true;
@@ -306,6 +444,8 @@ export function useIntersectionPreviewController(
     refresh,
     clear,
     materialize,
+    removeMaterialized,
+    updateMaterializedProperties,
     clearMaterialized,
     show,
     hide,

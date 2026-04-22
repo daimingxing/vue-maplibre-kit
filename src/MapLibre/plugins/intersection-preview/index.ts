@@ -42,10 +42,12 @@ export {
 export type { IntersectionPreviewPluginDescriptor };
 export type {
   IntersectionPreviewContext,
+  IntersectionPreviewMaterializedProperties,
   IntersectionPreviewOptions,
   IntersectionPreviewPluginApi,
   IntersectionPreviewScope,
   IntersectionPreviewState,
+  IntersectionPreviewStyleOverrides,
   UseIntersectionPreviewControllerOptions,
 } from './types';
 export type { MapIntersectionSource } from '../../shared/map-intersection-tools';

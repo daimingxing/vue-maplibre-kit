@@ -1,5 +1,12 @@
+import type { CircleLayerSpecification } from 'maplibre-gl';
 import type { MapIntersectionCandidate, MapIntersectionPoint } from '../../shared/map-intersection-tools';
-import type { MapCommonFeature, MapCommonFeatureCollection } from '../../shared/map-common-tools';
+import type {
+  MapCommonFeature,
+  MapCommonFeatureCollection,
+  MapCommonProperties,
+} from '../../shared/map-common-tools';
+import type { MapBusinessSourceRegistry } from '../../facades/createMapBusinessSource';
+import type { MapLayerStyleOverrides } from '../../shared/map-layer-style-config';
 import type { MapLayerInteractiveContext } from '../../shared/mapLibre-controls-types';
 
 /** 交点插件求交范围。 */
@@ -27,6 +34,17 @@ export interface IntersectionPreviewContext extends MapIntersectionPoint {
   feature: MapCommonFeature | null;
 }
 
+/** 正式交点默认属性解析器。 */
+export type IntersectionPreviewMaterializedProperties =
+  | MapCommonProperties
+  | ((context: IntersectionPreviewContext) => MapCommonProperties);
+
+/** 交点圆点图层样式覆写。 */
+export type IntersectionPreviewStyleOverrides = MapLayerStyleOverrides<
+  CircleLayerSpecification['layout'],
+  CircleLayerSpecification['paint']
+>;
+
 /** 交点插件配置。 */
 export interface IntersectionPreviewOptions {
   /** 当前插件是否启用。 */
@@ -41,14 +59,22 @@ export interface IntersectionPreviewOptions {
   targetSourceIds: string[];
   /** 参与求交的来源 layer 列表。 */
   targetLayerIds?: string[];
+  /** 业务 source 注册表。传入后，插件会自动从注册表中提取候选线。 */
+  sourceRegistry?: MapBusinessSourceRegistry;
   /** 是否保留端点交点。 */
   includeEndpoint?: boolean;
   /** 交点坐标归一化小数位。 */
   coordDigits?: number;
   /** 是否忽略同一条线自交。 */
   ignoreSelf?: boolean;
-  /** 外部提供的交点候选线集合。 */
+  /** 外部提供的交点候选线集合。仅在自动 sourceRegistry 模式不够用时作为高级兜底。 */
   getCandidates?: () => MapIntersectionCandidate[];
+  /** 生成正式交点点要素时注入的默认业务属性。 */
+  materializedProperties?: IntersectionPreviewMaterializedProperties;
+  /** 预览交点图层样式局部覆写。 */
+  previewStyleOverrides?: IntersectionPreviewStyleOverrides;
+  /** 正式交点图层样式局部覆写。 */
+  materializedStyleOverrides?: IntersectionPreviewStyleOverrides;
   /** 点击交点回调。 */
   onClick?: (context: IntersectionPreviewContext) => void;
   /** 右键交点回调。 */
@@ -63,6 +89,13 @@ export interface IntersectionPreviewPluginApi {
   clear: () => void;
   /** 将指定交点写入正式交点点要素集合。 */
   materialize: (intersectionId?: string | null) => boolean;
+  /** 删除指定正式交点点要素。 */
+  removeMaterialized: (intersectionId?: string | null) => boolean;
+  /** 更新指定正式交点点要素的业务属性。 */
+  updateMaterializedProperties: (
+    intersectionId: string,
+    patch: MapCommonProperties
+  ) => boolean;
   /** 清空正式交点点要素集合。 */
   clearMaterialized: () => void;
   /** 显示交点层。 */

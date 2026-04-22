@@ -36,6 +36,11 @@ export type { IntersectionPreviewContext } from '../MapLibre/plugins/intersectio
 /** 交点预览插件配置类型。初始化交点插件时使用。 */
 export type { IntersectionPreviewOptions } from '../MapLibre/plugins/intersection-preview';
 
+/** 正式交点默认属性解析器类型。需要定制落点属性时使用。 */
+export type {
+  IntersectionPreviewMaterializedProperties,
+} from '../MapLibre/plugins/intersection-preview';
+
 /** 交点预览插件 API 类型。业务层直接调用交点插件实例时使用。 */
 export type { IntersectionPreviewPluginApi } from '../MapLibre/plugins/intersection-preview';
 
@@ -44,6 +49,9 @@ export type { IntersectionPreviewScope } from '../MapLibre/plugins/intersection-
 
 /** 交点预览状态类型。监听交点状态变化时使用。 */
 export type { IntersectionPreviewState } from '../MapLibre/plugins/intersection-preview';
+
+/** 交点图层样式覆写类型。需要定制预览点 / 正式点样式时使用。 */
+export type { IntersectionPreviewStyleOverrides } from '../MapLibre/plugins/intersection-preview';
 
 /** 交点候选来源类型。声明 sourceId、layerId 和 data 时使用。 */
 export type { MapIntersectionSource } from '../MapLibre/plugins/intersection-preview';

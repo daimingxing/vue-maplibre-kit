@@ -330,10 +330,10 @@ export function buildIntersectionMaterializedStatusText(
   }
 
   if (materializedCount <= 0) {
-    return "当前示例已开启 materializeOnClick。点击地图上的预览交点后，插件会自动生成正式交点点要素，无需业务层自己声明 source 或 layer。";
+    return "当前示例已开启 materializeOnClick。点击地图上的预览交点后，插件会自动生成正式交点点要素；业务层可继续通过 getMaterializedData() 读取 GeoJSON，或通过 updateMaterializedProperties() / removeMaterialized() 追加属性与撤销误点。";
   }
 
-  return `当前已有 ${materializedCount} 个正式交点点要素。它们由插件内部统一托管，业务层只需要通过 businessMap.intersection 读取数量或调用 clearMaterialized() 清理即可。`;
+  return `当前已有 ${materializedCount} 个正式交点点要素。它们由插件内部统一托管，业务层可通过 businessMap.intersection 调用 getMaterializedData()、updateMaterializedProperties()、removeMaterialized()、clearMaterialized()。`;
 }
 
 /**

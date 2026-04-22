@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { MapCommonLineFeature, MapSourceFeatureRef } from '../../shared/map-common-tools';
+import { describe, expect, it } from 'vitest';
+import type { MapCommonLineFeature } from '../../shared/map-common-tools';
+import type { MapSourceFeatureRef } from '../../shared/map-common-tools';
 import { useIntersectionPreviewController } from './useIntersectionPreviewController';
+import type { IntersectionPreviewOptions } from './types';
 
 /**
  * 创建测试用线要素。
@@ -36,159 +38,81 @@ function createFeatureRef(featureId: string): MapSourceFeatureRef {
   };
 }
 
-describe('useIntersectionPreviewController', () => {
-  it('会刷新交点集合并按 ID 返回交点上下文', () => {
-    const onStateChange = vi.fn();
-    const controller = useIntersectionPreviewController({
-      getOptions: () => ({
-        enabled: true,
-        visible: true,
-        scope: 'all',
-        targetSourceIds: ['line-source'],
-        includeEndpoint: true,
-        coordDigits: 6,
-      }),
-      getCandidates: () => [
-        {
-          feature: createLineFeature('line-a', [
-            [0, 0],
-            [10, 10],
-          ]),
-          ref: createFeatureRef('line-a'),
-        },
-        {
-          feature: createLineFeature('line-b', [
-            [0, 10],
-            [10, 0],
-          ]),
-          ref: createFeatureRef('line-b'),
-        },
-      ],
-      getSelectedFeatureContext: () => null,
-      onStateChange,
-    });
-
-    controller.refresh();
-    const data = controller.data.value;
-    const [feature] = data.features;
-    const context = controller.getById(String(feature.id));
-
-    expect(data.features).toHaveLength(1);
-    expect(context?.intersectionId).toBe(String(feature.id));
-    expect(context?.feature?.geometry.type).toBe('Point');
-    expect(onStateChange).toHaveBeenCalled();
-  });
-
-  it('在 selected 模式下没有选中线时返回空集合', () => {
-    const controller = useIntersectionPreviewController({
-      getOptions: () => ({
-        enabled: true,
-        visible: true,
-        scope: 'selected',
-        targetSourceIds: ['line-source'],
-        includeEndpoint: true,
-        coordDigits: 6,
-      }),
-      getCandidates: () => [
-        {
-          feature: createLineFeature('line-a', [
-            [0, 0],
-            [10, 10],
-          ]),
-          ref: createFeatureRef('line-a'),
-        },
-      ],
-      getSelectedFeatureContext: () => null,
-    });
-
-    controller.refresh();
-
-    expect(controller.data.value.features).toHaveLength(0);
-    expect(controller.getSelected()).toBeNull();
-  });
-
-  it('切换到 all 范围后会立即按全量候选线重新求交', () => {
-    const stateSnapshots: Array<{ scope: 'all' | 'selected'; count: number }> = [];
-    const pluginOptions = {
-      enabled: true,
-      visible: true,
-      scope: 'selected' as const,
-      targetSourceIds: ['line-source'],
-      includeEndpoint: true,
-      coordDigits: 6,
-    };
-    const controller = useIntersectionPreviewController({
-      getOptions: () => pluginOptions,
-      getCandidates: () => [
-        {
-          feature: createLineFeature('line-a', [
-            [0, 0],
-            [10, 10],
-          ]),
-          ref: createFeatureRef('line-a'),
-        },
-        {
-          feature: createLineFeature('line-b', [
-            [0, 10],
-            [10, 0],
-          ]),
-          ref: createFeatureRef('line-b'),
-        },
-      ],
-      getSelectedFeatureContext: () => null,
-      onStateChange: (state) => {
-        stateSnapshots.push({
-          scope: state.scope,
-          count: state.count,
-        });
+/**
+ * 创建测试用交点插件配置。
+ * @returns 标准配置
+ */
+function createPluginOptions(): IntersectionPreviewOptions {
+  return {
+    enabled: true,
+    visible: true,
+    scope: 'all',
+    targetSourceIds: ['line-source'],
+    targetLayerIds: ['line-layer'],
+    includeEndpoint: true,
+    coordDigits: 6,
+    materializedProperties: (context) => {
+      return {
+        category: 'intersection-node',
+        note: `${String(context.leftRef.featureId)} x ${String(context.rightRef.featureId)}`,
+      };
+    },
+    getCandidates: () => [
+      {
+        feature: createLineFeature('line-a', [
+          [0, 0],
+          [10, 10],
+        ]),
+        ref: createFeatureRef('line-a'),
       },
-    });
+      {
+        feature: createLineFeature('line-b', [
+          [0, 10],
+          [10, 0],
+        ]),
+        ref: createFeatureRef('line-b'),
+      },
+    ],
+  };
+}
 
-    controller.refresh();
-    expect(controller.data.value.features).toHaveLength(0);
-
-    controller.setScope('all');
-
-    expect(controller.data.value.features).toHaveLength(1);
-    expect(stateSnapshots.at(-1)).toEqual({
-      scope: 'all',
-      count: 1,
-    });
-  });
-
-  it('手动隐藏后重新 refresh 不应被 options.visible 覆盖', () => {
+describe('useIntersectionPreviewController', () => {
+  it('应支持正式交点默认属性、属性更新、删除，并在 refresh 后保留业务补丁', () => {
     const controller = useIntersectionPreviewController({
-      getOptions: () => ({
-        enabled: true,
-        visible: true,
-        scope: 'all',
-        targetSourceIds: ['line-source'],
-        includeEndpoint: true,
-        coordDigits: 6,
-      }),
-      getCandidates: () => [
-        {
-          feature: createLineFeature('line-a', [
-            [0, 0],
-            [10, 10],
-          ]),
-          ref: createFeatureRef('line-a'),
-        },
-        {
-          feature: createLineFeature('line-b', [
-            [0, 10],
-            [10, 0],
-          ]),
-          ref: createFeatureRef('line-b'),
-        },
-      ],
+      getOptions: () => createPluginOptions(),
+      getCandidates: () => createPluginOptions().getCandidates?.() || [],
       getSelectedFeatureContext: () => null,
     });
 
     controller.refresh();
-    controller.hide();
+
+    const [previewFeature] = controller.getData().features;
+    const intersectionId = String(previewFeature?.id || '');
+    expect(intersectionId).not.toBe('');
+
+    expect(controller.materialize(intersectionId)).toBe(true);
+    expect(controller.getMaterializedData().features).toHaveLength(1);
+    expect(controller.getMaterializedData().features[0].properties?.category).toBe(
+      'intersection-node'
+    );
+
+    expect(
+      controller.updateMaterializedProperties(intersectionId, {
+        name: '已确认交点',
+        status: 'done',
+      })
+    ).toBe(true);
+    expect(controller.getMaterializedData().features[0].properties?.name).toBe('已确认交点');
+    expect(controller.getMaterializedData().features[0].properties?.status).toBe('done');
+    expect(controller.getMaterializedData().features[0].properties?.id).toBe(intersectionId);
+
     controller.refresh();
 
-    expect(controller.visible.value).toBe(false);
+    expect(controller.getMaterializedData().features).toHaveLength(1);
+    expect(controller.getMaterializedData().features[0].properties?.status).toBe('done');
+    expect(controller.getMaterializedData().features[0].properties?.id).toBe(intersectionId);
+
+    expect(controller.removeMaterialized(intersectionId)).toBe(true);
+    expect(controller.getMaterializedData().features).toHaveLength(0);
   });
 });

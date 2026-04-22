@@ -53,6 +53,19 @@ export const demoMapGlobalConfig = defineMapGlobalConfig({
         },
       },
     },
+    intersection: {
+      previewStyleOverrides: {
+        paint: {
+          'circle-radius': 6,
+        },
+      },
+      materializedStyleOverrides: {
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#1677ff',
+        },
+      },
+    },
     multiSelect: {
       enabled: true,
       position: 'top-right',

@@ -190,7 +190,6 @@ import {
   LINE_DRAFT_PREVIEW_SOURCE_ID,
 } from "vue-maplibre-kit/plugins/line-draft-preview";
 import {
-  buildIntersectionCandidates,
   createIntersectionPreviewPlugin,
 } from "vue-maplibre-kit/plugins/intersection-preview";
 import {
@@ -1459,11 +1458,10 @@ const mapDxfExportPlugin = createMapDxfExportPlugin({
 
 /**
  * 交点预览插件示例。
- * 业务层示例重点不是“插件自己去扫描全图”，
- * 而是明确告诉插件：
- * 1. 哪些业务 source 允许参与求交
- * 2. 哪些业务图层的线要参与求交
- * 3. 命中交点后，业务层要如何消费交点上下文
+ * 这一版示例改成最推荐的简化接法：
+ * 1. 交给插件直接读取 sourceRegistry 里的业务线数据
+ * 2. 业务层只声明“哪些 source / layer 允许参与求交”
+ * 3. 正式交点点位、source、layer、交互和样式都由插件内部托管
  */
 const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
   // 是否启用整个交点插件。
@@ -1485,14 +1483,16 @@ const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
   // false：只触发交点点击回调，业务层如果要落正式点，需要自己手动调用 materialize()。
   materializeOnClick: true,
 
+  // 正式业务 source 注册表。
+  // 插件会直接从这里读取最新业务线数据
+  sourceRegistry: businessSourceRegistry,
+
   // 允许参与求交的业务 sourceId 列表。
-  // 这里不是“自动去这些 source 里找线”，而是让插件在候选线集合里再做一次 source 级过滤。
-  // 这样即使 getCandidates() 返回了更多数据，也只会留下这里声明过的 source。
+  // 简化模式下，它表示“只从这些 source 里自动收集线候选”。
   targetSourceIds: [SOURCE_IDS.primary, SOURCE_IDS.secondary],
 
   // 允许参与求交的业务 layerId 列表。
-  // 如果只想让某几个线图层参与求交，就把它们列在这里。
-  // 不传时，插件只按 targetSourceIds 过滤；传了以后，会继续按 layerId 再收紧一次范围。
+  // 简化模式建议始终显式写上，避免一个 source 下存在多条 line layer 时把范围放大。
   targetLayerIds: [LAYER_IDS.primaryLine, LAYER_IDS.secondaryLine],
 
   // 是否保留端点交点。
@@ -1509,23 +1509,39 @@ const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
   // 当前示例先保持 true，避免把自交/折点规则混进基础示例。
   ignoreSelf: true,
 
-  // 返回“允许参与求交的线集合”。
-  // selected 模式下，插件会先从这里面找到“当前选中的线”，再和其余候选线求交。
-  // 业务层现在只需要告诉插件：线来自哪个 source、属于哪个 layer、对应哪份 data。
-  getCandidates: () => {
-    return buildIntersectionCandidates([
-      {
-        sourceId: SOURCE_IDS.primary,
-        layerId: LAYER_IDS.primaryLine,
-        data: primaryBusinessSource.sourceProps.data,
-      },
-      {
-        sourceId: SOURCE_IDS.secondary,
-        layerId: LAYER_IDS.secondaryLine,
-        data: secondaryBusinessSource.sourceProps.data,
-      },
-    ]);
+  // 生成正式交点时注入的默认业务属性。
+  // 这里适合补充“业务想长期保留”的属性，例如类型、状态、来源标签等。
+  materializedProperties: (context) => {
+    return {
+      name: "交点",
+      mark: "intersection",
+      status: "draft",
+      sourcePair: `${String(context.leftRef.featureId)} x ${String(context.rightRef.featureId)}`,
+    };
   },
+
+  // 预览交点样式局部覆写。
+  // 只需要传你关心的 paint / layout 字段，插件默认样式会自动保留。
+  previewStyleOverrides: {
+    paint: {
+      "circle-radius": 6,
+    },
+  },
+
+  // 正式交点样式局部覆写。
+  // 当前示例把正式点放大一点，方便与预览点区分。
+  materializedStyleOverrides: {
+    paint: {
+      "circle-radius": 7,
+      "circle-color": "#1677ff",
+    },
+  },
+
+  // 高级兜底：如果一个 source 下有非常复杂的原始 filter / 自定义抽线逻辑，
+  // 再回退到 getCandidates 手动喂数据即可；普通业务页优先用上面的 sourceRegistry 简化模式。
+  // getCandidates: () => {
+  //   return [];
+  // },
 
   // 单击交点后的业务回调。
   // 这里拿到的是完整交点上下文：交点坐标、左右参与线、命中线段索引、是否端点命中等信息。
@@ -1538,8 +1554,25 @@ const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
     //    显式把当前点击命中的交点落成正式点要素。
     // 2. intersectionPreview.materialize()
     //    不传参时，会默认物化“当前已选中的交点”。
-    // 当前示例保留自动物化，只把完整交点上下文继续交给业务层消费。
+    //
+    // 正式交点 GeoJSON 获取方式：
+    // const materializedGeoJson = intersectionPreview.getMaterializedData();
+    //
+    // 如果要把当前正式点再补充业务属性：
+    // intersectionPreview.updateMaterializedProperties(context.intersectionId, {
+    //   status: "confirmed",
+    //   remark: "人工确认交点",
+    // });
+    //
+    // 如果用户点错了，不想保留刚生成的正式点：
+    // intersectionPreview.removeMaterialized(context.intersectionId);
+    //
+    // 当前示例保留自动物化，只把完整交点上下文和最新正式点 GeoJSON 打到控制台，方便直接观察。
     console.log("[NGGI00 交点示例] 当前点击交点上下文", context);
+    console.log(
+      "[NGGI00 交点示例] 当前正式交点 GeoJSON",
+      intersectionPreview.getMaterializedData(),
+    );
     ElMessage.success(
       `已命中交点：${String(context.leftRef.featureId)} x ${String(context.rightRef.featureId)}`,
     );
@@ -1602,6 +1635,20 @@ const lineDraftPreview = businessMap.draft;
  * 业务层通过 businessMap.intersection 读取交点数量、切换范围和手动刷新。
  */
 const intersectionPreview = businessMap.intersection;
+
+/**
+ * 正式交点常用门面示例。
+ * 1. 读取当前正式交点 GeoJSON：
+ *    const data = intersectionPreview.getMaterializedData();
+ * 2. 手动物化当前选中交点：
+ *    intersectionPreview.materialize();
+ * 3. 更新某个正式交点的业务属性：
+ *    intersectionPreview.updateMaterializedProperties("intersection-id", { status: "done" });
+ * 4. 撤销某个正式交点：
+ *    intersectionPreview.removeMaterialized("intersection-id");
+ * 5. 一次性清空全部正式交点：
+ *    intersectionPreview.clearMaterialized();
+ */
 
 /**
  * 当前页面是否存在线草稿要素。
