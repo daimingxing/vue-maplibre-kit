@@ -8,7 +8,7 @@
 
 **Tech Stack:** Vue 3, TypeScript, Vitest, MapLibre plugin host, GeoJSON shared tools
 
----
+***
 
 ## File Map
 
@@ -59,10 +59,10 @@
 ## Task 1: 写纯计算层交点测试并确认失败
 
 **Files:**
+
 - Create: `src/MapLibre/shared/map-intersection-tools.spec.ts`
 - Modify: 无
 - Test: `src/MapLibre/shared/map-intersection-tools.spec.ts`
-
 - [ ] **Step 1: 写交点计算失败测试**
 
 ```ts
@@ -223,10 +223,10 @@ git commit -m "test: add intersection tool specs"
 ## Task 2: 以最小实现让纯计算层测试转绿
 
 **Files:**
+
 - Create: `src/MapLibre/shared/map-intersection-tools.ts`
 - Modify: `src/geometry.ts`
 - Test: `src/MapLibre/shared/map-intersection-tools.spec.ts`
-
 - [ ] **Step 1: 实现交点领域模型与交点计算**
 
 ```ts
@@ -453,10 +453,10 @@ git commit -m "feat: add intersection geometry tools"
 ## Task 3: 先写交点插件控制器测试并确认失败
 
 **Files:**
+
 - Create: `src/MapLibre/plugins/intersection-preview/useIntersectionPreviewController.spec.ts`
 - Modify: 无
 - Test: `src/MapLibre/plugins/intersection-preview/useIntersectionPreviewController.spec.ts`
-
 - [ ] **Step 1: 写交点插件控制器失败测试**
 
 ```ts
@@ -559,6 +559,7 @@ git commit -m "test: add intersection preview controller specs"
 ## Task 4: 以最小实现让交点插件控制器测试转绿
 
 **Files:**
+
 - Create:
   - `src/MapLibre/plugins/intersection-preview/types.ts`
   - `src/MapLibre/plugins/intersection-preview/IntersectionPreviewLayers.vue`
@@ -568,7 +569,6 @@ git commit -m "test: add intersection preview controller specs"
   - `src/MapLibre/plugins/intersection-preview/index.ts`
 - Modify: 无
 - Test: `src/MapLibre/plugins/intersection-preview/useIntersectionPreviewController.spec.ts`
-
 - [ ] **Step 1: 定义插件类型和状态**
 
 ```ts
@@ -891,12 +891,12 @@ git commit -m "feat: add intersection preview plugin core"
 ## Task 5: 先写 facade 与业务聚合接入测试并确认失败
 
 **Files:**
+
 - Create: `src/MapLibre/facades/useIntersectionPreview.spec.ts`
 - Modify: `src/MapLibre/facades/useBusinessMap.spec.ts`
 - Test:
   - `src/MapLibre/facades/useIntersectionPreview.spec.ts`
   - `src/MapLibre/facades/useBusinessMap.spec.ts`
-
 - [ ] **Step 1: 写 facade 失败测试**
 
 ```ts
@@ -963,6 +963,7 @@ git commit -m "test: add intersection facade specs"
 ## Task 6: 以最小实现让 facade 与导出测试转绿
 
 **Files:**
+
 - Create:
   - `src/MapLibre/facades/useIntersectionPreview.ts`
   - `src/plugins/intersection-preview.ts`
@@ -976,7 +977,6 @@ git commit -m "test: add intersection facade specs"
 - Test:
   - `src/MapLibre/facades/useIntersectionPreview.spec.ts`
   - `src/MapLibre/facades/useBusinessMap.spec.ts`
-
 - [ ] **Step 1: 增加插件解析与 facade**
 
 ```ts
@@ -1130,13 +1130,13 @@ git commit -m "feat: expose intersection preview facade"
 ## Task 7: 跑完整验证并收尾
 
 **Files:**
+
 - Modify: 如前面任务产生的全部文件
 - Test:
   - `src/MapLibre/shared/map-intersection-tools.spec.ts`
   - `src/MapLibre/plugins/intersection-preview/useIntersectionPreviewController.spec.ts`
   - `src/MapLibre/facades/useIntersectionPreview.spec.ts`
   - `src/MapLibre/facades/useBusinessMap.spec.ts`
-
 - [ ] **Step 1: 运行目标测试集**
 
 Run: `npm test -- src/MapLibre/shared/map-intersection-tools.spec.ts src/MapLibre/plugins/intersection-preview/useIntersectionPreviewController.spec.ts src/MapLibre/facades/useIntersectionPreview.spec.ts src/MapLibre/facades/useBusinessMap.spec.ts`
@@ -1178,3 +1178,4 @@ git commit -m "feat: add intersection preview workflow"
 - 统一使用 `IntersectionPreviewContext`、`IntersectionPreviewState`、`IntersectionPreviewPluginApi`
 - 求交范围统一使用 `IntersectionScope = 'all' | 'selected'`
 - 正式点要素转换统一使用 `buildIntersectionPointFeature`
+

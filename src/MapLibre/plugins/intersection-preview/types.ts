@@ -13,6 +13,8 @@ export interface IntersectionPreviewState {
   scope: IntersectionPreviewScope;
   /** 当前交点数量。 */
   count: number;
+  /** 当前正式交点点要素数量。 */
+  materializedCount: number;
   /** 当前选中的交点 ID。 */
   selectedId: string | null;
   /** 最近一次错误信息。 */
@@ -31,6 +33,8 @@ export interface IntersectionPreviewOptions {
   enabled?: boolean;
   /** 当前交点层默认是否可见。 */
   visible?: boolean;
+  /** 点击预览交点时是否自动生成正式交点点要素。 */
+  materializeOnClick?: boolean;
   /** 当前求交范围。 */
   scope?: IntersectionPreviewScope;
   /** 参与求交的来源 source 列表。 */
@@ -57,6 +61,10 @@ export interface IntersectionPreviewPluginApi {
   refresh: () => void;
   /** 清空交点集合。 */
   clear: () => void;
+  /** 将指定交点写入正式交点点要素集合。 */
+  materialize: (intersectionId?: string | null) => boolean;
+  /** 清空正式交点点要素集合。 */
+  clearMaterialized: () => void;
   /** 显示交点层。 */
   show: () => void;
   /** 隐藏交点层。 */
@@ -65,6 +73,8 @@ export interface IntersectionPreviewPluginApi {
   setScope: (scope: IntersectionPreviewScope) => void;
   /** 读取当前交点要素集合。 */
   getData: () => MapCommonFeatureCollection;
+  /** 读取当前正式交点点要素集合。 */
+  getMaterializedData: () => MapCommonFeatureCollection;
   /** 按交点 ID 读取上下文。 */
   getById: (intersectionId: string | null) => IntersectionPreviewContext | null;
   /** 读取当前选中的交点上下文。 */

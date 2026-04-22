@@ -14,6 +14,26 @@ function createEmptyCollection(): MapCommonFeatureCollection {
 }
 
 /**
+ * 根据交点上下文映射构建要素集合。
+ * @param contextMap 交点上下文映射
+ * @returns 标准要素集合
+ */
+function createCollectionFromContextMap(
+  contextMap: Record<string, IntersectionPreviewContext>
+): MapCommonFeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: Object.values(contextMap).flatMap((context) => {
+      if (!context.feature) {
+        return [];
+      }
+
+      return [context.feature];
+    }),
+  };
+}
+
+/**
  * 创建交点预览 store。
  * 这里只负责维护临时点集、显隐和按 ID 检索的上下文映射，
  * 不承担求交计算本身。
@@ -22,12 +42,33 @@ function createEmptyCollection(): MapCommonFeatureCollection {
  */
 export function useIntersectionPreviewStore() {
   const data = ref<MapCommonFeatureCollection>(createEmptyCollection());
-  const visible = ref(true);
+  const materializedData = ref<MapCommonFeatureCollection>(createEmptyCollection());
+  const visible = ref(false);
   const selectedId = ref<string | null>(null);
   const contextMap = ref<Record<string, IntersectionPreviewContext>>({});
+  const materializedContextMap = ref<Record<string, IntersectionPreviewContext>>({});
   const lastError = ref<string | null>(null);
 
   const count = computed(() => data.value.features.length);
+  const materializedCount = computed(() => materializedData.value.features.length);
+
+  /**
+   * 同步当前选中交点是否仍然存在。
+   * @param nextPreviewContextMap 最新预览上下文映射
+   * @param nextMaterializedContextMap 最新正式交点上下文映射
+   */
+  const syncSelectedId = (
+    nextPreviewContextMap: Record<string, IntersectionPreviewContext>,
+    nextMaterializedContextMap: Record<string, IntersectionPreviewContext>
+  ): void => {
+    if (
+      selectedId.value &&
+      !nextPreviewContextMap[selectedId.value] &&
+      !nextMaterializedContextMap[selectedId.value]
+    ) {
+      selectedId.value = null;
+    }
+  };
 
   /**
    * 用最新交点集合替换当前 store 状态。
@@ -40,10 +81,19 @@ export function useIntersectionPreviewStore() {
   ): void => {
     data.value = nextData;
     contextMap.value = nextContextMap;
+    syncSelectedId(nextContextMap, materializedContextMap.value);
+  };
 
-    if (selectedId.value && !nextContextMap[selectedId.value]) {
-      selectedId.value = null;
-    }
+  /**
+   * 用最新正式交点点要素集合替换当前 store 状态。
+   * @param nextContextMap 最新正式交点上下文映射
+   */
+  const replaceMaterialized = (
+    nextContextMap: Record<string, IntersectionPreviewContext>
+  ): void => {
+    materializedContextMap.value = nextContextMap;
+    materializedData.value = createCollectionFromContextMap(nextContextMap);
+    syncSelectedId(contextMap.value, nextContextMap);
   };
 
   /**
@@ -52,6 +102,13 @@ export function useIntersectionPreviewStore() {
   const clear = (): void => {
     replace(createEmptyCollection(), {});
     lastError.value = null;
+  };
+
+  /**
+   * 清空当前正式交点点要素集合。
+   */
+  const clearMaterialized = (): void => {
+    replaceMaterialized({});
   };
 
   /**
@@ -64,13 +121,18 @@ export function useIntersectionPreviewStore() {
 
   return {
     data,
+    materializedData,
     visible,
     selectedId,
     contextMap,
+    materializedContextMap,
     lastError,
     count,
+    materializedCount,
     replace,
+    replaceMaterialized,
     clear,
+    clearMaterialized,
     setSelectedId,
   };
 }

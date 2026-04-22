@@ -18,6 +18,8 @@ export interface UseIntersectionPreviewResult {
   state: ComputedRef<IntersectionPreviewState | null>;
   /** 当前交点数量。 */
   count: ComputedRef<number>;
+  /** 当前正式交点点要素数量。 */
+  materializedCount: ComputedRef<number>;
   /** 当前交点图层是否可见。 */
   visible: ComputedRef<boolean>;
   /** 当前求交范围。 */
@@ -30,6 +32,10 @@ export interface UseIntersectionPreviewResult {
   refresh: () => boolean;
   /** 清空当前交点集合。 */
   clear: () => boolean;
+  /** 将指定交点写入正式交点点要素集合。 */
+  materialize: (intersectionId?: string | null) => boolean;
+  /** 清空正式交点点要素集合。 */
+  clearMaterialized: () => boolean;
   /** 显示当前交点图层。 */
   show: () => boolean;
   /** 隐藏当前交点图层。 */
@@ -38,6 +44,8 @@ export interface UseIntersectionPreviewResult {
   setScope: (scope: IntersectionPreviewScope) => boolean;
   /** 读取当前交点要素集合。 */
   getData: () => MapCommonFeatureCollection | null;
+  /** 读取当前正式交点点要素集合。 */
+  getMaterializedData: () => MapCommonFeatureCollection | null;
   /** 按交点 ID 读取交点上下文。 */
   getById: (intersectionId: string | null) => IntersectionPreviewContext | null;
   /** 读取当前选中的交点上下文。 */
@@ -87,19 +95,37 @@ export function useIntersectionPreview(
     return true;
   };
 
+  /**
+   * 安全执行有返回值的交点插件动作。
+   * @param action 需要执行的动作
+   * @returns 插件动作返回值；插件未注册时返回 false
+   */
+  const runBooleanAction = (action: (api: IntersectionPreviewPluginApi) => boolean): boolean => {
+    const intersectionApi = getIntersectionPreviewApi();
+    if (!intersectionApi) {
+      return false;
+    }
+
+    return action(intersectionApi);
+  };
+
   return {
     state,
     count: computed(() => state.value?.count || 0),
+    materializedCount: computed(() => state.value?.materializedCount || 0),
     visible: computed(() => Boolean(state.value?.visible)),
     scope: computed(() => state.value?.scope || 'all'),
     selectedId: computed(() => state.value?.selectedId || null),
     lastError: computed(() => state.value?.lastError || null),
     refresh: () => runAction((api) => api.refresh()),
     clear: () => runAction((api) => api.clear()),
+    materialize: (intersectionId = null) => runBooleanAction((api) => api.materialize(intersectionId)),
+    clearMaterialized: () => runAction((api) => api.clearMaterialized()),
     show: () => runAction((api) => api.show()),
     hide: () => runAction((api) => api.hide()),
     setScope: (scope) => runAction((api) => api.setScope(scope)),
     getData: () => getIntersectionPreviewApi()?.getData() || null,
+    getMaterializedData: () => getIntersectionPreviewApi()?.getMaterializedData() || null,
     getById: (intersectionId) => getIntersectionPreviewApi()?.getById(intersectionId) || null,
     getSelected: () => getIntersectionPreviewApi()?.getSelected() || null,
   };

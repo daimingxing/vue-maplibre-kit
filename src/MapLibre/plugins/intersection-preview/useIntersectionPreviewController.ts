@@ -1,14 +1,50 @@
 import {
   buildIntersectionPointFeature,
+  buildMaterializedIntersectionFeature,
   collectLineIntersections,
   type IntersectionScope,
 } from '../../shared/map-intersection-tools';
+import type { MapCommonFeature } from '../../shared/map-common-tools';
 import { useIntersectionPreviewStore } from './useIntersectionPreviewStore';
 import type {
   IntersectionPreviewContext,
   IntersectionPreviewState,
   UseIntersectionPreviewControllerOptions,
 } from './types';
+
+/**
+ * 构建预览交点上下文。
+ * @param intersection 原始交点领域对象
+ * @returns 携带预览点要素的交点上下文
+ */
+function createPreviewIntersectionContext(intersection: IntersectionPreviewContext): IntersectionPreviewContext;
+function createPreviewIntersectionContext(
+  intersection: Parameters<typeof buildIntersectionPointFeature>[0]
+): IntersectionPreviewContext;
+function createPreviewIntersectionContext(
+  intersection: Parameters<typeof buildIntersectionPointFeature>[0]
+): IntersectionPreviewContext {
+  return {
+    ...intersection,
+    feature: buildIntersectionPointFeature(intersection, {
+      generatedKind: 'intersection-preview',
+    }) as MapCommonFeature,
+  };
+}
+
+/**
+ * 构建正式交点上下文。
+ * @param intersection 原始交点领域对象
+ * @returns 携带正式点要素的交点上下文
+ */
+function createMaterializedIntersectionContext(
+  intersection: Parameters<typeof buildMaterializedIntersectionFeature>[0]
+): IntersectionPreviewContext {
+  return {
+    ...intersection,
+    feature: buildMaterializedIntersectionFeature(intersection) as MapCommonFeature,
+  };
+}
 
 /**
  * 创建交点预览控制器。
@@ -22,6 +58,7 @@ export function useIntersectionPreviewController(
   options: UseIntersectionPreviewControllerOptions
 ) {
   const store = useIntersectionPreviewStore();
+  store.visible.value = options.getOptions()?.visible !== false;
 
   /**
    * 读取当前最新求交范围。
@@ -43,6 +80,7 @@ export function useIntersectionPreviewController(
       visible: store.visible.value,
       scope: getCurrentScope(),
       count: store.count.value,
+      materializedCount: store.materializedCount.value,
       selectedId: store.selectedId.value,
       lastError: store.lastError.value,
     };
@@ -92,6 +130,32 @@ export function useIntersectionPreviewController(
       },
       nextContextMap
     );
+
+    syncMaterializedContexts(nextContextMap);
+  };
+
+  /**
+   * 用最新预览上下文同步正式交点点要素快照。
+   * @param nextPreviewContextMap 最新预览上下文映射
+   */
+  const syncMaterializedContexts = (
+    nextPreviewContextMap: Record<string, IntersectionPreviewContext>
+  ): void => {
+    const nextMaterializedContextMap = {
+      ...store.materializedContextMap.value,
+    };
+
+    Object.keys(nextMaterializedContextMap).forEach((intersectionId) => {
+      const latestPreviewContext = nextPreviewContextMap[intersectionId];
+      if (!latestPreviewContext) {
+        return;
+      }
+
+      nextMaterializedContextMap[intersectionId] =
+        createMaterializedIntersectionContext(latestPreviewContext);
+    });
+
+    store.replaceMaterialized(nextMaterializedContextMap);
   };
 
   /**
@@ -103,16 +167,24 @@ export function useIntersectionPreviewController(
   };
 
   /**
+   * 清空当前正式交点点要素集合并广播状态。
+   */
+  const clearMaterialized = (): void => {
+    store.clearMaterialized();
+    options.onStateChange?.(buildState());
+  };
+
+  /**
    * 重新计算交点集合。
    */
   const refresh = (): void => {
     const pluginOptions = options.getOptions();
     if (!pluginOptions || pluginOptions.enabled === false) {
-      clear();
+      store.clear();
+      store.clearMaterialized();
+      options.onStateChange?.(buildState());
       return;
     }
-
-    store.visible.value = pluginOptions.visible !== false;
     store.lastError.value = null;
 
     try {
@@ -134,17 +206,12 @@ export function useIntersectionPreviewController(
         ignoreSelf: pluginOptions.ignoreSelf,
       });
       const contexts = intersections.map<IntersectionPreviewContext>((intersection) => {
-        return {
-          ...intersection,
-          feature: buildIntersectionPointFeature(intersection, {
-            generatedKind: 'intersection-preview',
-          }),
-        };
+        return createPreviewIntersectionContext(intersection);
       });
 
       commitContexts(contexts);
     } catch (error) {
-      clear();
+      store.clear();
       store.lastError.value = error instanceof Error ? error.message : '交点计算失败';
     }
 
@@ -161,7 +228,7 @@ export function useIntersectionPreviewController(
       return null;
     }
 
-    return store.contextMap.value[intersectionId] || null;
+    return store.contextMap.value[intersectionId] || store.materializedContextMap.value[intersectionId] || null;
   };
 
   /**
@@ -182,8 +249,28 @@ export function useIntersectionPreviewController(
   };
 
   /**
+   * 将指定交点落成正式交点点要素。
+   * @param intersectionId 目标交点 ID；不传时默认使用当前选中交点
+   * @returns 是否成功落点
+   */
+  const materialize = (intersectionId: string | null = store.selectedId.value): boolean => {
+    const intersection = getById(intersectionId);
+    if (!intersection) {
+      return false;
+    }
+
+    store.replaceMaterialized({
+      ...store.materializedContextMap.value,
+      [intersection.intersectionId]: createMaterializedIntersectionContext(intersection),
+    });
+    options.onStateChange?.(buildState());
+    return true;
+  };
+
+  /**
    * 切换当前求交范围。
-   * 当前实现不直接改写外部配置对象，只负责在控制器内部重新计算。
+   * 当前实现会同步回写外部描述对象上的 scope，
+   * 这样插件宿主、门面与运行时控制器会始终读取到同一份最新范围。
    *
    * @param nextScope 目标范围
    */
@@ -214,14 +301,18 @@ export function useIntersectionPreviewController(
 
   return {
     data: store.data,
+    materializedData: store.materializedData,
     visible: store.visible,
     refresh,
     clear,
+    materialize,
+    clearMaterialized,
     show,
     hide,
     setScope,
     setSelected,
     getData: () => store.data.value,
+    getMaterializedData: () => store.materializedData.value,
     getById,
     getSelected,
   };

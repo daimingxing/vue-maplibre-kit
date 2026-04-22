@@ -1,12 +1,10 @@
-import type { MapSourceFeatureRef } from "vue-maplibre-kit/business";
 import type {
   MapCommonFeature,
-  MapCommonFeatureCollection,
-  MapCommonLineFeature,
-  MapIntersectionCandidate,
   MapIntersectionPoint,
 } from "vue-maplibre-kit/geometry";
-import { buildIntersectionPointFeature } from "vue-maplibre-kit/geometry";
+import {
+  buildMaterializedIntersectionFeature as buildSharedMaterializedIntersectionFeature,
+} from "vue-maplibre-kit/geometry";
 
 /** 选择模式。 */
 export type SelectionMode = "single" | "multiple";
@@ -75,13 +73,6 @@ export interface DxfSummaryOptions {
   targetCrs?: string;
   layerTrueColorResolver?: unknown;
   featureTrueColorResolver?: unknown;
-}
-
-/** 交点示例 source 输入。 */
-export interface IntersectionSourceInput {
-  sourceId: string;
-  layerId: string;
-  features: MapCommonFeature[] | null | undefined;
 }
 
 /** 选中变化默认提示。 */
@@ -325,6 +316,27 @@ export function buildLineDraftStatusText(
 }
 
 /**
+ * 生成交点正式点示例的状态说明文本。
+ * @param intersectionCount 当前预览交点数量
+ * @param materializedCount 当前正式交点数量
+ * @returns 适合示例面板直接展示的说明文本
+ */
+export function buildIntersectionMaterializedStatusText(
+  intersectionCount: number,
+  materializedCount: number,
+): string {
+  if (intersectionCount <= 0) {
+    return "当前还没有可预览交点。先选中一条线，或切到“全量业务线求交”后刷新，这里就会出现可点击的交点预览。";
+  }
+
+  if (materializedCount <= 0) {
+    return "当前示例已开启 materializeOnClick。点击地图上的预览交点后，插件会自动生成正式交点点要素，无需业务层自己声明 source 或 layer。";
+  }
+
+  return `当前已有 ${materializedCount} 个正式交点点要素。它们由插件内部统一托管，业务层只需要通过 businessMap.intersection 读取数量或调用 clearMaterialized() 清理即可。`;
+}
+
+/**
  * 统一格式化 DXF 导出的 source 范围文本。
  * @param sourceIds 最终生效的 sourceId 列表
  * @returns 适合示例面板直接展示的中文文本
@@ -382,70 +394,6 @@ export function buildDxfResolvedOptionsText(
 }
 
 /**
- * 将业务 source 中的线要素转换成交点插件候选。
- * 业务层示例不直接把整个 sourceRegistry 丢给插件，
- * 而是显式声明“哪些 source / layer 里的哪些线要参与求交”，
- * 这样后续真接业务时更容易收紧边界。
- *
- * @param sources 当前页面允许参与交点计算的业务 source 描述
- * @returns 可直接传给交点插件的候选线列表
- */
-export function buildIntersectionCandidates(
-  sources: IntersectionSourceInput[],
-): MapIntersectionCandidate[] {
-  return sources.flatMap((source) => {
-    return (source.features || []).flatMap((feature) => {
-      if (feature.geometry?.type !== "LineString") {
-        return [];
-      }
-
-      // 交点插件的上下文链路依赖稳定 featureId。
-      // 如果示例数据缺少 id，就在业务层直接跳过，避免生成无法反查来源的临时交点。
-      const featureId =
-        // 业务 source 当前统一使用 promoteId: "id"。
-        // 这里优先读取业务属性里的 id，避免顶层 GeoJSON id 与业务选中态走成两套标识体系。
-        (feature.properties?.id as string | number | null | undefined) ??
-        feature.id ??
-        null;
-      if (featureId === null || featureId === undefined || featureId === "") {
-        return [];
-      }
-
-      const featureRef: MapSourceFeatureRef = {
-        sourceId: source.sourceId,
-        featureId,
-        layerId: source.layerId,
-      };
-
-      return [
-        {
-          feature: feature as MapCommonLineFeature,
-          ref: featureRef,
-        },
-      ];
-    });
-  });
-}
-
-/**
- * 从任意 GeoJSON data 入参中安全提取 FeatureCollection 要素数组。
- * 业务示例层经常会读取 `sourceProps.data`，但它的类型既可能是对象，也可能是字符串 URL；
- * 这里统一收口成“能安全继续处理的要素数组”，避免示例代码里到处做联合类型判断。
- *
- * @param data 业务 source 当前 data
- * @returns 可安全继续消费的要素数组
- */
-export function getFeatureCollectionFeatures(
-  data: string | MapCommonFeatureCollection | MapCommonFeature | null | undefined,
-): MapCommonFeature[] {
-  if (!data || typeof data === "string" || data.type !== "FeatureCollection") {
-    return [];
-  }
-
-  return (data.features || []) as MapCommonFeature[];
-}
-
-/**
  * 将交点上下文落成正式点要素。
  * 当前示例选择补齐 `properties.id`，这样它可以直接复用业务 source 常见的 `promoteId: "id"` 配置。
  *
@@ -455,12 +403,5 @@ export function getFeatureCollectionFeatures(
 export function buildMaterializedIntersectionFeature(
   intersection: MapIntersectionPoint,
 ): MapCommonFeature {
-  return buildIntersectionPointFeature(intersection, {
-    // 正式业务点 source 当前继续沿用 `promoteId: "id"`。
-    // 这里显式补齐 properties.id，避免示例里再引入第二套 ID 语义。
-    id: intersection.intersectionId,
-    name: "交点",
-    mark: "intersection",
-    generatedKind: "intersection-materialized",
-  }) as MapCommonFeature;
+  return buildSharedMaterializedIntersectionFeature(intersection) as MapCommonFeature;
 }

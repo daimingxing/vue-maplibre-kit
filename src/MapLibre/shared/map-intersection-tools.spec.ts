@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { GeoJSONSourceSpecification } from 'maplibre-gl';
 import type { MapCommonLineFeature, MapSourceFeatureRef } from './map-common-tools';
 import {
+  buildIntersectionCandidates,
   buildIntersectionPointFeature,
   collectLineIntersections,
 } from './map-intersection-tools';
@@ -45,6 +47,142 @@ function createFeatureRef(featureId: string): MapSourceFeatureRef {
 }
 
 describe('collectLineIntersections', () => {
+  it('会从来源 data 中提取交点候选线，并优先使用 properties.id', () => {
+    const candidates = buildIntersectionCandidates([
+      {
+        sourceId: 'primary-source',
+        layerId: 'primary-line-layer',
+        data: {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              id: 8,
+              properties: {
+                id: 'line_1',
+                name: '主线',
+              },
+              geometry: {
+                type: 'LineString',
+                coordinates: [
+                  [0, 0],
+                  [10, 10],
+                ],
+              },
+            },
+            {
+              type: 'Feature',
+              id: 'point_1',
+              properties: {
+                id: 'point_1',
+              },
+              geometry: {
+                type: 'Point',
+                coordinates: [5, 5],
+              },
+            },
+          ],
+        },
+      },
+      {
+        sourceId: 'secondary-source',
+        layerId: 'secondary-line-layer',
+        data: {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: {
+                id: 'line_2',
+                name: '次线',
+              },
+              geometry: {
+                type: 'LineString',
+                coordinates: [
+                  [0, 10],
+                  [10, 0],
+                ],
+              },
+            },
+            {
+              type: 'Feature',
+              id: 'line_3_top',
+              properties: {
+                name: '只存在顶层 ID 的线',
+              },
+              geometry: {
+                type: 'LineString',
+                coordinates: [
+                  [0, 20],
+                  [10, 20],
+                ],
+              },
+            },
+            {
+              type: 'Feature',
+              properties: {
+                name: '缺少 ID 的线',
+              },
+              geometry: {
+                type: 'LineString',
+                coordinates: [
+                  [0, 5],
+                  [10, 5],
+                ],
+              },
+            },
+          ],
+        },
+      },
+      {
+        sourceId: 'empty-source',
+        layerId: 'empty-line-layer',
+        data: 'mock.geojson',
+      },
+    ]);
+
+    expect(candidates).toHaveLength(3);
+    expect(candidates[0].ref).toEqual({
+      sourceId: 'primary-source',
+      featureId: 'line_1',
+      layerId: 'primary-line-layer',
+    });
+    expect(candidates[1].ref).toEqual({
+      sourceId: 'secondary-source',
+      featureId: 'line_2',
+      layerId: 'secondary-line-layer',
+    });
+    expect(candidates[2].ref).toEqual({
+      sourceId: 'secondary-source',
+      featureId: 'line_3_top',
+      layerId: 'secondary-line-layer',
+    });
+  });
+
+  it('遇到 GeoJSONSource data 中的非 FeatureCollection 数据时会安全跳过', () => {
+    const nonCollectionData: GeoJSONSourceSpecification['data'] = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [0, 0],
+          [10, 0],
+          [10, 10],
+          [0, 0],
+        ],
+      ],
+    };
+
+    const candidates = buildIntersectionCandidates([
+      {
+        sourceId: 'geometry-source',
+        layerId: 'geometry-layer',
+        data: nonCollectionData,
+      },
+    ]);
+
+    expect(candidates).toEqual([]);
+  });
+
   it('会为两条业务线生成稳定交点对象', () => {
     const left = createLineFeature('line-a', [
       [0, 0],
@@ -153,6 +291,7 @@ describe('collectLineIntersections', () => {
 
     expect(intersection.isEndpointHit).toBe(true);
     expect(pointFeature.geometry.coordinates).toEqual([10, 0]);
+    expect(pointFeature.properties?.id).toBe(intersection.intersectionId);
     expect(pointFeature.properties?.intersectionId).toBe(intersection.intersectionId);
     expect(pointFeature.properties?.kind).toBe('materialized-node');
   });

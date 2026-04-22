@@ -155,4 +155,40 @@ describe('useIntersectionPreviewController', () => {
       count: 1,
     });
   });
+
+  it('手动隐藏后重新 refresh 不应被 options.visible 覆盖', () => {
+    const controller = useIntersectionPreviewController({
+      getOptions: () => ({
+        enabled: true,
+        visible: true,
+        scope: 'all',
+        targetSourceIds: ['line-source'],
+        includeEndpoint: true,
+        coordDigits: 6,
+      }),
+      getCandidates: () => [
+        {
+          feature: createLineFeature('line-a', [
+            [0, 0],
+            [10, 10],
+          ]),
+          ref: createFeatureRef('line-a'),
+        },
+        {
+          feature: createLineFeature('line-b', [
+            [0, 10],
+            [10, 0],
+          ]),
+          ref: createFeatureRef('line-b'),
+        },
+      ],
+      getSelectedFeatureContext: () => null,
+    });
+
+    controller.refresh();
+    controller.hide();
+    controller.refresh();
+
+    expect(controller.visible.value).toBe(false);
+  });
 });

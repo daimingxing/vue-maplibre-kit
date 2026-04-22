@@ -1,5 +1,7 @@
 import type { IntersectionPreviewOptions } from './types';
 import {
+  INTERSECTION_MATERIALIZED_LAYER_ID,
+  INTERSECTION_MATERIALIZED_SOURCE_ID,
   intersectionPreviewPlugin,
   INTERSECTION_PREVIEW_LAYER_ID,
   INTERSECTION_PREVIEW_PLUGIN_TYPE,
@@ -27,10 +29,16 @@ export function createIntersectionPreviewPlugin(
 
 export {
   intersectionPreviewPlugin,
+  INTERSECTION_MATERIALIZED_LAYER_ID,
+  INTERSECTION_MATERIALIZED_SOURCE_ID,
   INTERSECTION_PREVIEW_LAYER_ID,
   INTERSECTION_PREVIEW_PLUGIN_TYPE,
   INTERSECTION_PREVIEW_SOURCE_ID,
 };
+export {
+  buildIntersectionCandidates,
+  buildIntersectionCandidates as buildIntersectionCandidatesFromSources,
+} from '../../shared/map-intersection-tools';
 export type { IntersectionPreviewPluginDescriptor };
 export type {
   IntersectionPreviewContext,
@@ -40,3 +48,4 @@ export type {
   IntersectionPreviewState,
   UseIntersectionPreviewControllerOptions,
 } from './types';
+export type { MapIntersectionSource } from '../../shared/map-intersection-tools';

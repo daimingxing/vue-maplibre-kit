@@ -6,17 +6,29 @@
 /** 交点预览插件工厂。需要向地图注册交点能力时使用。 */
 export { createIntersectionPreviewPlugin } from '../MapLibre/plugins/intersection-preview';
 
+/** 交点候选线构建工具。需要从业务 source data 提取参与求交的线时使用。 */
+export {
+  buildIntersectionCandidates,
+  buildIntersectionCandidatesFromSources,
+} from '../MapLibre/plugins/intersection-preview';
+
 /** 交点预览插件实现体。需要直接组合底层插件定义时使用。 */
 export { intersectionPreviewPlugin } from '../MapLibre/plugins/intersection-preview';
 
 /** 交点预览图层 ID 常量。需要直接控制交点图层时使用。 */
 export { INTERSECTION_PREVIEW_LAYER_ID } from '../MapLibre/plugins/intersection-preview';
 
+/** 正式交点点图层 ID 常量。需要识别正式交点点图层时使用。 */
+export { INTERSECTION_MATERIALIZED_LAYER_ID } from '../MapLibre/plugins/intersection-preview';
+
 /** 交点预览插件类型常量。按插件 type 判断是否为交点插件时使用。 */
 export { INTERSECTION_PREVIEW_PLUGIN_TYPE } from '../MapLibre/plugins/intersection-preview';
 
 /** 交点预览 source ID 常量。需要识别交点预览来源时使用。 */
 export { INTERSECTION_PREVIEW_SOURCE_ID } from '../MapLibre/plugins/intersection-preview';
+
+/** 正式交点点 source ID 常量。需要识别正式交点点来源时使用。 */
+export { INTERSECTION_MATERIALIZED_SOURCE_ID } from '../MapLibre/plugins/intersection-preview';
 
 /** 交点预览上下文类型。业务层处理交点动作时使用。 */
 export type { IntersectionPreviewContext } from '../MapLibre/plugins/intersection-preview';
@@ -32,3 +44,6 @@ export type { IntersectionPreviewScope } from '../MapLibre/plugins/intersection-
 
 /** 交点预览状态类型。监听交点状态变化时使用。 */
 export type { IntersectionPreviewState } from '../MapLibre/plugins/intersection-preview';
+
+/** 交点候选来源类型。声明 sourceId、layerId 和 data 时使用。 */
+export type { MapIntersectionSource } from '../MapLibre/plugins/intersection-preview';

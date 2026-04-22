@@ -170,6 +170,7 @@ function createIntersectionPluginHarness(): {
     visible: true,
     scope: 'all',
     count: 2,
+    materializedCount: 1,
     selectedId: null,
     lastError: null,
   };
@@ -179,6 +180,13 @@ function createIntersectionPluginHarness(): {
     clear: () => {
       state.count = 0;
       state.selectedId = null;
+    },
+    materialize: () => {
+      state.materializedCount += 1;
+      return true;
+    },
+    clearMaterialized: () => {
+      state.materializedCount = 0;
     },
     show: () => {
       state.visible = true;
@@ -190,6 +198,7 @@ function createIntersectionPluginHarness(): {
       state.scope = scope;
     },
     getData: () => createFeatureCollection([]),
+    getMaterializedData: () => createFeatureCollection([]),
     getById: () => null,
     getSelected: () => null,
   } as IntersectionPreviewPluginApi;

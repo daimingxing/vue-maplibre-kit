@@ -96,6 +96,12 @@ export { matchFeatureProperty } from './MapLibre/shared/map-feature-property-exp
 /** 交点转正式点要素工具。 */
 export { buildIntersectionPointFeature } from './MapLibre/shared/map-intersection-tools';
 
+/** 交点候选线构建工具。 */
+export { buildIntersectionCandidates } from './MapLibre/shared/map-intersection-tools';
+
+/** 正式交点点要素构建工具。 */
+export { buildMaterializedIntersectionFeature } from './MapLibre/shared/map-intersection-tools';
+
 /** 业务线交点计算工具。 */
 export { collectLineIntersections } from './MapLibre/shared/map-intersection-tools';
 
@@ -219,6 +225,9 @@ export type { IntersectionScope } from './MapLibre/shared/map-intersection-tools
 
 /** 交点候选线类型。 */
 export type { MapIntersectionCandidate } from './MapLibre/shared/map-intersection-tools';
+
+/** 交点候选来源类型。 */
+export type { MapIntersectionSource } from './MapLibre/shared/map-intersection-tools';
 
 /** 交点领域对象类型。 */
 export type { MapIntersectionPoint } from './MapLibre/shared/map-intersection-tools';

@@ -1,6 +1,9 @@
 import type { Feature, Point } from 'geojson';
+import type { GeoJSONSourceSpecification } from 'maplibre-gl';
 import type { MapFeatureId } from '../composables/useMapDataUpdate';
 import type {
+  MapCommonFeature,
+  MapCommonFeatureCollection,
   MapCommonLineFeature,
   MapCommonProperties,
   MapSourceFeatureRef,
@@ -18,6 +21,16 @@ export interface MapIntersectionCandidate {
   feature: MapCommonLineFeature;
   /** 当前业务线来源引用。 */
   ref: MapSourceFeatureRef;
+}
+
+/** 交点候选来源输入。 */
+export interface MapIntersectionSource {
+  /** 当前来源对应的 sourceId。 */
+  sourceId: string;
+  /** 当前来源对应的 layerId。 */
+  layerId: string;
+  /** 当前来源最新 GeoJSON 数据。 */
+  data: GeoJSONSourceSpecification['data'];
 }
 
 /** 交点参与方摘要。 */
@@ -251,6 +264,60 @@ function buildParticipants(
 }
 
 /**
+ * 从任意 GeoJSON data 入参中安全提取 FeatureCollection 要素数组。
+ * @param data 当前来源数据
+ * @returns 可继续参与求交处理的要素数组
+ */
+function getFeatureCollectionFeatures(
+  data: GeoJSONSourceSpecification['data']
+): MapCommonFeature[] {
+  if (!data || typeof data === 'string' || data.type !== 'FeatureCollection') {
+    return [];
+  }
+
+  return (data.features || []) as MapCommonFeature[];
+}
+
+/**
+ * 将业务来源列表转换成交点候选线集合。
+ * helper 会自动：
+ * 1. 跳过非 LineString 要素
+ * 2. 优先读取 properties.id 作为业务 featureId
+ * 3. 若 properties.id 不存在，则回退顶层 feature.id
+ *
+ * @param sources 当前允许参与求交的来源列表
+ * @returns 标准化后的交点候选线集合
+ */
+export function buildIntersectionCandidates(
+  sources: MapIntersectionSource[]
+): MapIntersectionCandidate[] {
+  return sources.flatMap((source) => {
+    return getFeatureCollectionFeatures(source.data).flatMap((feature) => {
+      if (feature.geometry?.type !== 'LineString') {
+        return [];
+      }
+
+      const featureId =
+        (feature.properties?.id as string | number | null | undefined) ?? feature.id ?? null;
+      if (featureId === null || featureId === undefined || featureId === '') {
+        return [];
+      }
+
+      return [
+        {
+          feature: feature as MapCommonLineFeature,
+          ref: {
+            sourceId: source.sourceId,
+            featureId,
+            layerId: source.layerId,
+          },
+        },
+      ];
+    });
+  });
+}
+
+/**
  * 在 selected 模式下过滤出当前选中线。
  * @param options 交点计算配置
  * @returns 当前选中线候选集合
@@ -375,6 +442,7 @@ export function buildIntersectionPointFeature(
       coordinates: [intersection.point.lng, intersection.point.lat],
     },
     properties: {
+      id: intersection.intersectionId,
       intersectionId: intersection.intersectionId,
       scope: intersection.scope,
       isEndpointHit: intersection.isEndpointHit,
@@ -387,4 +455,22 @@ export function buildIntersectionPointFeature(
       ...extraProperties,
     },
   };
+}
+
+/**
+ * 将交点上下文转换成正式交点点要素。
+ * @param intersection 交点领域对象
+ * @param extraProperties 额外业务属性
+ * @returns 适合持久保留的正式交点点要素
+ */
+export function buildMaterializedIntersectionFeature(
+  intersection: MapIntersectionPoint,
+  extraProperties: MapCommonProperties = {}
+): Feature<Point, MapCommonProperties> {
+  return buildIntersectionPointFeature(intersection, {
+    name: '交点',
+    mark: 'intersection',
+    generatedKind: 'intersection-materialized',
+    ...extraProperties,
+  });
 }

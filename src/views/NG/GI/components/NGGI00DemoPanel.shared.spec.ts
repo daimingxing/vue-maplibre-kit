@@ -9,15 +9,14 @@ import {
   DXF_OVERRIDE_GUIDE_TEXT,
   DXF_PLUGIN_OPTIONS_GUIDE_TEXT,
   DXF_PRIMARY_ONLY_FILE_NAME,
+  buildIntersectionMaterializedStatusText,
   buildMaterializedIntersectionFeature,
-  buildIntersectionCandidates,
   buildDxfResolvedOptionsText,
   buildLineDraftStatusText,
   buildLineOperationText,
   buildSelectionChangeSummary,
   buildSelectionGuideText,
   createSelectionPanelState,
-  getFeatureCollectionFeatures,
 } from "./NGGI00DemoPanel.shared";
 
 describe("NGGI00DemoPanel.shared", () => {
@@ -91,6 +90,12 @@ describe("NGGI00DemoPanel.shared", () => {
     expect(buildLineDraftStatusText(false, 0)).toContain("当前没有线草稿");
   });
 
+  it("会按预览交点与正式交点数量生成交点说明", () => {
+    expect(buildIntersectionMaterializedStatusText(0, 0)).toContain("当前还没有可预览交点");
+    expect(buildIntersectionMaterializedStatusText(3, 0)).toContain("materializeOnClick");
+    expect(buildIntersectionMaterializedStatusText(3, 2)).toContain("clearMaterialized()");
+  });
+
   it("会按默认配置和局部覆写结果生成 DXF 最终说明", () => {
     const text = buildDxfResolvedOptionsText(
       {
@@ -119,140 +124,7 @@ describe("NGGI00DemoPanel.shared", () => {
     expect(text).toContain("图层名 = 按 sourceId + mark 生成");
   });
 
-  it("会把业务 source 中的线要素转换成交点插件候选，并优先对齐业务属性 ID", () => {
-    const candidates = buildIntersectionCandidates([
-      {
-        sourceId: "primary-source",
-        layerId: "primary-line-layer",
-        features: [
-          {
-            type: "Feature",
-            id: 8,
-            properties: {
-              id: "line_1",
-              name: "主线",
-            },
-            geometry: {
-              type: "LineString",
-              coordinates: [
-                [0, 0],
-                [10, 10],
-              ],
-            },
-          },
-          {
-            type: "Feature",
-            id: "point_1",
-            properties: {
-              id: "point_1",
-            },
-            geometry: {
-              type: "Point",
-              coordinates: [5, 5],
-            },
-          },
-        ],
-      },
-      {
-        sourceId: "secondary-source",
-        layerId: "secondary-line-layer",
-        features: [
-          {
-            type: "Feature",
-            properties: {
-              id: "line_2",
-              name: "次线",
-            },
-            geometry: {
-              type: "LineString",
-              coordinates: [
-                [0, 10],
-                [10, 0],
-              ],
-            },
-          },
-          {
-            type: "Feature",
-            id: "line_3_top",
-            properties: {
-              name: "只存在顶层 ID 的线",
-            },
-            geometry: {
-              type: "LineString",
-              coordinates: [
-                [0, 20],
-                [10, 20],
-              ],
-            },
-          },
-          {
-            type: "Feature",
-            properties: {
-              name: "缺少 ID 的线",
-            },
-            geometry: {
-              type: "LineString",
-              coordinates: [
-                [0, 5],
-                [10, 5],
-              ],
-            },
-          },
-        ],
-      },
-    ]);
-
-    expect(candidates).toHaveLength(3);
-    expect(candidates[0].ref).toEqual({
-      sourceId: "primary-source",
-      featureId: "line_1",
-      layerId: "primary-line-layer",
-    });
-    expect(candidates[1].ref).toEqual({
-      sourceId: "secondary-source",
-      featureId: "line_2",
-      layerId: "secondary-line-layer",
-    });
-    expect(candidates[2].ref).toEqual({
-      sourceId: "secondary-source",
-      featureId: "line_3_top",
-      layerId: "secondary-line-layer",
-    });
-  });
-
-  it("会安全读取 FeatureCollection 要素列表，并把交点上下文落成正式点要素", () => {
-    expect(getFeatureCollectionFeatures("mock.geojson")).toEqual([]);
-    expect(
-      getFeatureCollectionFeatures({
-        type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [0, 0],
-        },
-        properties: {
-          id: "single-point",
-        },
-      }),
-    ).toEqual([]);
-
-    expect(
-      getFeatureCollectionFeatures({
-        type: "FeatureCollection",
-        features: [
-          {
-            type: "Feature",
-            geometry: {
-              type: "Point",
-              coordinates: [1, 2],
-            },
-            properties: {
-              id: "point_1",
-            },
-          },
-        ],
-      }),
-    ).toHaveLength(1);
-
+  it("会把交点上下文落成正式点要素", () => {
     const feature = buildMaterializedIntersectionFeature({
       intersectionId: "intersection-a-b",
       point: {

@@ -7,10 +7,16 @@ describe('useIntersectionPreview', () => {
     const api = {
       refresh: () => undefined,
       clear: () => undefined,
+      materialize: () => true,
+      clearMaterialized: () => undefined,
       show: () => undefined,
       hide: () => undefined,
       setScope: () => undefined,
       getData: () => ({
+        type: 'FeatureCollection',
+        features: [],
+      }),
+      getMaterializedData: () => ({
         type: 'FeatureCollection',
         features: [],
       }),
@@ -21,6 +27,7 @@ describe('useIntersectionPreview', () => {
       visible: true,
       scope: 'all' as const,
       count: 2,
+      materializedCount: 1,
       selectedId: null,
       lastError: null,
     }));
@@ -36,8 +43,10 @@ describe('useIntersectionPreview', () => {
     const preview = useIntersectionPreview(mapRef as any);
 
     expect(preview.count.value).toBe(2);
+    expect(preview.materializedCount.value).toBe(1);
     expect(preview.visible.value).toBe(true);
     expect(preview.scope.value).toBe('all');
+    expect(preview.materialize()).toBe(true);
     expect(typeof preview.refresh).toBe('function');
   });
 });
