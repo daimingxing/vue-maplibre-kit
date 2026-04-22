@@ -44,6 +44,22 @@
               导出主业务DXF
             </ElButton>
           </mgl-custom-control>
+          <mgl-custom-control position="top-right" :noClasses="false">
+            <ElButton
+              style="background: white; width: 150px"
+              @click="refreshIntersectionPreviewDemo"
+            >
+              刷新交点示例
+            </ElButton>
+          </mgl-custom-control>
+          <mgl-custom-control position="top-right" :noClasses="false">
+            <ElButton
+              style="background: white; width: 190px"
+              @click="toggleIntersectionPreviewScope"
+            >
+              {{ intersectionScopeButtonText }}
+            </ElButton>
+          </mgl-custom-control>
         </template>
         <template #dataSource>
           <!--
@@ -67,6 +83,8 @@
       :selectedLineSourceId="selectedLineSourceId"
       :hasLineDraftFeatures="hasLineDraftFeatures"
       :lineDraftCount="lineDraftPreview.featureCount.value"
+      :intersectionCount="intersectionPreview.count.value"
+      :intersectionMaterializedCount="intersectionPreview.materializedCount.value"
       :dxfDefaultOptions="dxfDefaultOptions"
       :dxfPrimaryOptions="dxfPrimaryOptions"
       :selectionPanelState="selectionPanelState"
@@ -74,6 +92,7 @@
       @clear-selection="clearSelection"
       @deactivate-selection="deactivateSelection"
       @clear-line-draft="handleClearLineDraftFeatures"
+      @clear-materialized-intersections="handleClearMaterializedIntersections"
     />
     <!-- 引入自定义的 Vue Popup 组件 -->
     <mgl-popup
@@ -170,6 +189,9 @@ import {
   createLineDraftPreviewPlugin,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
 } from "vue-maplibre-kit/plugins/line-draft-preview";
+import {
+  createIntersectionPreviewPlugin,
+} from "vue-maplibre-kit/plugins/intersection-preview";
 import {
   createMapDxfExportPlugin,
   type MapDxfExportOptions,
@@ -1435,11 +1457,144 @@ const mapDxfExportPlugin = createMapDxfExportPlugin({
 } as MapDxfExportOptions);
 
 /**
+ * 交点预览插件示例。
+ * 这一版示例改成最推荐的简化接法：
+ * 1. 交给插件直接读取 sourceRegistry 里的业务线数据
+ * 2. 业务层只声明“哪些 source / layer 允许参与求交”
+ * 3. 正式交点点位、source、layer、交互和样式都由插件内部托管
+ */
+const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
+  // 是否启用整个交点插件。
+  // 设为 false 时，插件不会参与渲染，也不会计算交点。
+  enabled: true,
+
+  // 求交范围。
+  // selected：只计算“当前选中线”与候选线集合的交点。
+  // all：直接计算候选线集合内部的全部两两交点。
+  // 示例页默认先走 selected，便于观察“当前选中线对全图业务线求交”的交互体验。
+  scope: "selected",
+
+  // 交点预览图层默认是否显示。
+  // 设为 false 时，数据仍可计算，但图层默认不展示。
+  visible: true,
+
+  // 点击预览交点时，是否自动生成正式交点点要素。
+  // true：用户点击预览交点后，插件会把它自动写入内部托管的正式点 source / layer。
+  // false：只触发交点点击回调，业务层如果要落正式点，需要自己手动调用 materialize()。
+  materializeOnClick: true,
+
+  // 正式业务 source 注册表。
+  // 插件会直接从这里读取最新业务线数据
+  sourceRegistry: businessSourceRegistry,
+
+  // 允许参与求交的业务 sourceId 列表。
+  // 简化模式下，它表示“只从这些 source 里自动收集线候选”。
+  targetSourceIds: [SOURCE_IDS.primary, SOURCE_IDS.secondary],
+
+  // 允许参与求交的业务 layerId 列表。
+  // 简化模式建议始终显式写上，避免一个 source 下存在多条 line layer 时把范围放大。
+  targetLayerIds: [LAYER_IDS.primaryLine, LAYER_IDS.secondaryLine],
+
+  // 是否保留端点交点。
+  // true：线段在端点相接时，也算一个可操作交点。
+  // false：只保留严格落在线段内部的交点。
+  includeEndpoint: true,
+
+  // 交点坐标归一化保留的小数位。
+  // 它会影响交点临时 ID 的稳定性，以及“非常接近的两个点”是否会被视为同一个交点。
+  coordDigits: 6,
+
+  // 是否忽略同一条线自身的求交。
+  // true：不会把“同一条线自己的不同线段”拿来互相求交。
+  // 当前示例先保持 true，避免把自交/折点规则混进基础示例。
+  ignoreSelf: true,
+
+  // 生成正式交点时注入的默认业务属性。
+  // 这里适合补充“业务想长期保留”的属性，例如类型、状态、来源标签等。
+  materializedProperties: (context) => {
+    return {
+      name: "交点",
+      mark: "intersection",
+      status: "draft",
+      sourcePair: `${String(context.leftRef.featureId)} x ${String(context.rightRef.featureId)}`,
+    };
+  },
+
+  // 预览交点样式局部覆写。
+  // 只需要传你关心的 paint / layout 字段，插件默认样式会自动保留。
+  previewStyleOverrides: {
+    paint: {
+      "circle-radius": 6,
+    },
+  },
+
+  // 正式交点样式局部覆写。
+  // 当前示例把正式点放大一点，方便与预览点区分。
+  materializedStyleOverrides: {
+    paint: {
+      "circle-radius": 7,
+      "circle-color": "#1677ff",
+    },
+  },
+
+  // 高级兜底：如果一个 source 下有非常复杂的原始 filter / 自定义抽线逻辑，
+  // 再回退到 getCandidates 手动喂数据即可；普通业务页优先用上面的 sourceRegistry 简化模式。
+  // getCandidates: () => {
+  //   return [];
+  // },
+
+  // 单击交点后的业务回调。
+  // 这里拿到的是完整交点上下文：交点坐标、左右参与线、命中线段索引、是否端点命中等信息。
+  onClick: (context) => {
+    // 当前示例已开启 materializeOnClick: true，
+    // 所以点击预览交点后，插件会先自动把它落成正式交点点要素。
+    //
+    // 如果业务改成 materializeOnClick: false，也可以手动调用：
+    // 1. intersectionPreview.materialize(context.intersectionId)
+    //    显式把当前点击命中的交点落成正式点要素。
+    // 2. intersectionPreview.materialize()
+    //    不传参时，会默认物化“当前已选中的交点”。
+    //
+    // 正式交点 GeoJSON 获取方式：
+    // const materializedGeoJson = intersectionPreview.getMaterializedData();
+    //
+    // 如果要把当前正式点再补充业务属性：
+    // intersectionPreview.updateMaterializedProperties(context.intersectionId, {
+    //   status: "confirmed",
+    //   remark: "人工确认交点",
+    // });
+    //
+    // 如果用户点错了，不想保留刚生成的正式点：
+    // intersectionPreview.removeMaterialized(context.intersectionId);
+    //
+    // 当前示例保留自动物化，只把完整交点上下文和最新正式点 GeoJSON 打到控制台，方便直接观察。
+    console.log("[NGGI00 交点示例] 当前点击交点上下文", context);
+    console.log(
+      "[NGGI00 交点示例] 当前正式交点 GeoJSON",
+      intersectionPreview.getMaterializedData(),
+    );
+    ElMessage.success(
+      `已命中交点：${String(context.leftRef.featureId)} x ${String(context.rightRef.featureId)}`,
+    );
+  },
+
+  // 右键交点后的业务回调。
+  // 适合后续接右键菜单、交点详情面板、或“落点成正式点要素”等二级动作。
+  onContextMenu: (context) => {
+    console.log("[NGGI00 交点示例] 当前右键交点上下文", context);
+    ElMessage.info(
+      `交点范围：${context.scope}；坐标：${context.point.lng.toFixed(3)}, ${context.point.lat.toFixed(3)}`,
+    );
+  },
+});
+
+/**
  * 集中注册当前页面需要启用的地图能力扩展。
  */
 const mapPlugins = [
   mapFeatureSnapPlugin,
   lineDraftPreviewPlugin,
+  intersectionPreviewPlugin,
   mapFeatureMultiSelectPlugin,
   mapDxfExportPlugin,
 ];
@@ -1476,11 +1631,41 @@ const propertyEditor = businessMap.editor;
 const lineDraftPreview = businessMap.draft;
 
 /**
+ * 统一交点分组。
+ * 业务层通过 businessMap.intersection 读取交点数量、切换范围和手动刷新。
+ */
+const intersectionPreview = businessMap.intersection;
+
+/**
+ * 正式交点常用门面示例。
+ * 1. 读取当前正式交点 GeoJSON：
+ *    const data = intersectionPreview.getMaterializedData();
+ * 2. 手动物化当前选中交点：
+ *    intersectionPreview.materialize();
+ * 3. 更新某个正式交点的业务属性：
+ *    intersectionPreview.updateMaterializedProperties("intersection-id", { status: "done" });
+ * 4. 撤销某个正式交点：
+ *    intersectionPreview.removeMaterialized("intersection-id");
+ * 5. 一次性清空全部正式交点：
+ *    intersectionPreview.clearMaterialized();
+ */
+
+/**
  * 当前页面是否存在线草稿要素。
  * 该状态直接来自线草稿能力门面，用于驱动示例面板与按钮显隐。
  */
 const hasLineDraftFeatures = computed(() => {
   return lineDraftPreview.hasFeatures.value;
+});
+
+/**
+ * 交点范围切换按钮文本。
+ * 这里把当前范围和交点数量一起展示，方便示例页直接观察 facade 的变化。
+ */
+const intersectionScopeButtonText = computed(() => {
+  const scopeText =
+    intersectionPreview.scope.value === "all" ? "全量业务线求交" : "当前选中线求交";
+  return `交点范围：${scopeText}（${intersectionPreview.count.value}）`;
 });
 
 /**
@@ -1947,6 +2132,56 @@ const downloadPrimaryBusinessSourceDxf = async (): Promise<void> => {
     console.error("[NGGI00 DXF 示例] 导出失败", error);
     ElMessage.error(getReadableErrorMessage(error));
   }
+};
+
+/**
+ * 手动刷新交点示例。
+ * 当业务层主动改了 source 数据，且希望立即重算交点时，可以直接调用这个门面动作。
+ */
+const refreshIntersectionPreviewDemo = (): void => {
+  const success = intersectionPreview.refresh();
+  if (!success) {
+    ElMessage.warning("交点插件尚未初始化完成");
+    return;
+  }
+
+  ElMessage.success(`交点已刷新，当前共 ${intersectionPreview.count.value} 个`);
+};
+
+/**
+ * 清空当前示例页中的正式交点点要素。
+ * 这里故意只清正式点，不清预览交点，方便示例页观察“预览层”和“正式点层”是两条独立链路。
+ */
+const handleClearMaterializedIntersections = (): void => {
+  if (intersectionPreview.materializedCount.value <= 0) {
+    ElMessage.info("当前没有可清理的正式交点");
+    return;
+  }
+
+  const success = intersectionPreview.clearMaterialized();
+  if (!success) {
+    ElMessage.warning("交点插件尚未初始化完成");
+    return;
+  }
+
+  ElMessage.success("已清空全部正式交点点要素");
+};
+
+/**
+ * 切换交点求交范围。
+ * selected 更适合跟随当前选中线逐条分析，
+ * all 更适合一次性观察当前页面所有业务线的交点分布。
+ */
+const toggleIntersectionPreviewScope = (): void => {
+  const nextScope = intersectionPreview.scope.value === "all" ? "selected" : "all";
+  const success = intersectionPreview.setScope(nextScope);
+  if (!success) {
+    ElMessage.warning("交点插件尚未初始化完成");
+    return;
+  }
+
+  const scopeText = nextScope === "all" ? "全量业务线求交" : "当前选中线求交";
+  ElMessage.success(`已切换为${scopeText}，当前共 ${intersectionPreview.count.value} 个`);
 };
 
 /**

@@ -118,6 +118,68 @@ function cloneSerializable<T>(value: T): T {
 }
 
 /**
+ * 读取单个图层声明的命中优先级。
+ * @param layerConfig 当前图层交互配置
+ * @returns 标准化后的命中优先级
+ */
+function getLayerHitPriority(
+  layerConfig: MapLayerInteractiveLayerOptions | null | undefined
+): number {
+  return layerConfig?.hitPriority ?? 0;
+}
+
+/**
+ * 按命中优先级对图层声明排序。
+ * 同优先级时保留原始声明顺序，避免打乱业务层既有命中语义。
+ *
+ * @param layerEntries 当前图层声明列表
+ * @returns 已按命中优先级排序的图层声明列表
+ */
+export function sortLayerEntriesByHitPriority(
+  layerEntries: Array<[string, MapLayerInteractiveLayerOptions]>
+): Array<[string, MapLayerInteractiveLayerOptions]> {
+  return layerEntries
+    .map((entry, index) => ({
+      entry,
+      index,
+    }))
+    .sort((left, right) => {
+      const priorityDiff =
+        getLayerHitPriority(right.entry[1]) - getLayerHitPriority(left.entry[1]);
+
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
+      return left.index - right.index;
+    })
+    .map((item) => item.entry);
+}
+
+/**
+ * 判断吸附结果是否应该覆盖当前真实命中目标。
+ * 只有当吸附目标优先级更高，或当前没有真实命中目标时，才允许覆盖。
+ *
+ * @param rawLayerConfig 当前真实命中图层配置
+ * @param snapLayerConfig 当前吸附命中图层配置
+ * @returns 是否允许吸附结果覆盖真实命中目标
+ */
+export function shouldSnapOverrideRawTarget(
+  rawLayerConfig: MapLayerInteractiveLayerOptions | null | undefined,
+  snapLayerConfig: MapLayerInteractiveLayerOptions | null | undefined
+): boolean {
+  if (!snapLayerConfig) {
+    return false;
+  }
+
+  if (!rawLayerConfig) {
+    return true;
+  }
+
+  return getLayerHitPriority(snapLayerConfig) > getLayerHitPriority(rawLayerConfig);
+}
+
+/**
  * 将渲染态要素转换为标准 GeoJSON 快照。
  * @param feature 当前渲染态要素
  * @returns 标准化后的 GeoJSON 快照；无法转换时返回 null
@@ -301,6 +363,7 @@ function createMapInteractiveBinding(
 
   /**
    * 获取当前仍然存在于地图中的交互图层 ID，并保持业务声明的优先级顺序。
+   * 命中决策会再叠加 hitPriority，高优先级图层可覆盖这里的声明顺序。
    * @returns 当前可参与 hit-test 的图层 ID 列表
    */
   const getLayerIdsInPriorityOrder = (): string[] => {
@@ -1005,7 +1068,7 @@ function createMapInteractiveBinding(
       return null;
     }
 
-    for (const [layerId] of getLayerEntries()) {
+    for (const [layerId] of sortLayerEntriesByHitPriority(getLayerEntries())) {
       if (!availableLayerIdSet.has(layerId)) {
         continue;
       }
@@ -1032,13 +1095,14 @@ function createMapInteractiveBinding(
     const rawTarget = getEventTarget(event);
     const snapResult = getSnapBinding?.()?.resolveMapEvent(event) || null;
     let effectiveTarget = rawTarget;
+    const rawLayerConfig = getLayerConfig(rawTarget?.layerId || null);
     const snapLayerConfig = getLayerConfig(snapResult?.targetLayerId || null);
 
     if (
       snapResult?.matched &&
       snapResult.targetFeature &&
       snapResult.targetLayerId &&
-      snapLayerConfig
+      shouldSnapOverrideRawTarget(rawLayerConfig, snapLayerConfig)
     ) {
       effectiveTarget = {
         feature: snapResult.targetFeature,

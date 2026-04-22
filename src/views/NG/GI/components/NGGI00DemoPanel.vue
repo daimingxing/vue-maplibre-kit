@@ -100,6 +100,34 @@
 
     <section class="demo-panel-card">
       <div class="demo-panel-head">
+        <h3>交点正式点示例</h3>
+        <p>插件内部已经托管预览交点层和正式交点层，业务页这里只消费 facade 状态与动作。</p>
+      </div>
+      <div class="demo-panel-kv-list">
+        <div class="demo-panel-kv">
+          <span>当前预览交点</span>
+          <strong>{{ intersectionCount }} 个</strong>
+        </div>
+        <div class="demo-panel-kv">
+          <span>当前正式交点</span>
+          <strong>{{ intersectionMaterializedCount }} 个</strong>
+        </div>
+      </div>
+      <p class="demo-panel-summary">{{ intersectionMaterializedStatusText }}</p>
+      <div class="demo-panel-actions">
+        <el-button
+          type="warning"
+          plain
+          :disabled="intersectionMaterializedCount <= 0"
+          @click="handleClearMaterializedIntersections"
+        >
+          清空正式交点
+        </el-button>
+      </div>
+    </section>
+
+    <section class="demo-panel-card">
+      <div class="demo-panel-head">
         <h3>DXF 导出插件</h3>
         <p>这个示例同时演示“插件默认导出全部业务源”和“业务层局部覆写导出”。</p>
       </div>
@@ -161,6 +189,7 @@ import {
   DXF_PLUGIN_OPTIONS_GUIDE_TEXT,
   DXF_PRIMARY_ONLY_FILE_NAME,
   buildDxfResolvedOptionsText,
+  buildIntersectionMaterializedStatusText,
   buildLineDraftStatusText,
   buildLineOperationText,
   buildSelectionGuideText,
@@ -183,6 +212,8 @@ interface Props {
   selectedLineSourceId: string | null;
   hasLineDraftFeatures: boolean;
   lineDraftCount: number;
+  intersectionCount: number;
+  intersectionMaterializedCount: number;
   dxfDefaultOptions: DxfSummaryOptions | null;
   dxfPrimaryOptions: DxfSummaryOptions | null;
   selectionPanelState: SelectionPanelState;
@@ -195,6 +226,7 @@ const emit = defineEmits<{
   "clear-selection": [];
   "deactivate-selection": [];
   "clear-line-draft": [];
+  "clear-materialized-intersections": [];
 }>();
 
 /** 当前选择模式的中文文本。 */
@@ -237,6 +269,14 @@ const lineDraftStatusText = computed(() => {
   return buildLineDraftStatusText(props.hasLineDraftFeatures, props.lineDraftCount);
 });
 
+/** 当前交点正式点示例的说明文本。 */
+const intersectionMaterializedStatusText = computed(() => {
+  return buildIntersectionMaterializedStatusText(
+    props.intersectionCount,
+    props.intersectionMaterializedCount,
+  );
+});
+
 /** 当前示例面板展示的 DXF 最终配置说明。 */
 const dxfResolvedOptionsText = computed(() => {
   if (!props.dxfDefaultOptions || !props.dxfPrimaryOptions) {
@@ -272,6 +312,13 @@ function handleDeactivateSelection(): void {
  */
 function handleClearLineDraft(): void {
   emit("clear-line-draft");
+}
+
+/**
+ * 触发“清空正式交点”动作。
+ */
+function handleClearMaterializedIntersections(): void {
+  emit("clear-materialized-intersections");
 }
 </script>
 

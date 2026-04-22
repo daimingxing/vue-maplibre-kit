@@ -5,6 +5,10 @@ import { useMapSelection, type UseMapSelectionResult } from '../composables/useM
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
 import type { MapSourceFeatureRef } from '../shared/map-common-tools';
 import type { MapBusinessSource, MapBusinessSourceRegistry } from './createMapBusinessSource';
+import {
+  useIntersectionPreview,
+  type UseIntersectionPreviewResult,
+} from './useIntersectionPreview';
 import { useLineDraftPreview, type UseLineDraftPreviewResult } from './useLineDraftPreview';
 import {
   useMapFeatureActions,
@@ -102,6 +106,8 @@ export interface UseBusinessMapResult {
   editor: UseMapFeaturePropertyEditorResult;
   /** 线草稿分组。读取草稿数量、判断是否有草稿、清空草稿时使用。 */
   draft: UseLineDraftPreviewResult;
+  /** 交点分组。读取交点数量、切换求交范围和按 ID 读取交点时使用。 */
+  intersection: UseIntersectionPreviewResult;
   /** feature-state 特效分组。闪烁、高亮等页面级效果从这里取。 */
   effect: UseMapEffectResult;
 }
@@ -155,7 +161,8 @@ function createBusinessMapFeatureGroup(
  * 2. 要素查询/动作 -> `businessMap.feature`
  * 3. 属性编辑 -> `businessMap.editor`
  * 4. 线草稿状态 -> `businessMap.draft`
- * 5. 动效 -> `businessMap.effect`
+ * 5. 交点状态 -> `businessMap.intersection`
+ * 6. 动效 -> `businessMap.effect`
  *
  * @param options 聚合入口初始化配置
  * @returns 适合业务页直接消费的高层能力分组
@@ -171,6 +178,7 @@ export function useBusinessMap(options: UseBusinessMapOptions): UseBusinessMapRe
   const feature = createBusinessMapFeatureGroup(options);
   const editor = useMapFeaturePropertyEditor(options);
   const draft = useLineDraftPreview(mapRef);
+  const intersection = useIntersectionPreview(mapRef);
   const effect = useMapEffect(mapRef);
 
   return {
@@ -180,6 +188,7 @@ export function useBusinessMap(options: UseBusinessMapOptions): UseBusinessMapRe
     feature,
     editor,
     draft,
+    intersection,
     effect,
   };
 }

@@ -7,9 +7,14 @@ import type {
   LineDraftPreviewPluginApi,
   LineDraftPreviewStateChangePayload,
 } from '../plugins/line-draft-preview/useLineDraftPreviewController';
+import type {
+  IntersectionPreviewPluginApi,
+  IntersectionPreviewState,
+} from '../plugins/intersection-preview';
 
 const MAP_DXF_EXPORT_PLUGIN_TYPE = 'mapDxfExport';
 const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
+const INTERSECTION_PREVIEW_PLUGIN_TYPE = 'intersectionPreview';
 
 /** 按类型解析出的插件目标。 */
 export interface ResolvedMapPluginTarget {
@@ -101,6 +106,52 @@ export function resolveLineDraftPreviewState(
   }
 
   return mapExpose?.plugins.getState<LineDraftPreviewStateChangePayload>(pluginTarget.id) || null;
+}
+
+/**
+ * 读取交点预览插件 API。
+ * @param mapExpose 地图公开实例
+ * @param pluginId 历史兼容参数；传入时会额外校验唯一插件 ID
+ * @returns 命中的交点预览插件 API；找不到时返回 null
+ */
+export function resolveIntersectionPreviewApi(
+  mapExpose: MapLibreInitExpose | null | undefined,
+  pluginId?: string
+): IntersectionPreviewPluginApi | null {
+  const pluginTarget = resolveMapPluginTargetByType(
+    mapExpose,
+    INTERSECTION_PREVIEW_PLUGIN_TYPE,
+    pluginId
+  );
+
+  if (!pluginTarget) {
+    return null;
+  }
+
+  return mapExpose?.plugins.getApi<IntersectionPreviewPluginApi>(pluginTarget.id) || null;
+}
+
+/**
+ * 读取交点预览插件状态。
+ * @param mapExpose 地图公开实例
+ * @param pluginId 历史兼容参数；传入时会额外校验唯一插件 ID
+ * @returns 命中的交点预览插件状态；找不到时返回 null
+ */
+export function resolveIntersectionPreviewState(
+  mapExpose: MapLibreInitExpose | null | undefined,
+  pluginId?: string
+): IntersectionPreviewState | null {
+  const pluginTarget = resolveMapPluginTargetByType(
+    mapExpose,
+    INTERSECTION_PREVIEW_PLUGIN_TYPE,
+    pluginId
+  );
+
+  if (!pluginTarget) {
+    return null;
+  }
+
+  return mapExpose?.plugins.getState<IntersectionPreviewState>(pluginTarget.id) || null;
 }
 
 /**

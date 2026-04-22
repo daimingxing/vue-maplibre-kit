@@ -1,3 +1,11 @@
+import type {
+  MapCommonFeature,
+  MapIntersectionPoint,
+} from "vue-maplibre-kit/geometry";
+import {
+  buildMaterializedIntersectionFeature as buildSharedMaterializedIntersectionFeature,
+} from "vue-maplibre-kit/geometry";
+
 /** 选择模式。 */
 export type SelectionMode = "single" | "multiple";
 
@@ -308,6 +316,27 @@ export function buildLineDraftStatusText(
 }
 
 /**
+ * 生成交点正式点示例的状态说明文本。
+ * @param intersectionCount 当前预览交点数量
+ * @param materializedCount 当前正式交点数量
+ * @returns 适合示例面板直接展示的说明文本
+ */
+export function buildIntersectionMaterializedStatusText(
+  intersectionCount: number,
+  materializedCount: number,
+): string {
+  if (intersectionCount <= 0) {
+    return "当前还没有可预览交点。先选中一条线，或切到“全量业务线求交”后刷新，这里就会出现可点击的交点预览。";
+  }
+
+  if (materializedCount <= 0) {
+    return "当前示例已开启 materializeOnClick。点击地图上的预览交点后，插件会自动生成正式交点点要素；业务层可继续通过 getMaterializedData() 读取 GeoJSON，或通过 updateMaterializedProperties() / removeMaterialized() 追加属性与撤销误点。";
+  }
+
+  return `当前已有 ${materializedCount} 个正式交点点要素。它们由插件内部统一托管，业务层可通过 businessMap.intersection 调用 getMaterializedData()、updateMaterializedProperties()、removeMaterialized()、clearMaterialized()。`;
+}
+
+/**
  * 统一格式化 DXF 导出的 source 范围文本。
  * @param sourceIds 最终生效的 sourceId 列表
  * @returns 适合示例面板直接展示的中文文本
@@ -362,4 +391,17 @@ export function buildDxfResolvedOptionsText(
     `默认颜色解析器：图层色 = ${formatDxfTrueColorResolverText(defaultOptions.layerTrueColorResolver)}；要素色 = ${formatDxfTrueColorResolverText(defaultOptions.featureTrueColorResolver)}。`,
     `业务层局部覆写后：范围 = ${formatDxfSourceIdsText(primaryOnlyOptions.sourceIds)}；文件 = ${primaryOnlyOptions.fileName}；图层名 = 按 sourceId + mark 生成；图层色 = ${formatDxfTrueColorResolverText(primaryOnlyOptions.layerTrueColorResolver)}；要素色 = ${formatDxfTrueColorResolverText(primaryOnlyOptions.featureTrueColorResolver)}。`,
   ].join("\n");
+}
+
+/**
+ * 将交点上下文落成正式点要素。
+ * 当前示例选择补齐 `properties.id`，这样它可以直接复用业务 source 常见的 `promoteId: "id"` 配置。
+ *
+ * @param intersection 当前交点上下文
+ * @returns 可直接写入独立业务点 source 的正式点要素
+ */
+export function buildMaterializedIntersectionFeature(
+  intersection: MapIntersectionPoint,
+): MapCommonFeature {
+  return buildSharedMaterializedIntersectionFeature(intersection) as MapCommonFeature;
 }

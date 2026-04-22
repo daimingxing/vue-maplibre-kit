@@ -11,6 +11,7 @@ import type {
   TerradrawFeature,
 } from '../shared/mapLibre-controls-types';
 import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/useLineDraftPreviewController';
+import type { IntersectionPreviewPluginApi, IntersectionPreviewState } from '../plugins/intersection-preview';
 import type { MapPluginHostExpose, MapSelectionService } from '../plugins/types';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
 import type { MapInstance } from 'vue-maplibre-gl';
@@ -23,6 +24,8 @@ import {
 
 /** 线草稿插件类型常量。 */
 const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
+/** 交点插件类型常量。 */
+const INTERSECTION_PREVIEW_PLUGIN_TYPE = 'intersectionPreview';
 
 /** 缺省选择态。 */
 const defaultSelectionState: MapSelectionState = {
@@ -156,6 +159,57 @@ function createLineDraftPluginHarness(): {
 }
 
 /**
+ * 创建测试用交点插件 API。
+ * @returns 交点插件 API 与状态引用
+ */
+function createIntersectionPluginHarness(): {
+  api: IntersectionPreviewPluginApi;
+  state: IntersectionPreviewState;
+} {
+  const state: IntersectionPreviewState = {
+    visible: true,
+    scope: 'all',
+    count: 2,
+    materializedCount: 1,
+    selectedId: null,
+    lastError: null,
+  };
+
+  const api = {
+    refresh: () => undefined,
+    clear: () => {
+      state.count = 0;
+      state.selectedId = null;
+    },
+    materialize: () => {
+      state.materializedCount += 1;
+      return true;
+    },
+    clearMaterialized: () => {
+      state.materializedCount = 0;
+    },
+    show: () => {
+      state.visible = true;
+    },
+    hide: () => {
+      state.visible = false;
+    },
+    setScope: (scope: 'all' | 'selected') => {
+      state.scope = scope;
+    },
+    getData: () => createFeatureCollection([]),
+    getMaterializedData: () => createFeatureCollection([]),
+    getById: () => null,
+    getSelected: () => null,
+  } as IntersectionPreviewPluginApi;
+
+  return {
+    api,
+    state,
+  };
+}
+
+/**
  * 创建测试用选择服务。
  * @returns 选择服务与状态引用
  */
@@ -236,9 +290,17 @@ function createSelectionServiceHarness(): {
 function createMapExpose(options: {
   lineDraftApi?: LineDraftPreviewPluginApi | null;
   lineDraftState?: unknown;
+  intersectionApi?: IntersectionPreviewPluginApi | null;
+  intersectionState?: IntersectionPreviewState | null;
   selectionService?: MapSelectionService | null;
 } = {}): MapLibreInitExpose {
-  const { lineDraftApi = null, lineDraftState = null, selectionService = null } = options;
+  const {
+    lineDraftApi = null,
+    lineDraftState = null,
+    intersectionApi = null,
+    intersectionState = null,
+    selectionService = null,
+  } = options;
   const mapInstance = {
     component: undefined,
     map: undefined,
@@ -247,18 +309,57 @@ function createMapExpose(options: {
     language: undefined,
   } as MapInstance;
   const pluginHost: MapPluginHostExpose = {
-    has: (pluginId) => pluginId === 'lineDraftPreview' && Boolean(lineDraftApi),
-    getApi: <TApi = unknown>() => (lineDraftApi as TApi | null) || null,
-    getState: <TState = unknown>() => (lineDraftState as TState | null) || null,
-    list: () =>
-      lineDraftApi
-        ? [
-            {
-              id: 'lineDraftPreview',
-              type: LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
-            },
-          ]
-        : [],
+    has: (pluginId) => {
+      if (pluginId === 'lineDraftPreview') {
+        return Boolean(lineDraftApi);
+      }
+
+      if (pluginId === 'intersectionPreview') {
+        return Boolean(intersectionApi);
+      }
+
+      return false;
+    },
+    getApi: <TApi = unknown>(pluginId?: string) => {
+      if (pluginId === 'lineDraftPreview') {
+        return (lineDraftApi as TApi | null) || null;
+      }
+
+      if (pluginId === 'intersectionPreview') {
+        return (intersectionApi as TApi | null) || null;
+      }
+
+      return null;
+    },
+    getState: <TState = unknown>(pluginId?: string) => {
+      if (pluginId === 'lineDraftPreview') {
+        return (lineDraftState as TState | null) || null;
+      }
+
+      if (pluginId === 'intersectionPreview') {
+        return (intersectionState as TState | null) || null;
+      }
+
+      return null;
+    },
+    list: () => {
+      const result = [];
+      if (lineDraftApi) {
+        result.push({
+          id: 'lineDraftPreview',
+          type: LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
+        });
+      }
+
+      if (intersectionApi) {
+        result.push({
+          id: 'intersectionPreview',
+          type: INTERSECTION_PREVIEW_PLUGIN_TYPE,
+        });
+      }
+
+      return result;
+    },
   };
 
   return {
@@ -317,12 +418,15 @@ describe('useBusinessMap', () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const selectionHarness = createSelectionServiceHarness();
     const lineDraftHarness = createLineDraftPluginHarness();
+    const intersectionHarness = createIntersectionPluginHarness();
     const businessMap = useBusinessMap({
       mapRef: ref(
         createMapExpose({
           selectionService: selectionHarness.service,
           lineDraftApi: lineDraftHarness.api,
           lineDraftState: lineDraftHarness.state,
+          intersectionApi: intersectionHarness.api,
+          intersectionState: intersectionHarness.state,
         })
       ),
       sourceRegistry,
@@ -343,6 +447,9 @@ describe('useBusinessMap', () => {
     expect(lineDraftClearResult).toBe(true);
     expect(lineDraftHarness.state.hasFeatures).toBe(false);
     expect(lineDraftHarness.state.featureCount).toBe(0);
+    expect(businessMap.intersection.count.value).toBe(2);
+    expect(businessMap.intersection.visible.value).toBe(true);
+    expect(typeof businessMap.intersection.refresh).toBe('function');
     expect(flashStartResult).toBe(true);
     expect(
       businessMap.effect.isFeatureFlashing({

@@ -119,38 +119,42 @@ createApp(App).mount('#app');
 ## 4. 当前支持的全局配置树
 
 ```ts
-defineMapGlobalConfig({
-  mapOptions: {},
-  mapControls: {},
-  plugins: {
-    snap: {},
-    lineDraft: {},
-    multiSelect: {},
-    dxfExport: {},
-  },
-  styles: {
-    circle: {},
-    line: {},
-    fill: {},
-    symbol: {},
-    raster: {},
-  },
-});
+{
+  mapOptions?: ...
+  mapControls?: ...
+  plugins?: {
+    snap?: ...
+    lineDraft?: ...
+    intersection?: ...
+    multiSelect?: ...
+    dxfExport?: ...
+  }
+  styles?: {
+    circle?: ...
+    line?: ...
+    fill?: ...
+    symbol?: ...
+    raster?: ...
+  }
+}
 ```
 
 一级入口只有这些：
 
-- `mapOptions`
-- `mapControls`
-- `plugins.snap`
-- `plugins.lineDraft`
-- `plugins.multiSelect`
-- `plugins.dxfExport`
-- `styles.circle`
-- `styles.line`
-- `styles.fill`
-- `styles.symbol`
-- `styles.raster`
+| 一级入口 | 说明 |
+| --- | --- |
+| `config.mapOptions` | 地图初始化默认参数 |
+| `config.mapControls` | 地图控件默认参数 |
+| `config.plugins.snap` | 吸附插件默认参数 |
+| `config.plugins.lineDraft` | 线草稿预览插件默认参数 |
+| `config.plugins.intersection` | 交点预览插件默认参数 |
+| `config.plugins.multiSelect` | 多选插件默认参数 |
+| `config.plugins.dxfExport` | DXF 导出插件默认参数 |
+| `config.styles.circle` | 点图层样式工厂默认值 |
+| `config.styles.line` | 线图层样式工厂默认值 |
+| `config.styles.fill` | 面图层样式工厂默认值 |
+| `config.styles.symbol` | 符号图层样式工厂默认值 |
+| `config.styles.raster` | 栅格图层样式工厂默认值 |
 
 ---
 
@@ -717,30 +721,54 @@ plugins: {
 ## 8. `plugins.lineDraft` 全局配置项
 
 ```ts
-plugins: {
-  // 线草稿预览插件：统一控制线草稿默认样式
-  lineDraft: {
-    // styleOverrides: {
-    //   line: {
-    //     layout: {
-    //       // 这里可写所有 styles.line.layout 的字段
-    //     },
-    //     paint: {
-    //       // 这里可写所有 styles.line.paint 的字段
-    //     },
-    //   },
-    //   fill: {
-    //     layout: {
-    //       // 这里可写所有 styles.fill.layout 的字段
-    //     },
-    //     paint: {
-    //       // 这里可写所有 styles.fill.paint 的字段
-    //     },
-    //   },
-    // },
-  },
-},
+config.plugins.lineDraft
 ```
+
+类型来源：
+
+- [src/config.ts](../src/config.ts)
+- [src/MapLibre/plugins/line-draft-preview/types.ts](../src/MapLibre/plugins/line-draft-preview/types.ts)
+
+### 8.2 参数表
+
+| 参数路径 | 类型 / 取值 | 作用 |
+| --- | --- | --- |
+| `config.plugins.lineDraft.styleOverrides.line.layout.*` | `LineLayer layout` | 线草稿线图层 layout 覆写；字段清单见本文 `11.2 styles.line.layout`。 |
+| `config.plugins.lineDraft.styleOverrides.line.paint.*` | `LineLayer paint` | 线草稿线图层 paint 覆写；字段清单见本文 `11.2 styles.line.paint`。 |
+| `config.plugins.lineDraft.styleOverrides.fill.layout.*` | `FillLayer layout` | 线廊草稿面图层 layout 覆写；字段清单见本文 `11.3 styles.fill.layout`。 |
+| `config.plugins.lineDraft.styleOverrides.fill.paint.*` | `FillLayer paint` | 线廊草稿面图层 paint 覆写；字段清单见本文 `11.3 styles.fill.paint`。 |
+
+### 8.3 明确不进全局的字段
+
+| 字段 | 不进全局的原因 |
+| --- | --- |
+| `inheritInteractiveFromLayerId` | 它依赖页面正式业务图层 ID，属于实例绑定信息。 |
+
+### 8.4 `plugins.intersection` 参数补充
+
+入口路径：
+
+```ts
+config.plugins.intersection
+```
+
+类型来源：
+
+- [src/config.ts](../src/config.ts)
+- [src/MapLibre/plugins/intersection-preview/types.ts](../src/MapLibre/plugins/intersection-preview/types.ts)
+
+参数表：
+
+| 参数路径 | 类型 / 取值 | 作用 |
+| --- | --- | --- |
+| `config.plugins.intersection.previewStyleOverrides.layout.*` | `CircleLayer layout` | 预览交点图层 layout 覆写；字段清单见本文 `11.2 styles.circle.layout`。 |
+| `config.plugins.intersection.previewStyleOverrides.paint.*` | `CircleLayer paint` | 预览交点图层 paint 覆写；字段清单见本文 `11.2 styles.circle.paint`。 |
+| `config.plugins.intersection.materializedStyleOverrides.layout.*` | `CircleLayer layout` | 正式交点图层 layout 覆写；字段清单见本文 `11.2 styles.circle.layout`。 |
+| `config.plugins.intersection.materializedStyleOverrides.paint.*` | `CircleLayer paint` | 正式交点图层 paint 覆写；字段清单见本文 `11.2 styles.circle.paint`。 |
+
+合并顺序：
+
+- `交点插件内置样式 -> config.plugins.intersection.* -> createIntersectionPreviewPlugin(options).*StyleOverrides`
 
 ---
 
@@ -900,159 +928,75 @@ styles: {
 ### 11.3 `styles.fill`
 
 ```ts
-styles: {
-  fill: {
-    layout: {
-      // 'fill-sort-key': 0, // 面要素绘制排序值
-      // visibility: 'visible', // 图层显隐
-    },
-    paint: {
-      // 'fill-antialias': true, // 是否开启面抗锯齿
-      // 'fill-opacity': 0.4, // 面透明度
-      // 'fill-opacity-transition': { duration: 300, delay: 0 }, // opacity 过渡配置
-      // 'fill-color': '#888888', // 面填充颜色
-      // 'fill-color-transition': { duration: 300, delay: 0 }, // color 过渡配置
-      // 'fill-outline-color': '#000000', // 面边框颜色
-      // 'fill-outline-color-transition': { duration: 300, delay: 0 }, // outline-color 过渡配置
-      // 'fill-translate': [0, 0], // 面屏幕空间偏移量
-      // 'fill-translate-transition': { duration: 300, delay: 0 }, // translate 过渡配置
-      // 'fill-translate-anchor': 'map', // translate 参考系
-      // 'fill-pattern': 'pattern-name', // 面纹理图案名称
-      // 'fill-pattern-transition': { duration: 300, delay: 0 }, // pattern 过渡配置
-    },
-  },
-},
+import { defineMapGlobalConfig, setMapGlobalConfig } from 'vue-maplibre-kit/config';
+
+export function applyMapGlobalConfig(): void {
+  setMapGlobalConfig(
+    defineMapGlobalConfig({
+      mapOptions: {
+        mapStyle: 'https://your-style.json',
+        center: [114.3, 22.5],
+        zoom: 10,
+        renderWorldCopies: false,
+      },
+      mapControls: {
+        MglScaleControl: {
+          isUse: true,
+          position: 'bottom-left',
+          unit: 'metric',
+        },
+        MaplibreMeasureControl: {
+          isUse: true,
+          position: 'top-right',
+          measureUnitType: 'metric',
+        },
+      },
+      plugins: {
+        intersection: {
+          previewStyleOverrides: {
+            paint: {
+              'circle-radius': 6,
+            },
+          },
+          materializedStyleOverrides: {
+            paint: {
+              'circle-radius': 7,
+              'circle-color': '#1677ff',
+            },
+          },
+        },
+        dxfExport: {
+          defaults: {
+            sourceCrs: 'EPSG:4326',
+            targetCrs: 'EPSG:3857',
+            pointMode: 'circle',
+            pointRadius: 2,
+          },
+        },
+      },
+      styles: {
+        line: {
+          paint: {
+            'line-color': '#1677ff',
+          },
+        },
+      },
+    })
+  );
+}
 ```
 
-### 11.4 `styles.symbol`
+`src/main.ts`
 
 ```ts
-styles: {
-  symbol: {
-    layout: {
-      // 'symbol-placement': 'point', // 符号放置方式
-      // 'symbol-spacing': 250, // 符号间距
-      // 'symbol-avoid-edges': false, // 是否避免跨瓦片边缘放置
-      // 'symbol-sort-key': 0, // 符号排序值
-      // 'symbol-z-order': 'auto', // 符号绘制顺序策略
-      // 'icon-allow-overlap': false, // 图标是否允许重叠
-      // 'icon-overlap': 'never', // 图标重叠控制策略
-      // 'icon-ignore-placement': false, // 是否允许其他符号忽略当前图标碰撞盒
-      // 'icon-optional': false, // 图标碰撞时是否允许只显示文字
-      // 'icon-rotation-alignment': 'auto', // 图标旋转对齐方式
-      // 'icon-size': 1, // 图标缩放比例
-      // 'icon-text-fit': 'none', // 图标是否包裹文字
-      // 'icon-text-fit-padding': [0, 0, 0, 0], // 图标包裹文字时的额外内边距
-      // 'icon-image': 'marker-icon', // 图标 sprite 名称
-      // 'icon-rotate': 0, // 图标旋转角度
-      // 'icon-padding': 2, // 图标碰撞盒内边距
-      // 'icon-keep-upright': true, // 图标是否保持正向
-      // 'icon-offset': [0, 0], // 图标偏移量
-      // 'icon-anchor': 'center', // 图标锚点
-      // 'icon-pitch-alignment': 'auto', // 图标倾斜对齐方式
-      // 'text-pitch-alignment': 'viewport', // 文字倾斜对齐方式
-      // 'text-rotation-alignment': 'viewport', // 文字旋转对齐方式
-      // 'text-field': ['get', 'id'], // 文字内容表达式或字段
-      // 'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'], // 字体栈
-      // 'text-size': 14, // 字号
-      // 'text-max-width': 10, // 换行最大宽度
-      // 'text-line-height': 1.2, // 多行行高
-      // 'text-letter-spacing': 0, // 字间距
-      // 'text-justify': 'center', // 多行对齐方式
-      // 'text-radial-offset': 0, // 文字径向偏移
-      // 'text-variable-anchor': ['bottom', 'top'], // 可变文字锚点集合
-      // 'text-variable-anchor-offset': [['bottom', [0, -1]]], // 可变锚点偏移集合
-      // 'text-anchor': 'bottom', // 文字锚点
-      // 'text-max-angle': 45, // 沿线排布时允许的最大折角
-      // 'text-writing-mode': ['horizontal'], // 书写方向
-      // 'text-rotate': 0, // 文字旋转角度
-      // 'text-padding': 2, // 文字碰撞盒内边距
-      // 'text-keep-upright': true, // 文字是否保持正向
-      // 'text-transform': 'none', // 大小写转换方式
-      // 'text-offset': [0, -1], // 文字偏移量
-      // 'text-allow-overlap': false, // 文字是否允许重叠
-      // 'text-overlap': 'never', // 文字重叠控制策略
-      // 'text-ignore-placement': false, // 是否允许其他符号忽略当前文字碰撞盒
-      // 'text-optional': false, // 文字碰撞时是否允许只显示图标
-      // visibility: 'visible', // 图层显隐
-    },
-    paint: {
-      // 'icon-opacity': 1, // 图标透明度
-      // 'icon-opacity-transition': { duration: 300, delay: 0 }, // icon-opacity 过渡配置
-      // 'icon-color': '#000000', // 图标颜色
-      // 'icon-color-transition': { duration: 300, delay: 0 }, // icon-color 过渡配置
-      // 'icon-halo-color': 'rgba(0,0,0,0)', // 图标描边颜色
-      // 'icon-halo-color-transition': { duration: 300, delay: 0 }, // icon-halo-color 过渡配置
-      // 'icon-halo-width': 0, // 图标描边宽度
-      // 'icon-halo-width-transition': { duration: 300, delay: 0 }, // icon-halo-width 过渡配置
-      // 'icon-halo-blur': 0, // 图标描边模糊度
-      // 'icon-halo-blur-transition': { duration: 300, delay: 0 }, // icon-halo-blur 过渡配置
-      // 'icon-translate': [0, 0], // 图标偏移量
-      // 'icon-translate-transition': { duration: 300, delay: 0 }, // icon-translate 过渡配置
-      // 'icon-translate-anchor': 'map', // icon-translate 参考系
-      // 'text-opacity': 1, // 文字透明度
-      // 'text-opacity-transition': { duration: 300, delay: 0 }, // text-opacity 过渡配置
-      // 'text-color': '#333333', // 文字颜色
-      // 'text-color-transition': { duration: 300, delay: 0 }, // text-color 过渡配置
-      // 'text-halo-color': '#ffffff', // 文字描边颜色
-      // 'text-halo-color-transition': { duration: 300, delay: 0 }, // text-halo-color 过渡配置
-      // 'text-halo-width': 2, // 文字描边宽度
-      // 'text-halo-width-transition': { duration: 300, delay: 0 }, // text-halo-width 过渡配置
-      // 'text-halo-blur': 1, // 文字描边模糊度
-      // 'text-halo-blur-transition': { duration: 300, delay: 0 }, // text-halo-blur 过渡配置
-      // 'text-translate': [0, 0], // 文字偏移量
-      // 'text-translate-transition': { duration: 300, delay: 0 }, // text-translate 过渡配置
-      // 'text-translate-anchor': 'map', // text-translate 参考系
-    },
-  },
-},
+import { createApp } from 'vue';
+import App from './App.vue';
+import { applyMapGlobalConfig } from './map-global-config';
+
+applyMapGlobalConfig();
+
+createApp(App).mount('#app');
 ```
-
-### 11.5 `styles.raster`
-
-```ts
-styles: {
-  raster: {
-    layout: {
-      // visibility: 'visible', // 图层显隐
-    },
-    paint: {
-      // 'raster-opacity': 1, // 栅格透明度
-      // 'raster-opacity-transition': { duration: 300, delay: 0 }, // raster-opacity 过渡配置
-      // 'raster-hue-rotate': 0, // 色相旋转
-      // 'raster-hue-rotate-transition': { duration: 300, delay: 0 }, // raster-hue-rotate 过渡配置
-      // 'raster-brightness-min': 0, // 最小亮度
-      // 'raster-brightness-min-transition': { duration: 300, delay: 0 }, // raster-brightness-min 过渡配置
-      // 'raster-brightness-max': 1, // 最大亮度
-      // 'raster-brightness-max-transition': { duration: 300, delay: 0 }, // raster-brightness-max 过渡配置
-      // 'raster-saturation': 0, // 饱和度调整
-      // 'raster-saturation-transition': { duration: 300, delay: 0 }, // raster-saturation 过渡配置
-      // 'raster-contrast': 0, // 对比度调整
-      // 'raster-contrast-transition': { duration: 300, delay: 0 }, // raster-contrast 过渡配置
-      // resampling: 'linear', // 通用重采样方式
-      // 'raster-resampling': 'linear', // 栅格重采样方式
-      // 'raster-fade-duration': 0, // 瓦片切换淡入时长
-    },
-  },
-},
-```
-
----
-
-## 12. 明确不进全局配置的项
-
-下面这些字段不是应用级全局默认值，不应该写进 `vue-maplibre-kit/config`：
-
-- `sourceRegistry`
-- `ordinaryLayers`
-- `inheritInteractiveFromLayerId`
-- `targetLayerIds`
-- `excludeLayerIds`
-- `canSelect`
-
-原因统一只有一条：
-
-- 它们都带有明显的页面实例绑定特征，属于实例级配置，不属于应用级全局默认值
 
 ---
 

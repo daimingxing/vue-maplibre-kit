@@ -14,6 +14,7 @@ import type {
 } from './MapLibre/shared/mapLibre-controls-types';
 import type { MapFeatureSnapPreviewOptions } from './MapLibre/plugins/map-feature-snap/types';
 import type { LineDraftPreviewStyleOverrides } from './MapLibre/plugins/line-draft-preview/types';
+import type { IntersectionPreviewStyleOverrides } from './MapLibre/plugins/intersection-preview/types';
 import type { MapDxfExportTaskOptions } from './MapLibre/plugins/map-dxf-export/types';
 import type { MapLayerStyleOverrides } from './MapLibre/shared/map-layer-style-config';
 import { cloneDeep } from 'lodash-es';
@@ -77,6 +78,14 @@ export interface LineDraftPreviewGlobalDefaults {
   styleOverrides?: LineDraftPreviewStyleOverrides;
 }
 
+/** 交点预览插件全局默认配置。 */
+export interface IntersectionPreviewGlobalDefaults {
+  /** 全局预览交点样式覆写。 */
+  previewStyleOverrides?: IntersectionPreviewStyleOverrides;
+  /** 全局正式交点样式覆写。 */
+  materializedStyleOverrides?: IntersectionPreviewStyleOverrides;
+}
+
 /** 要素多选插件全局默认配置。 */
 export interface MapFeatureMultiSelectGlobalDefaults {
   /** 是否启用多选插件。 */
@@ -116,6 +125,8 @@ export interface MapKitGlobalConfig {
     snap?: MapFeatureSnapGlobalDefaults;
     /** 线草稿插件全局默认配置。 */
     lineDraft?: LineDraftPreviewGlobalDefaults;
+    /** 交点预览插件全局默认配置。 */
+    intersection?: IntersectionPreviewGlobalDefaults;
     /** 多选插件全局默认配置。 */
     multiSelect?: MapFeatureMultiSelectGlobalDefaults;
     /** DXF 插件全局默认配置。 */

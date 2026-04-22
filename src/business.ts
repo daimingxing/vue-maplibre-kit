@@ -39,6 +39,9 @@ export { default as MapBusinessSourceLayers } from './MapLibre/facades/MapBusine
 /** 高层业务聚合门面。业务页面优先从这里读取选择、编辑、草稿和动效能力。 */
 export { useBusinessMap } from './MapLibre/facades/useBusinessMap';
 
+/** 交点门面。业务页面直接读取交点状态和交点动作时使用。 */
+export { useIntersectionPreview } from './MapLibre/facades/useIntersectionPreview';
+
 /** 通用 Popup 状态门面。业务页面管理弹窗显隐与载荷时优先使用。 */
 export { useMapPopupState } from './MapLibre/facades/useMapPopupState';
 
@@ -90,6 +93,18 @@ export { whenFeaturePropertyIn } from './MapLibre/shared/map-feature-property-ex
 /** 属性映射表达式工厂。 */
 export { matchFeatureProperty } from './MapLibre/shared/map-feature-property-expression';
 
+/** 交点转正式点要素工具。 */
+export { buildIntersectionPointFeature } from './MapLibre/shared/map-intersection-tools';
+
+/** 交点候选线构建工具。 */
+export { buildIntersectionCandidates } from './MapLibre/shared/map-intersection-tools';
+
+/** 正式交点点要素构建工具。 */
+export { buildMaterializedIntersectionFeature } from './MapLibre/shared/map-intersection-tools';
+
+/** 业务线交点计算工具。 */
+export { collectLineIntersections } from './MapLibre/shared/map-intersection-tools';
+
 /** 业务 source 高频工厂分组。 */
 export const businessSources = {
   createMapBusinessSource,
@@ -133,6 +148,18 @@ export type { MapLayerInteractiveOptions } from './MapLibre/shared/mapLibre-cont
 /** 当前被选中的图层要素类型。 */
 export type { MapLayerSelectedFeature } from './MapLibre/shared/mapLibre-controls-types';
 
+/** 通用 GeoJSON 要素类型。业务层需要处理普通业务要素快照时使用。 */
+export type { MapCommonFeature } from './MapLibre/shared/map-common-tools';
+
+/** 通用 GeoJSON 要素集合类型。业务层需要处理 FeatureCollection 时使用。 */
+export type { MapCommonFeatureCollection } from './MapLibre/shared/map-common-tools';
+
+/** 通用线要素类型。业务层只处理线数据时使用。 */
+export type { MapCommonLineFeature } from './MapLibre/shared/map-common-tools';
+
+/** 通用属性对象类型。业务层需要描述 GeoJSON properties 时使用。 */
+export type { MapCommonProperties } from './MapLibre/shared/map-common-tools';
+
 /** 选中态变化上下文类型。 */
 export type { MapLayerSelectionChangeContext } from './MapLibre/shared/mapLibre-controls-types';
 
@@ -175,6 +202,9 @@ export type { MapFeaturePropertyEditorTarget } from './MapLibre/facades/useMapFe
 /** 高层业务聚合门面返回类型。 */
 export type { UseBusinessMapResult } from './MapLibre/facades/useBusinessMap';
 
+/** 交点门面返回类型。 */
+export type { UseIntersectionPreviewResult } from './MapLibre/facades/useIntersectionPreview';
+
 /** 业务层友好的单条要素上下文类型。 */
 export type { MapBusinessFeatureContext } from './MapLibre/facades/useMapFeatureQuery';
 
@@ -186,6 +216,36 @@ export type { MapBusinessSelectionTrigger } from './MapLibre/facades/useMapFeatu
 
 /** 业务层友好的选中集变化上下文类型。 */
 export type { MapBusinessSelectionContext } from './MapLibre/facades/useMapFeatureQuery';
+
+/** 交点收集配置类型。 */
+export type { CollectLineIntersectionsOptions } from './MapLibre/shared/map-intersection-tools';
+
+/** 交点求交范围类型。 */
+export type { IntersectionScope } from './MapLibre/shared/map-intersection-tools';
+
+/** 交点候选线类型。 */
+export type { MapIntersectionCandidate } from './MapLibre/shared/map-intersection-tools';
+
+/** 交点候选来源类型。 */
+export type { MapIntersectionSource } from './MapLibre/shared/map-intersection-tools';
+
+/** 交点领域对象类型。 */
+export type { MapIntersectionPoint } from './MapLibre/shared/map-intersection-tools';
+
+/** 交点预览上下文类型。 */
+export type { IntersectionPreviewContext } from './MapLibre/plugins/intersection-preview';
+
+/** 交点预览插件配置类型。 */
+export type { IntersectionPreviewOptions } from './MapLibre/plugins/intersection-preview';
+
+/** 交点预览插件 API 类型。 */
+export type { IntersectionPreviewPluginApi } from './MapLibre/plugins/intersection-preview';
+
+/** 交点预览求交范围类型。 */
+export type { IntersectionPreviewScope } from './MapLibre/plugins/intersection-preview';
+
+/** 交点预览状态类型。 */
+export type { IntersectionPreviewState } from './MapLibre/plugins/intersection-preview';
 
 /** 通用 Popup 状态门面返回类型。 */
 export type { UseMapPopupStateResult } from './MapLibre/facades/useMapPopupState';
