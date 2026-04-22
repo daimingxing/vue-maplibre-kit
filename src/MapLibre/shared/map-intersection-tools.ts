@@ -3,7 +3,6 @@ import type { GeoJSONSourceSpecification } from 'maplibre-gl';
 import type { MapFeatureId } from '../composables/useMapDataUpdate';
 import type {
   MapCommonFeature,
-  MapCommonFeatureCollection,
   MapCommonLineFeature,
   MapCommonProperties,
   MapSourceFeatureRef,

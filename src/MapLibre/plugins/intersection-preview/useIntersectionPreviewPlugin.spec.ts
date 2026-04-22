@@ -131,6 +131,8 @@ describe('intersectionPreviewPlugin', () => {
     expect(typeof pluginApi?.clearMaterialized).toBe('function');
     expect(patch?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]).toBeTruthy();
     expect(patch?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]).toBeTruthy();
+    expect(patch?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]?.hitPriority).toBeGreaterThan(0);
+    expect(patch?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]?.hitPriority).toBeGreaterThan(0);
   });
 
   it('点击预览交点后应自动生成正式点要素', () => {

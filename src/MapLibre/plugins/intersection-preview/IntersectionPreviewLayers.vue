@@ -43,7 +43,7 @@ import type { MapLayerStyle } from '../../shared/map-layer-style-config';
  * 这里显式传 filter，是为了避开 vue-maplibre-gl 中 “未传 filter 时布尔 prop 默认为 false”
  * 导致整层被错误过滤掉的问题。
  */
-const POINT_FILTER = ['==', '$type', 'Point'] as const;
+const POINT_FILTER: CircleLayerSpecification['filter'] = ['==', '$type', 'Point'];
 
 defineProps({
   /** 是否渲染交点图层。 */

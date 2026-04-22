@@ -20,6 +20,8 @@ export const INTERSECTION_PREVIEW_LAYER_ID = 'intersection-preview-layer';
 export const INTERSECTION_MATERIALIZED_SOURCE_ID = 'intersection-materialized-source';
 /** 正式交点点图层 ID。 */
 export const INTERSECTION_MATERIALIZED_LAYER_ID = 'intersection-materialized-layer';
+/** 交点图层命中优先级。 */
+const INTERSECTION_LAYER_HIT_PRIORITY = 100;
 
 /** 交点预览插件描述对象。 */
 export interface IntersectionPreviewPluginDescriptor
@@ -175,6 +177,9 @@ export const intersectionPreviewPlugin = defineMapPlugin<
     ) => {
       return {
         cursor: 'pointer',
+        // 交点点位应优先于线图层和普通业务点位命中，
+        // 否则鼠标落在交点附近时，底下的业务线/点会先把点击抢走。
+        hitPriority: INTERSECTION_LAYER_HIT_PRIORITY,
         enableFeatureStateHover: true,
         enableFeatureStateSelected: true,
         onFeatureSelect: (contextSnapshot: { featureId: string | number | null }) => {
