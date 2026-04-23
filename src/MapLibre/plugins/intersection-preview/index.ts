@@ -46,6 +46,8 @@ export type {
   IntersectionPreviewOptions,
   IntersectionPreviewPluginApi,
   IntersectionPreviewScope,
+  IntersectionPreviewStateStyle,
+  IntersectionPreviewStateStyles,
   IntersectionPreviewState,
   IntersectionPreviewStyleOverrides,
   UseIntersectionPreviewControllerOptions,

@@ -45,6 +45,28 @@ export type IntersectionPreviewStyleOverrides = MapLayerStyleOverrides<
   CircleLayerSpecification['paint']
 >;
 
+/** 交点状态样式片段。 */
+export interface IntersectionPreviewStateStyle {
+  /** 当前状态的点半径。 */
+  radius?: number;
+  /** 当前状态的点颜色。 */
+  color?: string;
+  /** 当前状态的描边颜色。 */
+  strokeColor?: string;
+  /** 当前状态的描边宽度。 */
+  strokeWidth?: number;
+}
+
+/** 交点状态样式配置。 */
+export interface IntersectionPreviewStateStyles {
+  /** 默认态样式。 */
+  default?: IntersectionPreviewStateStyle;
+  /** hover 态样式。 */
+  hover?: IntersectionPreviewStateStyle;
+  /** selected 态样式。 */
+  selected?: IntersectionPreviewStateStyle;
+}
+
 /** 交点插件配置。 */
 export interface IntersectionPreviewOptions {
   /** 当前插件是否启用。 */
@@ -73,6 +95,10 @@ export interface IntersectionPreviewOptions {
   materializedProperties?: IntersectionPreviewMaterializedProperties;
   /** 正式交点默认属性继承来源图层 ID。 */
   inheritMaterializedPropertiesFromLayerId?: string;
+  /** 预览交点状态样式配置。 */
+  previewStateStyles?: IntersectionPreviewStateStyles;
+  /** 正式交点状态样式配置。 */
+  materializedStateStyles?: IntersectionPreviewStateStyles;
   /** 预览交点图层样式局部覆写。 */
   previewStyleOverrides?: IntersectionPreviewStyleOverrides;
   /** 正式交点图层样式局部覆写。 */

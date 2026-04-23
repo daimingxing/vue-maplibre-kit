@@ -51,7 +51,11 @@ export type { IntersectionPreviewScope } from '../MapLibre/plugins/intersection-
 export type { IntersectionPreviewState } from '../MapLibre/plugins/intersection-preview';
 
 /** 交点图层样式覆写类型。需要定制预览点 / 正式点样式时使用。 */
-export type { IntersectionPreviewStyleOverrides } from '../MapLibre/plugins/intersection-preview';
+export type {
+  IntersectionPreviewStateStyle,
+  IntersectionPreviewStateStyles,
+  IntersectionPreviewStyleOverrides,
+} from '../MapLibre/plugins/intersection-preview';
 
 /** 交点候选来源类型。声明 sourceId、layerId 和 data 时使用。 */
 export type { MapIntersectionSource } from '../MapLibre/plugins/intersection-preview';

@@ -118,9 +118,11 @@
 import { computed } from "vue";
 import { InfoFilled, Location } from "@element-plus/icons-vue";
 import {
+  getLineActionPayload,
   getLinePopupPayload,
   getPointPopupPayload,
   getTerradrawPopupPayload,
+  type NgLineActionPayload,
   type NgLinePopupPayload,
   type NgPointPopupPayload,
   type NgPopupPayload,
@@ -140,8 +142,8 @@ const emit = defineEmits<{
   "update:widthMeters": [value: number];
   "update:extendLengthMeters": [value: number];
   "popup-action": [];
-  "generate-line-corridor": [];
-  "create-line-draft": [];
+  "generate-line-corridor": [payload: NgLineActionPayload];
+  "create-line-draft": [payload: NgLineActionPayload];
   "clear-line-draft": [];
 }>();
 
@@ -227,6 +229,11 @@ const terradrawFeatureJsonText = computed(() => {
   return JSON.stringify(terradrawPayload.value?.featureProps || {}, null, 2);
 });
 
+/** 当前线弹窗可直接使用的动作目标。 */
+const lineActionPayload = computed<NgLineActionPayload | null>(() => {
+  return getLineActionPayload(props.payload);
+});
+
 /**
  * 同步区域宽度输入值。
  * @param value 输入框返回的新值
@@ -257,14 +264,22 @@ function handlePopupAction(): void {
  * 触发线廊生成动作。
  */
 function handleGenerateLineCorridor(): void {
-  emit("generate-line-corridor");
+  if (!lineActionPayload.value) {
+    return;
+  }
+
+  emit("generate-line-corridor", lineActionPayload.value);
 }
 
 /**
  * 触发线草稿创建动作。
  */
 function handleCreateLineDraft(): void {
-  emit("create-line-draft");
+  if (!lineActionPayload.value) {
+    return;
+  }
+
+  emit("create-line-draft", lineActionPayload.value);
 }
 
 /**

@@ -337,6 +337,11 @@ describe('intersectionPreviewPlugin', () => {
     setMapGlobalConfig({
       plugins: {
         intersection: {
+          previewStateStyles: {
+            selected: {
+              color: '#333333',
+            },
+          },
           previewStyleOverrides: {
             paint: {
               'circle-color': '#222222',
@@ -367,7 +372,31 @@ describe('intersectionPreviewPlugin', () => {
 
     expect(renderProps.style.paint['circle-color']).toBe('#111111');
     expect(renderProps.style.paint['circle-radius']).toBe(8);
+    expect(renderProps.materializedStyle.paint['circle-color'][2]).toBe('#0958d9');
     expect(renderProps.materializedStyle.paint['circle-radius']).toBe(9);
+  });
+
+  it('应支持通过状态样式配置覆写交点 selected 颜色', () => {
+    const optionsRef = ref<IntersectionPreviewOptions>({
+      ...createPluginOptions(),
+      previewStateStyles: {
+        selected: {
+          color: '#ffcc00',
+        },
+      },
+      materializedStateStyles: {
+        selected: {
+          color: '#00aaff',
+        },
+      },
+    });
+
+    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const renderItems = pluginInstance.getRenderItems?.() || [];
+    const renderProps = renderItems[0]?.props;
+
+    expect(renderProps.style.paint['circle-color'][2]).toBe('#ffcc00');
+    expect(renderProps.materializedStyle.paint['circle-color'][2]).toBe('#00aaff');
   });
 
   it('应支持交点 hover enter / leave 回调，并通过插件交互配置触发', () => {

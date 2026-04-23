@@ -1,7 +1,12 @@
 import { createSSRApp, defineComponent, h } from "vue";
 import { renderToString } from "vue/server-renderer";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import NGGI00PopupPanel from "./NGGI00PopupPanel.vue";
+
+vi.mock("vue-maplibre-kit/plugins/line-draft-preview", () => ({
+  LINE_DRAFT_PREVIEW_LINE_LAYER_ID: "lineDraftLineLayer",
+  LINE_DRAFT_PREVIEW_SOURCE_ID: "lineDraftSource",
+}));
 
 /**
  * 创建仅透传默认插槽的通用桩组件。
@@ -54,6 +59,23 @@ describe("NGGI00PopupPanel", () => {
         featureId: "line_1",
         geometryType: "LineString",
         featureProps: { id: "line_1" },
+        featureRef: {
+          sourceId: "business-source",
+          featureId: "line_1",
+          layerId: "line-layer",
+        },
+        lineFeature: {
+          type: "Feature",
+          id: "line_1",
+          properties: { id: "line_1" },
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [0, 0],
+              [0, 1],
+            ],
+          },
+        },
         lineLengthMeters: 120.56,
         selectedSegmentIndex: 1,
         selectedSegmentLengthMeters: 45.12,

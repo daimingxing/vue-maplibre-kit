@@ -12,6 +12,7 @@ import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/us
 import {
   MapLineCorridorTool,
   extractManagedPreviewOriginFromProperties,
+  createMapSourceFeatureRef,
   type MapCommonFeature,
   type MapCommonFeatureCollection,
   type MapCommonLineFeature,
@@ -125,11 +126,35 @@ export interface PreviewSelectedLineOptions {
 }
 
 /**
+ * 显式线草稿预览动作入参。
+ * 业务层如果已经拿到了当前操作的线要素快照，推荐优先使用这一组入参，
+ * 避免再额外依赖“当前选中线”语义。
+ */
+export interface PreviewLineOptions extends PreviewSelectedLineOptions {
+  /** 当前需要参与延长的线要素；不传时回退到当前选中线。 */
+  lineFeature?: MapCommonLineFeature | null;
+  /** 当前线要素的来源引用；业务层已知时建议一并传入。 */
+  featureRef?: MapSourceFeatureRef | null;
+}
+
+/**
  * 线廊替换动作入参。
  */
 export interface ReplaceSelectedLineCorridorOptions {
   /** 线廊半宽。 */
   widthMeters: number;
+}
+
+/**
+ * 显式线廊替换动作入参。
+ * 业务层如果已经拿到了当前操作的线要素快照，推荐优先使用这一组入参，
+ * 避免再额外依赖“当前选中线”语义。
+ */
+export interface ReplaceLineCorridorOptions extends ReplaceSelectedLineCorridorOptions {
+  /** 当前需要生成线廊的线要素；不传时回退到当前选中线。 */
+  lineFeature?: MapCommonLineFeature | null;
+  /** 当前线要素的来源引用；若来源是线草稿 source，会继续写回草稿池。 */
+  featureRef?: MapSourceFeatureRef | null;
 }
 
 /**
@@ -170,8 +195,12 @@ export interface UseMapFeatureActionsResult {
   removeTerradrawFeatureProperties: (
     options: RemoveTerradrawFeaturePropertiesActionOptions
   ) => MapFeaturePropertyActionResult;
+  /** 根据显式线要素生成线草稿；未传 lineFeature 时回退到当前选中线。 */
+  previewLine: (options: PreviewLineOptions) => MapFeatureLineActionResult;
   /** 根据当前选中的线生成线草稿。 */
   previewSelectedLine: (options: PreviewSelectedLineOptions) => MapFeatureLineActionResult;
+  /** 根据显式线要素替换线廊；未传 lineFeature 时回退到当前选中线。 */
+  replaceLineCorridor: (options: ReplaceLineCorridorOptions) => MapFeatureActionResult;
   /** 根据当前选中的线替换线廊。 */
   replaceSelectedLineCorridor: (
     options: ReplaceSelectedLineCorridorOptions
@@ -213,6 +242,35 @@ function getBusinessSourceFeatures(
 }
 
 /**
+ * 判断当前要素是否为线要素。
+ * @param feature 待判断要素
+ * @returns 是否为 LineString
+ */
+function isLineFeature(
+  feature: MapCommonFeature | MapCommonLineFeature | null | undefined
+): feature is MapCommonLineFeature {
+  return feature?.geometry?.type === 'LineString';
+}
+
+/**
+ * 读取线要素的业务 ID。
+ * @param lineFeature 当前线要素
+ * @returns 业务 ID；不存在时返回 null
+ */
+function getLineFeatureId(lineFeature: MapCommonLineFeature | null | undefined): MapFeatureId | null {
+  const propertyId = lineFeature?.properties?.id;
+  if (propertyId !== undefined && propertyId !== null) {
+    return propertyId as MapFeatureId;
+  }
+
+  if (lineFeature?.id === undefined || lineFeature.id === null) {
+    return null;
+  }
+
+  return lineFeature.id as MapFeatureId;
+}
+
+/**
  * 创建地图业务动作门面。
  * @param options 动作门面配置
  * @returns 业务层可直接调用的动作集合
@@ -240,6 +298,92 @@ export function useMapFeatureActions(
    */
   const getLineDraftPreviewApi = (): LineDraftPreviewPluginApi | null => {
     return resolveLineDraftPreviewApi(getMapExpose());
+  };
+
+  /**
+   * 归一化来源引用，避免业务层传入半结构对象后在动作层重复做空值判断。
+   * @param featureRef 待归一化来源引用
+   * @returns 标准来源引用
+   */
+  const normalizeFeatureRef = (
+    featureRef: MapSourceFeatureRef | null | undefined
+  ): MapSourceFeatureRef | null => {
+    return createMapSourceFeatureRef(
+      featureRef?.sourceId || null,
+      featureRef?.featureId ?? null,
+      featureRef?.layerId || null
+    );
+  };
+
+  /**
+   * 当业务层直接传入线要素快照时，尝试补全它的来源引用。
+   * 目前只补两类最可靠来源：
+   * 1. 显式传入的 featureRef
+   * 2. 线草稿插件内部已知的草稿要素 ID
+   *
+   * @param lineFeature 当前线要素
+   * @param explicitFeatureRef 业务层显式传入的来源引用
+   * @returns 当前线要素最可信的来源引用
+   */
+  const resolveLineFeatureRef = (
+    lineFeature: MapCommonLineFeature | null,
+    explicitFeatureRef?: MapSourceFeatureRef | null
+  ): MapSourceFeatureRef | null => {
+    const normalizedExplicitRef = normalizeFeatureRef(explicitFeatureRef);
+    if (normalizedExplicitRef) {
+      return normalizedExplicitRef;
+    }
+
+    const lineFeatureId = getLineFeatureId(lineFeature);
+    if (lineFeatureId === null) {
+      return null;
+    }
+
+    // 当业务层传入的是线草稿快照时，这里优先直接识别为插件草稿源，
+    // 避免继续错误回退到普通业务图层当前选中态。
+    if (getLineDraftPreviewApi()?.isFeatureById(lineFeatureId)) {
+      return createMapSourceFeatureRef(LINE_DRAFT_PREVIEW_SOURCE_ID, lineFeatureId, null);
+    }
+
+    const selectedLineFeature = featureQuery.resolveSelectedLine();
+    const selectedFeatureRef = featureQuery.getSelectedFeatureRef();
+    if (getLineFeatureId(selectedLineFeature) === lineFeatureId) {
+      return selectedFeatureRef;
+    }
+
+    return null;
+  };
+
+  /**
+   * 统一解析当前线动作的目标线与来源引用。
+   * 若业务层已经显式传入 lineFeature，则优先使用显式值；
+   * 否则回退到“当前选中线”语义。
+   *
+   * @param actionOptions 当前线动作入参
+   * @returns 标准化后的目标线与来源引用
+   */
+  const resolveLineActionTarget = (actionOptions: {
+    lineFeature?: MapCommonLineFeature | null;
+    featureRef?: MapSourceFeatureRef | null;
+  }): {
+    lineFeature: MapCommonLineFeature | null;
+    featureRef: MapSourceFeatureRef | null;
+  } => {
+    const explicitLineFeature = isLineFeature(actionOptions.lineFeature)
+      ? actionOptions.lineFeature
+      : null;
+
+    if (explicitLineFeature) {
+      return {
+        lineFeature: explicitLineFeature,
+        featureRef: resolveLineFeatureRef(explicitLineFeature, actionOptions.featureRef),
+      };
+    }
+
+    return {
+      lineFeature: featureQuery.resolveSelectedLine(),
+      featureRef: featureQuery.getSelectedFeatureRef(),
+    };
   };
 
   /**
@@ -554,15 +698,14 @@ export function useMapFeatureActions(
    * @param previewOptions 草稿生成配置
    * @returns 结构化动作结果
    */
-  const previewSelectedLine = (
-    previewOptions: PreviewSelectedLineOptions
+  const previewLine = (
+    previewOptions: PreviewLineOptions
   ): MapFeatureLineActionResult => {
     const { segmentIndex, extendLengthMeters } = previewOptions;
-    const selectedLineFeature = featureQuery.resolveSelectedLine();
-    const selectedFeatureRef = featureQuery.getSelectedFeatureRef();
+    const { lineFeature, featureRef } = resolveLineActionTarget(previewOptions);
     const lineDraftPreviewApi = getLineDraftPreviewApi();
 
-    if (!selectedLineFeature) {
+    if (!lineFeature) {
       return {
         success: false,
         target: 'lineDraft',
@@ -587,11 +730,10 @@ export function useMapFeatureActions(
     }
 
     const nextLineFeature = lineDraftPreviewApi.previewLine({
-      lineFeature: selectedLineFeature,
+      lineFeature,
       segmentIndex,
       extendLengthMeters,
-      origin:
-        selectedFeatureRef?.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID ? null : selectedFeatureRef,
+      origin: featureRef?.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID ? null : featureRef,
     });
 
     if (!nextLineFeature) {
@@ -611,18 +753,28 @@ export function useMapFeatureActions(
   };
 
   /**
+   * 根据当前选中的线生成线草稿。
+   * @param previewOptions 草稿生成配置
+   * @returns 结构化动作结果
+   */
+  const previewSelectedLine = (
+    previewOptions: PreviewSelectedLineOptions
+  ): MapFeatureLineActionResult => {
+    return previewLine(previewOptions);
+  };
+
+  /**
    * 根据当前选中的线替换线廊。
    * @param replaceOptions 线廊替换配置
    * @returns 结构化动作结果
    */
-  const replaceSelectedLineCorridor = (
-    replaceOptions: ReplaceSelectedLineCorridorOptions
+  const replaceLineCorridor = (
+    replaceOptions: ReplaceLineCorridorOptions
   ): MapFeatureActionResult => {
     const { widthMeters } = replaceOptions;
-    const selectedLineFeature = featureQuery.resolveSelectedLine();
-    const selectedFeatureRef = featureQuery.getSelectedFeatureRef();
+    const { lineFeature, featureRef } = resolveLineActionTarget(replaceOptions);
 
-    if (!selectedLineFeature) {
+    if (!lineFeature) {
       return {
         success: false,
         target: 'business',
@@ -638,7 +790,7 @@ export function useMapFeatureActions(
       };
     }
 
-    if (selectedFeatureRef?.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID) {
+    if (featureRef?.sourceId === LINE_DRAFT_PREVIEW_SOURCE_ID) {
       const lineDraftPreviewApi = getLineDraftPreviewApi();
       if (!lineDraftPreviewApi) {
         return {
@@ -649,7 +801,7 @@ export function useMapFeatureActions(
       }
 
       const success = lineDraftPreviewApi.replacePreviewRegion({
-        lineFeature: selectedLineFeature,
+        lineFeature,
         widthMeters,
       });
 
@@ -660,7 +812,7 @@ export function useMapFeatureActions(
       };
     }
 
-    if (!selectedFeatureRef?.sourceId) {
+    if (!featureRef?.sourceId) {
       return {
         success: false,
         target: 'business',
@@ -668,10 +820,10 @@ export function useMapFeatureActions(
       };
     }
 
-    const currentFeatures = getBusinessSourceFeatures(sourceRegistry, selectedFeatureRef.sourceId);
+    const currentFeatures = getBusinessSourceFeatures(sourceRegistry, featureRef.sourceId);
     const nextFeatures = MapLineCorridorTool.replaceRegionFeatures(
       currentFeatures,
-      selectedLineFeature,
+      lineFeature,
       widthMeters
     );
 
@@ -683,12 +835,23 @@ export function useMapFeatureActions(
       };
     }
 
-    const success = sourceRegistry.replaceFeatures(selectedFeatureRef.sourceId, nextFeatures);
+    const success = sourceRegistry.replaceFeatures(featureRef.sourceId, nextFeatures);
     return {
       success,
       target: 'business',
       message: success ? '已按当前宽度替换生成区域' : '正式业务数据写回失败',
     };
+  };
+
+  /**
+   * 根据当前选中的线替换线廊。
+   * @param replaceOptions 线廊替换配置
+   * @returns 结构化动作结果
+   */
+  const replaceSelectedLineCorridor = (
+    replaceOptions: ReplaceSelectedLineCorridorOptions
+  ): MapFeatureActionResult => {
+    return replaceLineCorridor(replaceOptions);
   };
 
   /**
@@ -720,7 +883,9 @@ export function useMapFeatureActions(
     removeSelectedMapFeatureProperties,
     saveTerradrawFeatureProperties: saveTerradrawFeaturePropertiesAction,
     removeTerradrawFeatureProperties: removeTerradrawFeaturePropertiesAction,
+    previewLine,
     previewSelectedLine,
+    replaceLineCorridor,
     replaceSelectedLineCorridor,
     clearLineDraft,
   };

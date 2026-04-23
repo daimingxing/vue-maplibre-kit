@@ -154,7 +154,7 @@ import {
   createLinePopupPayload,
   createPointPopupPayload,
   createTerradrawPopupPayload,
-  getLinePopupPayload,
+  type NgLineActionPayload,
   type NgPopupPayload,
 } from "./components/NGGI00PopupPanel.shared";
 import {
@@ -1547,6 +1547,12 @@ const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
 
   // 预览交点样式局部覆写。
   // 只需要传你关心的 paint / layout 字段，插件默认样式会自动保留。
+  previewStateStyles: {
+    // 当前示例把 selected 态改成橙色，避免右键删除时先闪成红色。
+    selected: {
+      color: "#fa8c16",
+    },
+  },
   previewStyleOverrides: {
     paint: {
       "circle-radius": 6,
@@ -1555,6 +1561,12 @@ const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
 
   // 正式交点样式局部覆写。
   // 当前示例把正式点放大一点，方便与预览点区分。
+  materializedStateStyles: {
+    // 正式点保持蓝色系 selected 态，不再使用插件内置红色。
+    selected: {
+      color: "#1677ff",
+    },
+  },
   materializedStyleOverrides: {
     paint: {
       "circle-radius": 7,
@@ -1602,24 +1614,62 @@ const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
     // 如果用户点错了，不想保留刚生成的正式点：
     // intersectionPreview.removeMaterialized(context.intersectionId);
     //
-    // 当前示例保留自动物化，只把完整交点上下文和最新正式点 GeoJSON 打到控制台，方便直接观察。
+    const materializedFeature =
+      intersectionPreview
+        .getMaterializedData()
+        ?.features.find((feature) => {
+          return (
+            String(feature.properties?.id ?? feature.id ?? "") === context.intersectionId
+          );
+        }) || null;
+    const coordinates =
+      materializedFeature?.geometry?.type === "Point"
+        ? materializedFeature.geometry.coordinates
+        : null;
+
     console.log("[NGGI00 交点示例] 当前点击交点上下文", context);
-    console.log(
-      "[NGGI00 交点示例] 当前正式交点 GeoJSON",
-      intersectionPreview.getMaterializedData(),
-    );
+    console.log("[NGGI00 交点示例] 当前正式交点要素", materializedFeature);
+    console.log("[NGGI00 交点示例] 当前正式交点属性", materializedFeature?.properties || {});
+    console.log("[NGGI00 交点示例] 当前正式交点坐标", coordinates);
+
+    if (!coordinates) {
+      ElMessage.warning("交点已命中，但当前未找到对应的正式交点点要素");
+      return;
+    }
+
     ElMessage.success(
-      `已命中交点：${String(context.leftRef.featureId)} x ${String(context.rightRef.featureId)}`,
+      `已生成正式交点：${coordinates[0].toFixed(6)}, ${coordinates[1].toFixed(6)}`,
     );
   },
 
   // 右键交点后的业务回调。
-  // 适合后续接右键菜单、交点详情面板、或“落点成正式点要素”等二级动作。
+  // 当前示例演示“右键撤销正式交点”。
   onContextMenu: (context) => {
-    console.log("[NGGI00 交点示例] 当前右键交点上下文", context);
-    ElMessage.info(
-      `交点范围：${context.scope}；坐标：${context.point.lng.toFixed(3)}, ${context.point.lat.toFixed(3)}`,
-    );
+    const materializedFeature =
+      intersectionPreview
+        .getMaterializedData()
+        ?.features.find((feature) => {
+          return (
+            String(feature.properties?.id ?? feature.id ?? "") === context.intersectionId
+          );
+        }) || null;
+
+    if (!materializedFeature) {
+      ElMessage.info("当前交点还没有生成正式点，无需删除");
+      return;
+    }
+
+    const removed = intersectionPreview.removeMaterialized(context.intersectionId);
+    if (!removed) {
+      ElMessage.warning("正式交点删除失败");
+      return;
+    }
+
+    console.log("[NGGI00 交点示例] 已删除正式交点", {
+      intersectionId: context.intersectionId,
+      feature: materializedFeature,
+    });
+    ElMessage.success(`已删除正式交点：${context.intersectionId}`);
   },
 });
 
@@ -2311,11 +2361,6 @@ const showClickedLineMeasureExample = (lineFeature: MapCommonLineFeature): void 
 const popup = useMapPopupState<NgPopupPayload>();
 const { visible: popupVisible, lngLat: popupLngLat, payload: popupPayload } = popup;
 
-/** 当前选中的线段索引。 */
-const popupSelectedSegmentIndex = computed(() => {
-  return getLinePopupPayload(popupPayload.value)?.selectedSegmentIndex ?? -1;
-});
-
 const lineActionForm = reactive({
   widthMeters: 10,
   extendLengthMeters: 20,
@@ -2370,23 +2415,19 @@ const handleClearLineDraftFeatures = (): void => {
 /**
  * 点击【生成线廊】按钮时的处理逻辑。
  * 核心逻辑：
- * 1. 拿到当前选中的线
- * 2. 如果选中的是"线草稿"，生成的结果就继续进入插件内部草稿池（这样清理时能一起清掉）
- * 3. 如果选中的是"正式线"，生成的结果就保存到"正式数据源"里
+ * 1. 直接拿当前 Popup 正在展示的线快照
+ * 2. 如果 Popup 指向的是"线草稿"，结果就继续进入插件内部草稿池
+ * 3. 如果 Popup 指向的是"正式线"，结果就保存到"正式数据源"里
  */
-const handleGenerateLineCorridor = (): void => {
-  const selectedLineFeature = featureQuery.resolveSelectedLine();
-  if (!selectedLineFeature) {
-    ElMessage.warning("当前未选中可操作的线要素");
-    return;
-  }
-
+const handleGenerateLineCorridor = (payload: NgLineActionPayload): void => {
   if (lineActionForm.widthMeters <= 0) {
     ElMessage.warning("请输入大于 0 的区域宽度");
     return;
   }
 
-  const result = featureQuery.replaceSelectedLineCorridor({
+  const result = featureQuery.replaceLineCorridor({
+    lineFeature: payload.lineFeature,
+    featureRef: payload.featureRef,
     widthMeters: lineActionForm.widthMeters,
   });
   if (!result.success) {
@@ -2394,7 +2435,6 @@ const handleGenerateLineCorridor = (): void => {
     return;
   }
 
-  popup.setPayload(createLinePopupPayload(selectedLineFeature, popupSelectedSegmentIndex.value));
   ElMessage.success(result.message);
 };
 
@@ -2404,14 +2444,16 @@ const handleGenerateLineCorridor = (): void => {
  * 它只是告诉插件："我要在这条线的这个位置，按这个方向延长这么多米"。
  * 然后插件会自动在地图上画出一条【线草稿】（虚线）。
  */
-const handleCreateLineDraft = (): void => {
+const handleCreateLineDraft = (payload: NgLineActionPayload): void => {
   if (lineActionForm.extendLengthMeters <= 0) {
     ElMessage.warning("请输入大于 0 的延长长度");
     return;
   }
 
-  const result = featureQuery.previewSelectedLine({
-    segmentIndex: popupSelectedSegmentIndex.value,
+  const result = featureQuery.previewLine({
+    lineFeature: payload.lineFeature,
+    featureRef: payload.featureRef,
+    segmentIndex: payload.segmentIndex,
     extendLengthMeters: lineActionForm.extendLengthMeters,
   });
 
@@ -2463,7 +2505,11 @@ const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) =>
     if (!lineInteractionSnapshot) {
       popup.open({
         lngLat: createPopupLngLat(businessContext.lngLat),
-        payload: createLinePopupPayload(businessContext.feature as MapCommonLineFeature, -1),
+        payload: createLinePopupPayload(
+          businessContext.feature as MapCommonLineFeature,
+          -1,
+          businessContext.featureRef,
+        ),
       });
       return;
     }
@@ -2473,6 +2519,7 @@ const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) =>
       payload: createLinePopupPayload(
         lineInteractionSnapshot.lineFeature,
         lineInteractionSnapshot.segmentSelection?.index ?? 0,
+        businessContext.featureRef,
       ),
     });
     showClickedLineMeasureExample(lineInteractionSnapshot.lineFeature);

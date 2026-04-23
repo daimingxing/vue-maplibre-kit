@@ -238,6 +238,12 @@ export type { IntersectionPreviewContext } from './MapLibre/plugins/intersection
 /** 交点预览插件配置类型。 */
 export type { IntersectionPreviewOptions } from './MapLibre/plugins/intersection-preview';
 
+/** 交点状态样式片段与状态样式配置类型。 */
+export type {
+  IntersectionPreviewStateStyle,
+  IntersectionPreviewStateStyles,
+} from './MapLibre/plugins/intersection-preview';
+
 /** 交点预览插件 API 类型。 */
 export type { IntersectionPreviewPluginApi } from './MapLibre/plugins/intersection-preview';
 

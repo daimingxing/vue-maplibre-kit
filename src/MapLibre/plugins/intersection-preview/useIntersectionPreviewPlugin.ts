@@ -12,6 +12,7 @@ import type {
   IntersectionPreviewOptions,
   IntersectionPreviewPluginApi,
   IntersectionPreviewState,
+  IntersectionPreviewStateStyles,
   IntersectionPreviewStyleOverrides,
 } from './types';
 
@@ -27,6 +28,43 @@ export const INTERSECTION_MATERIALIZED_SOURCE_ID = 'intersection-materialized-so
 export const INTERSECTION_MATERIALIZED_LAYER_ID = 'intersection-materialized-layer';
 /** 交点图层命中优先级。 */
 const INTERSECTION_LAYER_HIT_PRIORITY = 100;
+
+/** 预览交点默认状态样式。 */
+const DEFAULT_PREVIEW_STATE_STYLES: IntersectionPreviewStateStyles = {
+  default: {
+    radius: 5,
+    color: '#ff7a45',
+    strokeColor: '#ffffff',
+    strokeWidth: 2,
+  },
+  hover: {
+    radius: 6,
+    color: '#fa8c16',
+  },
+  selected: {
+    radius: 6,
+    color: '#f5222d',
+    strokeWidth: 3,
+  },
+};
+
+/** 正式交点默认状态样式。 */
+const DEFAULT_MATERIALIZED_STATE_STYLES: IntersectionPreviewStateStyles = {
+  default: {
+    radius: 5,
+    color: '#1677ff',
+    strokeColor: '#ffffff',
+    strokeWidth: 2,
+  },
+  hover: {
+    radius: 6,
+    color: '#40a9ff',
+  },
+  selected: {
+    radius: 7,
+    color: '#0958d9',
+  },
+};
 
 /** 交点预览插件描述对象。 */
 export interface IntersectionPreviewPluginDescriptor
@@ -57,39 +95,91 @@ function resolveIntersectionStyleOverrides(
 }
 
 /**
+ * 合并交点状态样式配置。
+ * 合并顺序：默认值 -> 全局默认 -> 实例局部。
+ *
+ * @param fallbackStyles 当前图层内置默认状态样式
+ * @param globalStyles 全局状态样式配置
+ * @param localStyles 实例状态样式配置
+ * @returns 最终状态样式配置
+ */
+function resolveIntersectionStateStyles(
+  fallbackStyles: IntersectionPreviewStateStyles,
+  globalStyles?: IntersectionPreviewStateStyles,
+  localStyles?: IntersectionPreviewStateStyles
+): IntersectionPreviewStateStyles {
+  return {
+    default: {
+      ...(fallbackStyles.default || {}),
+      ...(globalStyles?.default || {}),
+      ...(localStyles?.default || {}),
+    },
+    hover: {
+      ...(fallbackStyles.hover || {}),
+      ...(globalStyles?.hover || {}),
+      ...(localStyles?.hover || {}),
+    },
+    selected: {
+      ...(fallbackStyles.selected || {}),
+      ...(globalStyles?.selected || {}),
+      ...(localStyles?.selected || {}),
+    },
+  };
+}
+
+/**
  * 解析预览交点图层样式。
+ * 当前交点图层的 hover / selected 视觉状态由状态样式配置驱动，
+ * 最后再叠加原始 styleOverrides，保留低层逃生口。
+ *
+ * @param stateStyles 当前状态样式配置
  * @param overrides 业务层局部样式覆写
  * @returns 最终生效的交点图层样式
  */
-function createResolvedIntersectionStyle(overrides?: IntersectionPreviewStyleOverrides) {
+function createResolvedIntersectionStyle(
+  stateStyles: IntersectionPreviewStateStyles,
+  overrides?: IntersectionPreviewStyleOverrides
+) {
+  const defaultStyle = stateStyles.default || {};
+  const hoverStyle = stateStyles.hover || {};
+  const selectedStyle = stateStyles.selected || {};
+
   return createCircleLayerStyle({
     layout: {
       ...(overrides?.layout || {}),
     },
     paint: {
-      // 默认半径为 5，hover / selected 抬到 6，保证状态变化可见但不会过度跳变。
       'circle-radius': [
         'case',
         ['boolean', ['feature-state', 'selected'], false],
-        6,
+        selectedStyle.radius ?? hoverStyle.radius ?? defaultStyle.radius ?? 5,
         ['boolean', ['feature-state', 'hover'], false],
-        6,
-        5,
+        hoverStyle.radius ?? defaultStyle.radius ?? 5,
+        defaultStyle.radius ?? 5,
       ],
       'circle-color': [
         'case',
         ['boolean', ['feature-state', 'selected'], false],
-        '#f5222d',
+        selectedStyle.color ?? hoverStyle.color ?? defaultStyle.color ?? '#ff7a45',
         ['boolean', ['feature-state', 'hover'], false],
-        '#fa8c16',
-        '#ff7a45',
+        hoverStyle.color ?? defaultStyle.color ?? '#ff7a45',
+        defaultStyle.color ?? '#ff7a45',
       ],
-      'circle-stroke-color': '#ffffff',
+      'circle-stroke-color': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        selectedStyle.strokeColor ?? hoverStyle.strokeColor ?? defaultStyle.strokeColor ?? '#ffffff',
+        ['boolean', ['feature-state', 'hover'], false],
+        hoverStyle.strokeColor ?? defaultStyle.strokeColor ?? '#ffffff',
+        defaultStyle.strokeColor ?? '#ffffff',
+      ],
       'circle-stroke-width': [
         'case',
         ['boolean', ['feature-state', 'selected'], false],
-        3,
-        2,
+        selectedStyle.strokeWidth ?? hoverStyle.strokeWidth ?? defaultStyle.strokeWidth ?? 2,
+        ['boolean', ['feature-state', 'hover'], false],
+        hoverStyle.strokeWidth ?? defaultStyle.strokeWidth ?? 2,
+        defaultStyle.strokeWidth ?? 2,
       ],
       ...(overrides?.paint || {}),
     },
@@ -98,10 +188,21 @@ function createResolvedIntersectionStyle(overrides?: IntersectionPreviewStyleOve
 
 /**
  * 解析正式交点图层样式。
+ * 当前交点图层的 hover / selected 视觉状态由状态样式配置驱动，
+ * 最后再叠加原始 styleOverrides，保留低层逃生口。
+ *
+ * @param stateStyles 当前状态样式配置
  * @param overrides 业务层局部样式覆写
  * @returns 最终生效的正式交点图层样式
  */
-function createResolvedMaterializedStyle(overrides?: IntersectionPreviewStyleOverrides) {
+function createResolvedMaterializedStyle(
+  stateStyles: IntersectionPreviewStateStyles,
+  overrides?: IntersectionPreviewStyleOverrides
+) {
+  const defaultStyle = stateStyles.default || {};
+  const hoverStyle = stateStyles.hover || {};
+  const selectedStyle = stateStyles.selected || {};
+
   return createCircleLayerStyle({
     layout: {
       ...(overrides?.layout || {}),
@@ -110,21 +211,35 @@ function createResolvedMaterializedStyle(overrides?: IntersectionPreviewStyleOve
       'circle-radius': [
         'case',
         ['boolean', ['feature-state', 'selected'], false],
-        7,
+        selectedStyle.radius ?? hoverStyle.radius ?? defaultStyle.radius ?? 5,
         ['boolean', ['feature-state', 'hover'], false],
-        6,
-        5,
+        hoverStyle.radius ?? defaultStyle.radius ?? 5,
+        defaultStyle.radius ?? 5,
       ],
       'circle-color': [
         'case',
         ['boolean', ['feature-state', 'selected'], false],
-        '#0958d9',
+        selectedStyle.color ?? hoverStyle.color ?? defaultStyle.color ?? '#1677ff',
         ['boolean', ['feature-state', 'hover'], false],
-        '#40a9ff',
-        '#1677ff',
+        hoverStyle.color ?? defaultStyle.color ?? '#1677ff',
+        defaultStyle.color ?? '#1677ff',
       ],
-      'circle-stroke-color': '#ffffff',
-      'circle-stroke-width': 2,
+      'circle-stroke-color': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        selectedStyle.strokeColor ?? hoverStyle.strokeColor ?? defaultStyle.strokeColor ?? '#ffffff',
+        ['boolean', ['feature-state', 'hover'], false],
+        hoverStyle.strokeColor ?? defaultStyle.strokeColor ?? '#ffffff',
+        defaultStyle.strokeColor ?? '#ffffff',
+      ],
+      'circle-stroke-width': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        selectedStyle.strokeWidth ?? hoverStyle.strokeWidth ?? defaultStyle.strokeWidth ?? 2,
+        ['boolean', ['feature-state', 'hover'], false],
+        hoverStyle.strokeWidth ?? defaultStyle.strokeWidth ?? 2,
+        defaultStyle.strokeWidth ?? 2,
+      ],
       ...(overrides?.paint || {}),
     },
   });
@@ -266,6 +381,20 @@ export const intersectionPreviewPlugin = defineMapPlugin<
       );
     };
     /**
+     * 读取预览交点最终状态样式。
+     * 合并顺序：插件默认 -> 全局默认 -> 当前实例。
+     *
+     * @returns 最终预览状态样式
+     */
+    const resolvePreviewStateStyles = (): IntersectionPreviewStateStyles => {
+      const globalDefaults = getMapGlobalIntersectionDefaults();
+      return resolveIntersectionStateStyles(
+        DEFAULT_PREVIEW_STATE_STYLES,
+        globalDefaults?.previewStateStyles,
+        context.getOptions()?.previewStateStyles
+      );
+    };
+    /**
      * 读取正式交点最终样式覆写。
      * 合并顺序：全局默认 -> 当前实例。
      *
@@ -276,6 +405,20 @@ export const intersectionPreviewPlugin = defineMapPlugin<
       return resolveIntersectionStyleOverrides(
         globalDefaults?.materializedStyleOverrides,
         context.getOptions()?.materializedStyleOverrides
+      );
+    };
+    /**
+     * 读取正式交点最终状态样式。
+     * 合并顺序：插件默认 -> 全局默认 -> 当前实例。
+     *
+     * @returns 最终正式交点状态样式
+     */
+    const resolveMaterializedStateStyles = (): IntersectionPreviewStateStyles => {
+      const globalDefaults = getMapGlobalIntersectionDefaults();
+      return resolveIntersectionStateStyles(
+        DEFAULT_MATERIALIZED_STATE_STYLES,
+        globalDefaults?.materializedStateStyles,
+        context.getOptions()?.materializedStateStyles
       );
     };
     const controller = useIntersectionPreviewController({
@@ -487,12 +630,18 @@ export const intersectionPreviewPlugin = defineMapPlugin<
             sourceId: INTERSECTION_PREVIEW_SOURCE_ID,
             layerId: INTERSECTION_PREVIEW_LAYER_ID,
             data: controller.data.value,
-            style: createResolvedIntersectionStyle(resolvePreviewStyleOverrides()),
+            style: createResolvedIntersectionStyle(
+              resolvePreviewStateStyles(),
+              resolvePreviewStyleOverrides()
+            ),
             materializedEnabled: true,
             materializedSourceId: INTERSECTION_MATERIALIZED_SOURCE_ID,
             materializedLayerId: INTERSECTION_MATERIALIZED_LAYER_ID,
             materializedData: controller.materializedData.value,
-            materializedStyle: createResolvedMaterializedStyle(resolveMaterializedStyleOverrides()),
+            materializedStyle: createResolvedMaterializedStyle(
+              resolveMaterializedStateStyles(),
+              resolveMaterializedStyleOverrides()
+            ),
           },
         },
       ],

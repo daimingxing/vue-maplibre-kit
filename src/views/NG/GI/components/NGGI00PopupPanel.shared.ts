@@ -4,6 +4,11 @@ import {
   type MapCommonFeature,
   type MapCommonLineFeature,
 } from "vue-maplibre-kit/geometry";
+import type { MapSourceFeatureRef } from "vue-maplibre-kit";
+import {
+  LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
+  LINE_DRAFT_PREVIEW_SOURCE_ID,
+} from "vue-maplibre-kit/plugins/line-draft-preview";
 
 /**
  * 当前页面 Popup 类型常量。
@@ -34,9 +39,18 @@ export interface NgPointPopupPayload extends NgPopupBasePayload {
 /** 线弹窗载荷。 */
 export interface NgLinePopupPayload extends NgPopupBasePayload {
   type: typeof NGGI00_POPUP_TYPE.line;
+  featureRef: MapSourceFeatureRef | null;
+  lineFeature: MapCommonLineFeature;
   selectedSegmentIndex: number;
   selectedSegmentLengthMeters: number;
   lineLengthMeters: number;
+}
+
+/** 线弹窗动作载荷。 */
+export interface NgLineActionPayload {
+  lineFeature: MapCommonLineFeature;
+  featureRef: MapSourceFeatureRef | null;
+  segmentIndex: number;
 }
 
 /** TerraDraw 弹窗载荷。 */
@@ -56,6 +70,74 @@ function clonePopupProperties(
   properties: Record<string, any> | null | undefined,
 ): Record<string, any> {
   return JSON.parse(JSON.stringify(properties || {}));
+}
+
+/**
+ * 深拷贝一份来源引用，避免 Popup UI 直接持有外部对象引用。
+ * @param featureRef 原始来源引用
+ * @returns 独立的来源引用快照
+ */
+function cloneFeatureRef(featureRef: MapSourceFeatureRef | null | undefined): MapSourceFeatureRef | null {
+  if (!featureRef) {
+    return null;
+  }
+
+  return {
+    sourceId: featureRef.sourceId,
+    featureId: featureRef.featureId,
+    layerId: featureRef.layerId ?? null,
+  };
+}
+
+/**
+ * 深拷贝一份线要素快照，避免 Popup UI 直接持有底层引用。
+ * @param lineFeature 原始线要素
+ * @returns 独立的线要素快照
+ */
+function cloneLineFeature(lineFeature: MapCommonLineFeature): MapCommonLineFeature {
+  return JSON.parse(JSON.stringify(lineFeature)) as MapCommonLineFeature;
+}
+
+/**
+ * 为线草稿要素推导标准来源引用。
+ * @param lineFeature 当前线要素
+ * @returns 线草稿来源引用；不是线草稿时返回 null
+ */
+function resolveLineDraftFeatureRef(
+  lineFeature: MapCommonLineFeature,
+): MapSourceFeatureRef | null {
+  const generatedKind = lineFeature.properties?.generatedKind;
+  if (typeof generatedKind !== "string" || !generatedKind.includes("draft")) {
+    return null;
+  }
+
+  const featureId = resolvePopupFeatureId(lineFeature);
+  if (featureId === null) {
+    return null;
+  }
+
+  return {
+    sourceId: LINE_DRAFT_PREVIEW_SOURCE_ID,
+    featureId,
+    layerId: LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
+  };
+}
+
+/**
+ * 解析线弹窗最终要使用的来源引用。
+ * 优先级：
+ * 1. 业务层显式传入的 featureRef
+ * 2. 自动推导出的线草稿来源引用
+ *
+ * @param lineFeature 当前线要素
+ * @param featureRef 业务层显式来源引用
+ * @returns 最终来源引用
+ */
+function resolveLinePopupFeatureRef(
+  lineFeature: MapCommonLineFeature,
+  featureRef: MapSourceFeatureRef | null | undefined,
+): MapSourceFeatureRef | null {
+  return cloneFeatureRef(featureRef) || resolveLineDraftFeatureRef(lineFeature);
 }
 
 /**
@@ -100,11 +182,13 @@ export function createPointPopupPayload(
  *
  * @param lineFeature 当前线要素
  * @param segmentIndex 当前线段索引；传负数表示当前未识别到具体线段
+ * @param featureRef 当前线要素来源引用；用于后续动作直接回写到正确目标
  * @returns 线弹窗载荷
  */
 export function createLinePopupPayload(
   lineFeature: MapCommonLineFeature,
   segmentIndex: number,
+  featureRef: MapSourceFeatureRef | null = null,
 ): NgLinePopupPayload {
   const normalizedCoordinates = MapLineExtensionTool.normalizeLineCoordinates(
     lineFeature.geometry.coordinates,
@@ -121,6 +205,8 @@ export function createLinePopupPayload(
       featureId: resolvePopupFeatureId(lineFeature),
       geometryType: lineFeature.geometry.type,
       featureProps: clonePopupProperties(lineFeature.properties || {}),
+      featureRef: resolveLinePopupFeatureRef(lineFeature, featureRef),
+      lineFeature: cloneLineFeature(lineFeature),
       selectedSegmentIndex: -1,
       selectedSegmentLengthMeters: 0,
       lineLengthMeters,
@@ -143,6 +229,8 @@ export function createLinePopupPayload(
     featureId: resolvePopupFeatureId(lineFeature),
     geometryType: lineFeature.geometry.type,
     featureProps: clonePopupProperties(lineFeature.properties || {}),
+    featureRef: resolveLinePopupFeatureRef(lineFeature, featureRef),
+    lineFeature: cloneLineFeature(lineFeature),
     selectedSegmentIndex: currentSegmentIndex,
     selectedSegmentLengthMeters,
     lineLengthMeters,
@@ -174,6 +262,27 @@ export function createTerradrawPopupPayload(
  */
 export function getLinePopupPayload(payload: NgPopupPayload | null | undefined): NgLinePopupPayload | null {
   return payload?.type === NGGI00_POPUP_TYPE.line ? payload : null;
+}
+
+/**
+ * 从线弹窗载荷中提取当前动作目标。
+ * @param payload 当前 popup 载荷
+ * @returns 可直接交给业务动作的线目标；不是线弹窗时返回 null
+ */
+export function getLineActionPayload(
+  payload: NgPopupPayload | null | undefined,
+): NgLineActionPayload | null {
+  const linePayload = getLinePopupPayload(payload);
+  if (!linePayload) {
+    return null;
+  }
+
+  return {
+    lineFeature: cloneLineFeature(linePayload.lineFeature),
+    featureRef: cloneFeatureRef(linePayload.featureRef),
+    // 若当前弹窗还没识别到具体线段，就稳定回退到第 1 段，避免按钮动作直接失败。
+    segmentIndex: linePayload.selectedSegmentIndex >= 0 ? linePayload.selectedSegmentIndex : 0,
+  };
 }
 
 /**

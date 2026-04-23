@@ -329,6 +329,9 @@ export type { MapFeaturePropertyActionResult } from './MapLibre/facades/useMapFe
 /** 选中线草稿预览入参类型。按当前线生成预览草稿时使用。 */
 export type { PreviewSelectedLineOptions } from './MapLibre/facades/useMapFeatureActions';
 
+/** 显式线草稿预览入参类型。已拿到线快照时直接生成草稿时使用。 */
+export type { PreviewLineOptions } from './MapLibre/facades/useMapFeatureActions';
+
 /** 业务源属性删除入参类型。删正式源或线草稿属性时使用。 */
 export type { RemoveBusinessFeaturePropertiesOptions } from './MapLibre/facades/useMapFeatureActions';
 
@@ -337,6 +340,9 @@ export type { RemoveTerradrawFeaturePropertiesActionOptions } from './MapLibre/f
 
 /** 线廊替换入参类型。按线生成或替换区域时使用。 */
 export type { ReplaceSelectedLineCorridorOptions } from './MapLibre/facades/useMapFeatureActions';
+
+/** 显式线廊替换入参类型。已拿到线快照时直接生成或替换区域时使用。 */
+export type { ReplaceLineCorridorOptions } from './MapLibre/facades/useMapFeatureActions';
 
 /** 业务源属性保存入参类型。保存正式源或线草稿属性时使用。 */
 export type { SaveBusinessFeaturePropertiesOptions } from './MapLibre/facades/useMapFeatureActions';
@@ -490,6 +496,12 @@ export type { IntersectionPreviewContext } from './MapLibre/plugins/intersection
 
 /** 交点预览插件配置类型。 */
 export type { IntersectionPreviewOptions } from './MapLibre/plugins/intersection-preview';
+
+/** 交点状态样式片段与状态样式配置类型。 */
+export type {
+  IntersectionPreviewStateStyle,
+  IntersectionPreviewStateStyles,
+} from './MapLibre/plugins/intersection-preview';
 
 /** 交点预览插件 API 类型。 */
 export type { IntersectionPreviewPluginApi } from './MapLibre/plugins/intersection-preview';

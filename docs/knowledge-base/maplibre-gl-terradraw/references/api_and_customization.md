@@ -170,7 +170,7 @@ let drawInstance = null;
 const handleDrawFinish = (id, ctx) => {
     console.log('绘制完成:', id);
     const features = drawInstance.getSnapshot();
-    // TODO: 同步到 Vue 响应式变量或发送给后端
+    // 同步到 Vue 响应式变量或发送给后端
 };
 
 // 假设这是通过某个按钮触发的初始化操作

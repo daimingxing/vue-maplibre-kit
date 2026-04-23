@@ -14,7 +14,10 @@ import type {
 } from './MapLibre/shared/mapLibre-controls-types';
 import type { MapFeatureSnapPreviewOptions } from './MapLibre/plugins/map-feature-snap/types';
 import type { LineDraftPreviewStyleOverrides } from './MapLibre/plugins/line-draft-preview/types';
-import type { IntersectionPreviewStyleOverrides } from './MapLibre/plugins/intersection-preview/types';
+import type {
+  IntersectionPreviewStateStyles,
+  IntersectionPreviewStyleOverrides,
+} from './MapLibre/plugins/intersection-preview/types';
 import type { MapDxfExportTaskOptions } from './MapLibre/plugins/map-dxf-export/types';
 import type { MapLayerStyleOverrides } from './MapLibre/shared/map-layer-style-config';
 import { cloneDeep } from 'lodash-es';
@@ -80,6 +83,10 @@ export interface LineDraftPreviewGlobalDefaults {
 
 /** 交点预览插件全局默认配置。 */
 export interface IntersectionPreviewGlobalDefaults {
+  /** 全局预览交点状态样式配置。 */
+  previewStateStyles?: IntersectionPreviewStateStyles;
+  /** 全局正式交点状态样式配置。 */
+  materializedStateStyles?: IntersectionPreviewStateStyles;
   /** 全局预览交点样式覆写。 */
   previewStyleOverrides?: IntersectionPreviewStyleOverrides;
   /** 全局正式交点样式覆写。 */
