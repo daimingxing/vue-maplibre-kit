@@ -190,7 +190,14 @@ function createSelectedFeatureRecord(options: {
  * 创建测试用地图公开实例。
  * @returns 可供 useMapFeatureQuery 直接消费的公开实例
  */
-function createMapExpose(): MapLibreInitExpose {
+function createMapExpose(options: {
+  selectedMapFeatureContext?: (() => MapLayerInteractiveContext | null) | null;
+  selectedMapFeatureSnapshot?: (() => MapCommonFeature | null) | null;
+} = {}): MapLibreInitExpose {
+  const {
+    selectedMapFeatureContext = null,
+    selectedMapFeatureSnapshot = null,
+  } = options;
   const mapInstance = {
     component: undefined,
     map: undefined,
@@ -216,8 +223,8 @@ function createMapExpose(): MapLibreInitExpose {
     getDrawFeatures: () => [] as TerradrawFeature[],
     getMeasureFeatures: () => [] as TerradrawFeature[],
     getSelectedMapFeature: () => null,
-    getSelectedMapFeatureContext: () => null,
-    getSelectedMapFeatureSnapshot: () => null,
+    getSelectedMapFeatureContext: () => selectedMapFeatureContext?.() || null,
+    getSelectedMapFeatureSnapshot: () => selectedMapFeatureSnapshot?.() || null,
     getMapSelectionService: () => null,
     getTerradrawPropertyPolicy: () => null,
     clearSelectedMapFeature: () => undefined,
@@ -449,5 +456,32 @@ describe('useMapFeatureQuery', () => {
     expect(businessContext.added[0].isLine).toBe(true);
     expect(businessContext.added[0].featureRef).toBeNull();
     expect(businessContext.removed[0].featureId).toBe('feature-1');
+  });
+
+  it('resolveSelectedFeature 在插件要素被选中时应优先返回插件快照，而不是旧的业务图层选中引用', () => {
+    const { sourceRegistry } = createBusinessSourceHarness();
+    const pluginSelectedFeature = createPointFeature('intersection-1', {
+      name: '正式交点',
+      generatedKind: 'intersection-materialized',
+    });
+    const featureQuery = useMapFeatureQuery({
+      mapRef: ref(
+        createMapExpose({
+          selectedMapFeatureContext: () =>
+            ({
+              featureId: 'feature-1',
+              layerId: 'circleLayer',
+              sourceId: 'business-source',
+            }) as MapLayerInteractiveContext,
+          selectedMapFeatureSnapshot: () => pluginSelectedFeature,
+        })
+      ),
+      sourceRegistry,
+    });
+
+    const selectedFeature = featureQuery.resolveSelectedFeature();
+
+    expect(selectedFeature?.id).toBe('intersection-1');
+    expect(selectedFeature?.properties?.generatedKind).toBe('intersection-materialized');
   });
 });

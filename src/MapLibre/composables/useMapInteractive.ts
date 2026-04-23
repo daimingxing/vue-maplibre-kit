@@ -16,6 +16,10 @@ import type {
 import type { MapSnapBinding, MapSelectionService } from '../plugins/types';
 import type { MapCommonFeature } from '../shared/map-common-tools';
 import { createSelectionChangeContextMethods } from './mapSelection';
+import {
+  isMapInteractiveEventHandled,
+  markMapInteractiveEventHandled,
+} from './mapInteractiveEventHandled';
 
 export interface UseMapInteractiveOptions {
   /** 地图实例引用，通常是通过 useMap() 获取的 */
@@ -45,10 +49,6 @@ interface MapInteractiveBinding {
   clearSelectionState: () => void;
   getSelectedFeature: () => MapGeoJSONFeature | null;
   getSelectedFeatureContext: () => MapLayerInteractiveContext | null;
-}
-
-interface InteractiveMouseEvent extends MouseEvent {
-  __mapInteractiveHandled__?: boolean;
 }
 
 interface BoxSelectionSession {
@@ -984,25 +984,6 @@ function createMapInteractiveBinding(
    * @param event 当前地图鼠标事件
    * @returns 已标记时返回 true
    */
-  const isEventHandled = (event: MapMouseEvent): boolean => {
-    return Boolean(
-      (event.originalEvent as InteractiveMouseEvent | undefined)?.__mapInteractiveHandled__
-    );
-  };
-
-  /**
-   * 在原始鼠标事件上写入已处理标记，供其他交互模块共享判断。
-   * @param event 当前地图鼠标事件
-   */
-  const markEventHandled = (event: MapMouseEvent): void => {
-    const originalEvent = event.originalEvent as InteractiveMouseEvent | undefined;
-    if (!originalEvent) {
-      return;
-    }
-
-    originalEvent.__mapInteractiveHandled__ = true;
-  };
-
   /**
    * 将空白点击回调延后到微任务阶段，便于等待其他交互模块先行写入处理标记。
    * @param event 当前地图鼠标事件
@@ -1013,7 +994,7 @@ function createMapInteractiveBinding(
     pointerContext: Partial<MapLayerInteractiveContext>
   ): void => {
     const emitBlankClick = () => {
-      if (isEventHandled(event)) {
+      if (isMapInteractiveEventHandled(event)) {
         return;
       }
 
@@ -1753,6 +1734,10 @@ const applyHoverTarget = (
     topLevelCallbackResolver: TopLevelInteractiveCallbackResolver,
     getLayerCallback: LayerInteractiveCallbackResolver
   ): void => {
+    if (isMapInteractiveEventHandled(event)) {
+      return;
+    }
+
     const { effectiveTarget: target, pointerContext } = resolveEventTarget(event);
 
     if (eventType === 'click') {
@@ -1764,7 +1749,7 @@ const applyHoverTarget = (
       if (isMultiSelectActive) {
         if (target) {
           toggleMultiSelectedTarget(target, pointerContext);
-          markEventHandled(event);
+          markMapInteractiveEventHandled(event);
         } else {
           scheduleBlankClick(event, pointerContext);
         }
@@ -1796,7 +1781,7 @@ const applyHoverTarget = (
       return;
     }
 
-    markEventHandled(event);
+    markMapInteractiveEventHandled(event);
     emitLayerCallback(target, eventType, getLayerCallback, pointerContext);
   };
 
@@ -1805,6 +1790,12 @@ const applyHoverTarget = (
    * @param event 当前地图鼠标事件
    */
   const handleMouseMove = (event: MapMouseEvent): void => {
+    if (isMapInteractiveEventHandled(event)) {
+      cancelScheduledHoverSync();
+      clearHoverState(true, createPointerContext(event, { hitFeature: null, snapResult: null }));
+      return;
+    }
+
     scheduleHoverTargetSync(event);
   };
 

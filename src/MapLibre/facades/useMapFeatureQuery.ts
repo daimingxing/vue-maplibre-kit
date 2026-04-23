@@ -418,8 +418,24 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
    */
   const resolveSelectedFeature = (): MapCommonFeature | null => {
     const featureRef = getSelectedFeatureRef();
+    const resolvedFeature = resolveFeature(featureRef);
+    const selectedSnapshot = getMapExpose()?.getSelectedMapFeatureSnapshot?.() || null;
 
-    return resolveFeature(featureRef) || getMapExpose()?.getSelectedMapFeatureSnapshot?.() || null;
+    if (!selectedSnapshot) {
+      return resolvedFeature;
+    }
+
+    if (!resolvedFeature) {
+      return selectedSnapshot;
+    }
+
+    // 普通业务图层仍优先回源拿最新要素；
+    // 只有当快照明显不是这条业务要素时，才认为当前选中来自插件托管图层。
+    if (selectedSnapshot.id !== resolvedFeature.id) {
+      return selectedSnapshot;
+    }
+
+    return resolvedFeature;
   };
 
   /**
@@ -431,16 +447,26 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
   const resolveSelectedFeaturePropertyPanelState = (): MapFeaturePropertyPanelState | null => {
     const featureRef = getSelectedFeatureRef();
     const panelState = resolveFeaturePropertyPanelState(featureRef);
+    const selectedSnapshot = getMapExpose()?.getSelectedMapFeatureSnapshot?.() || null;
+
+    if (!selectedSnapshot) {
+      return panelState;
+    }
+
+    const resolvedFeature = resolveFeature(featureRef);
+    if (panelState && resolvedFeature && selectedSnapshot.id === resolvedFeature.id) {
+      return panelState;
+    }
+
+    if (selectedSnapshot.properties) {
+      return resolveMapFeaturePropertyPanelState(selectedSnapshot.properties);
+    }
+
     if (panelState) {
       return panelState;
     }
 
-    const selectedFeature = getMapExpose()?.getSelectedMapFeatureSnapshot?.() || null;
-    if (!selectedFeature?.properties) {
-      return null;
-    }
-
-    return resolveMapFeaturePropertyPanelState(selectedFeature.properties);
+    return null;
   };
 
   /**

@@ -1159,8 +1159,6 @@ const businessSourceRegistry = createMapBusinessSourceRegistry([
 // 1. 线草稿预览插件：提供线段临时延长和预览能力
 const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
   enabled: true,
-  // 草稿线要继承哪个正式图层的交互行为（保持交互一致性）
-  inheritInteractiveFromLayerId: LAYER_IDS.primaryLine,
   // 覆盖默认草稿样式
   styleOverrides: {
     // 线草稿图层样式覆写。
@@ -1213,6 +1211,27 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
         "fill-outline-color": "#ff7a00",
       },
     },
+  },
+  // 鼠标移入草稿线回调。
+  // 这里拿到的是插件自己的草稿上下文，不再通过 mapInteractive 透传。
+  onHoverEnter: (context) => {
+    console.log("[NGGI00 草稿线示例] hover enter", context);
+  },
+  // 鼠标移出草稿线回调。
+  onHoverLeave: (context) => {
+    console.log("[NGGI00 草稿线示例] hover leave", context.featureId);
+  },
+  // 点击草稿线回调。
+  onClick: (context) => {
+    ElMessage.info(`已选中草稿线：${String(context.featureId)}`);
+  },
+  // 双击草稿线回调。
+  onDoubleClick: (context) => {
+    console.log("[NGGI00 草稿线示例] double click", context);
+  },
+  // 右键草稿线回调。
+  onContextMenu: (context) => {
+    console.log("[NGGI00 草稿线示例] context menu", context);
   },
 });
 
@@ -1511,6 +1530,7 @@ const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
 
   // 生成正式交点时注入的默认业务属性。
   // 这里适合补充“业务想长期保留”的属性，例如类型、状态、来源标签等。
+  // 若还需要直接继承某一侧正式线的属性，可配合下面的 inheritMaterializedPropertiesFromLayerId。
   materializedProperties: (context) => {
     return {
       name: "交点",
@@ -1519,6 +1539,11 @@ const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
       sourcePair: `${String(context.leftRef.featureId)} x ${String(context.rightRef.featureId)}`,
     };
   },
+
+  // 正式交点默认属性继承来源图层。
+  // 当交点两侧中有一侧来自这个图层时，会先继承那条正式线的 properties，
+  // 再由上面的 materializedProperties 做最终补丁覆盖。
+  inheritMaterializedPropertiesFromLayerId: LAYER_IDS.primaryLine,
 
   // 预览交点样式局部覆写。
   // 只需要传你关心的 paint / layout 字段，插件默认样式会自动保留。
@@ -1542,6 +1567,16 @@ const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
   // getCandidates: () => {
   //   return [];
   // },
+
+  // 鼠标移入交点回调。
+  onHoverEnter: (context) => {
+    console.log("[NGGI00 交点示例] hover enter", context);
+  },
+
+  // 鼠标移出交点回调。
+  onHoverLeave: (context) => {
+    console.log("[NGGI00 交点示例] hover leave", context.intersectionId);
+  },
 
   // 单击交点后的业务回调。
   // 这里拿到的是完整交点上下文：交点坐标、左右参与线、命中线段索引、是否端点命中等信息。

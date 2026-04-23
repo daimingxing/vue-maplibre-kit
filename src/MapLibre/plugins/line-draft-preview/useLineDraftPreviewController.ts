@@ -1,11 +1,7 @@
-import { computed, watch, type ComputedRef } from 'vue';
-import { cloneDeep } from 'lodash-es';
+import { computed, ref, watch, type ComputedRef } from 'vue';
 import { createFillLayerStyle, createLineLayerStyle } from '../../shared/map-layer-style-config';
 import { getMapGlobalLineDraftDefaults } from '../../shared/map-global-config';
-import type {
-  MapLayerInteractiveContext,
-  MapLayerInteractiveOptions,
-} from '../../shared/mapLibre-controls-types';
+import type { MapLayerInteractiveContext } from '../../shared/mapLibre-controls-types';
 import type {
   FeatureProperties,
   MapFeatureId,
@@ -22,8 +18,12 @@ import {
 } from '../../shared/map-common-tools';
 import type { MapLayerStyle } from '../../shared/map-layer-style-config';
 import type { FillLayerSpecification, LineLayerSpecification } from 'maplibre-gl';
-import type { LineDraftPreviewOptions } from './types';
-import { LINE_DRAFT_PREVIEW_LINE_LAYER_ID, useLineDraftPreviewStore } from './useLineDraftPreviewStore';
+import type { LineDraftPreviewContext, LineDraftPreviewOptions } from './types';
+import {
+  LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
+  LINE_DRAFT_PREVIEW_SOURCE_ID,
+  useLineDraftPreviewStore,
+} from './useLineDraftPreviewStore';
 
 /** 线草稿预览状态变化载荷。 */
 export interface LineDraftPreviewStateChangePayload {
@@ -86,16 +86,12 @@ export interface LineDraftPreviewPluginApi {
 interface UseLineDraftPreviewControllerOptions {
   /** 读取业务层传入的线草稿预览配置。 */
   getOptions: () => LineDraftPreviewOptions | null | undefined;
-  /** 读取业务层传入的普通图层交互配置。 */
-  getMapInteractive: () => MapLayerInteractiveOptions | null | undefined;
   /** 普通图层交互层提供的选中上下文读取能力。 */
   getSelectedFeatureContext: () => MapLayerInteractiveContext | null;
-  /** 普通图层交互层提供的 hover 状态清理能力。 */
-  clearHoverState: () => void;
-  /** 普通图层交互层提供的选中状态清理能力。 */
-  clearSelectedFeature: () => void;
-  /** 将渲染态要素转换为标准 GeoJSON 快照。 */
-  toFeatureSnapshot: (feature: any) => MapCommonFeature | null;
+  /** 插件托管图层提供的 hover 状态清理能力。 */
+  clearPluginHoverState: () => void;
+  /** 插件托管图层提供的选中状态清理能力。 */
+  clearPluginSelectedFeature: () => void;
   /** 线草稿状态变化回调。 */
   onStateChange?: (payload: LineDraftPreviewStateChangePayload) => void;
 }
@@ -142,18 +138,16 @@ function resolveLineDraftStyleOverrides(
 
 /**
  * 线草稿预览插件控制器。
- * 负责将“临时草稿数据管理、样式覆写、交互继承、对外 API”打包成一个可复用插件。
+ * 负责将“临时草稿数据管理、样式覆写、插件事件上下文、对外 API”打包成一个可复用插件。
  * @param options 插件初始化选项
  * @returns 线草稿插件能力集合
  */
 export function useLineDraftPreviewController(options: UseLineDraftPreviewControllerOptions) {
   const {
     getOptions,
-    getMapInteractive,
     getSelectedFeatureContext,
-    clearHoverState,
-    clearSelectedFeature,
-    toFeatureSnapshot,
+    clearPluginHoverState,
+    clearPluginSelectedFeature,
     onStateChange,
   } = options;
   const resolvedStyleOverrides = computed(() =>
@@ -216,35 +210,7 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
    * 使用 computed 包一层，便于调用方统一按响应式对象消费。
    */
   const data = computed(() => binding.featureCollection.value);
-
-  /**
-   * 配置临时图层（线延长草稿）的鼠标点击和悬浮行为。
-   * 插件会从正式线图层继承交互配置，减少业务层重复声明。
-   */
-  const mergedMapInteractive = computed<MapLayerInteractiveOptions | null>(() => {
-    const baseInteractive = getMapInteractive();
-    if (!enabled.value) {
-      return baseInteractive || null;
-    }
-
-    const inheritLayerId = getOptions()?.inheritInteractiveFromLayerId;
-    if (!baseInteractive || !inheritLayerId) {
-      return baseInteractive || null;
-    }
-
-    const inheritedLayerConfig = baseInteractive.layers?.[inheritLayerId];
-    if (!inheritedLayerConfig) {
-      return baseInteractive || null;
-    }
-
-    return {
-      ...baseInteractive,
-      layers: {
-        ...(baseInteractive.layers || {}),
-        [LINE_DRAFT_PREVIEW_LINE_LAYER_ID]: cloneDeep(inheritedLayerConfig),
-      },
-    };
-  });
+  const selectedFeatureId = ref<string | number | null>(null);
 
   watch(
     () => ({
@@ -256,41 +222,74 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
     },
     { immediate: true }
   );
+  watch(
+    () => binding.featureCollection.value.features,
+    () => {
+      if (
+        selectedFeatureId.value !== null &&
+        !binding.isLineDraftFeatureById(selectedFeatureId.value)
+      ) {
+        selectedFeatureId.value = null;
+      }
+    },
+    { deep: true }
+  );
+
+  /**
+   * 按草稿要素 ID 构造插件交互上下文。
+   * @param featureId 草稿要素 ID
+   * @returns 标准化后的草稿交互上下文
+   */
+  const getFeatureContext = (featureId: MapFeatureId | null): LineDraftPreviewContext | null => {
+    const feature = binding.getFeatureById(featureId);
+
+    return {
+      feature,
+      featureId:
+        featureId ??
+        ((feature?.properties?.id as MapFeatureId | null | undefined) ??
+          ((feature?.id as MapFeatureId | null | undefined) ?? null)),
+      sourceId: LINE_DRAFT_PREVIEW_SOURCE_ID,
+      layerId: LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
+      originRef: extractManagedPreviewOriginFromProperties(feature?.properties || {}),
+      generatedKind:
+        typeof feature?.properties?.generatedKind === 'string'
+          ? feature.properties.generatedKind
+          : null,
+    };
+  };
 
   /**
    * 获取当前选中要素的标准化快照。
    * 如果当前选中的是线草稿要素，则优先返回内部数据源中的最新快照。
    */
   const getSelectedFeatureSnapshot = (): MapCommonFeature | null => {
-    const selectedFeatureContext = getSelectedFeatureContext();
-    if (!selectedFeatureContext?.feature) {
-      return null;
-    }
-
-    if (binding.isLineDraftFeatureSource(selectedFeatureContext.sourceId)) {
-      return binding.getFeatureById(selectedFeatureContext.featureId);
-    }
-
-    return toFeatureSnapshot(selectedFeatureContext.feature);
+    return binding.getFeatureById(selectedFeatureId.value);
   };
 
   /**
    * 判断当前选中的要素是否属于线草稿。
    */
   const isSelectedFeature = (): boolean => {
-    const selectedFeatureContext = getSelectedFeatureContext();
-    return binding.isLineDraftFeatureSource(selectedFeatureContext?.sourceId);
+    return getSelectedFeatureSnapshot() !== null;
   };
 
   /**
-   * 清空全部线草稿要素，并同步清理普通图层交互状态。
+   * 设置当前选中的草稿要素 ID。
+   * @param featureId 目标草稿要素 ID
+   */
+  const setSelectedFeatureId = (featureId: MapFeatureId | null): void => {
+    selectedFeatureId.value = binding.isLineDraftFeatureById(featureId) ? featureId : null;
+  };
+
+  /**
+   * 清空全部线草稿要素，并同步清理插件图层交互状态。
    */
   const clear = (): void => {
     binding.clearLineDraftFeatures();
-    clearHoverState();
-    if (isSelectedFeature()) {
-      clearSelectedFeature();
-    }
+    selectedFeatureId.value = null;
+    clearPluginHoverState();
+    clearPluginSelectedFeature();
   };
 
   /**
@@ -394,12 +393,13 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
     data,
     lineStyle,
     fillStyle,
-    mergedMapInteractive,
     getFeatureById: binding.getFeatureById,
+    getFeatureContext,
     isFeatureById: binding.isLineDraftFeatureById,
     isFeatureSource: binding.isLineDraftFeatureSource,
     getSelectedFeatureSnapshot,
     isSelectedFeature,
+    setSelectedFeatureId,
     previewLine,
     replacePreviewRegion,
     clear,

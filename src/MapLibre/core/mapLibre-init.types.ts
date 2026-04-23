@@ -98,17 +98,17 @@ export interface MapLibreInitExpose {
   getDrawFeatures: () => TerradrawFeature[] | null;
   /** 获取当前地图上测量的几何图形数据。 */
   getMeasureFeatures: () => TerradrawFeature[] | null;
-  /** 获取当前普通图层交互选中的要素数据对象。 */
+  /** 获取当前地图交互选中的要素数据对象，插件托管图层优先。 */
   getSelectedMapFeature: () => MapGeoJSONFeature | null;
-  /** 获取当前普通图层交互选中要素的完整交互上下文。 */
+  /** 获取当前地图交互选中要素的完整交互上下文，插件托管图层优先。 */
   getSelectedMapFeatureContext: () => MapLayerInteractiveContext | null;
-  /** 获取当前普通图层交互选中的标准化要素快照。 */
+  /** 获取当前地图交互选中的标准化要素快照，插件托管图层优先。 */
   getSelectedMapFeatureSnapshot: () => MapCommonFeature | null;
   /** 获取当前地图注册的普通图层选择服务。 */
   getMapSelectionService: () => MapSelectionService | null;
   /** 读取当前 Draw / Measure 控件的属性治理配置。 */
   getTerradrawPropertyPolicy: (controlType: TerradrawControlType) => MapFeaturePropertyPolicy | null;
-  /** 清空当前普通图层的整个选中集。 */
+  /** 清空当前地图交互的整个选中集，同时覆盖插件托管图层与普通业务图层。 */
   clearSelectedMapFeature: () => void;
   /** 为指定要素写入 feature-state。 */
   setMapFeatureState: (target: MapFeatureStateTarget, state: MapFeatureStatePatch) => boolean;

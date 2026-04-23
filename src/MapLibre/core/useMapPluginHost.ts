@@ -6,6 +6,7 @@ import type {
   MapPluginContext,
   MapPluginHostExpose,
   MapPluginInstance,
+  MapPluginLayerInteractiveOptions,
   MapPluginRenderItem,
   MapPluginServices,
   MapPluginStateChangePayload,
@@ -32,6 +33,10 @@ interface UseMapPluginHostOptions {
   clearHoverState: () => void;
   /** 清理普通图层选中状态。 */
   clearSelectedFeature: () => void;
+  /** 清理插件托管图层 hover 状态。 */
+  clearPluginHoverState: () => void;
+  /** 清理插件托管图层选中状态。 */
+  clearPluginSelectedFeature: () => void;
   /** 将渲染态要素转换为标准 GeoJSON 快照。 */
   toFeatureSnapshot: (feature: any) => MapCommonFeature | null;
   /** 插件状态变化时的统一回调。 */
@@ -319,6 +324,45 @@ function mergeMapInteractiveOptions(
 }
 
 /**
+ * 合并插件专用图层交互配置。
+ * 合并规则与普通图层 layers 一致，但不承接地图级回调。
+ * @param baseConfig 基础配置
+ * @param patchConfig 插件补丁配置
+ * @returns 合并后的插件交互配置
+ */
+function mergePluginLayerInteractiveOptions(
+  baseConfig: MapPluginLayerInteractiveOptions | null | undefined,
+  patchConfig: MapPluginLayerInteractiveOptions | null | undefined
+): MapPluginLayerInteractiveOptions | null {
+  if (!baseConfig && !patchConfig) {
+    return null;
+  }
+
+  if (!baseConfig) {
+    return patchConfig
+      ? {
+          ...patchConfig,
+          layers: mergeLayerInteractiveLayers(undefined, patchConfig.layers),
+        }
+      : null;
+  }
+
+  if (!patchConfig) {
+    return {
+      ...baseConfig,
+      layers: mergeLayerInteractiveLayers(baseConfig.layers, undefined),
+    };
+  }
+
+  return {
+    ...baseConfig,
+    ...patchConfig,
+    enabled: patchConfig.enabled ?? baseConfig.enabled,
+    layers: mergeLayerInteractiveLayers(baseConfig.layers, patchConfig.layers),
+  };
+}
+
+/**
  * 创建地图插件宿主。
  * @param options 宿主初始化参数
  * @returns 插件聚合结果与对外查询接口
@@ -332,6 +376,8 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     getSelectedFeatureContext,
     clearHoverState,
     clearSelectedFeature,
+    clearPluginHoverState,
+    clearPluginSelectedFeature,
     toFeatureSnapshot,
     onPluginStateChange,
   } = options;
@@ -419,6 +465,8 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
       getSelectedFeatureContext,
       clearHoverState,
       clearSelectedFeature,
+      clearPluginHoverState,
+      clearPluginSelectedFeature,
       toFeatureSnapshot,
     };
   }
@@ -572,6 +620,22 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
   });
 
   /**
+   * 合并当前所有插件对插件托管图层交互的补丁。
+   */
+  const mergedPluginLayerInteractive = computed<MapPluginLayerInteractiveOptions | null>(() => {
+    let nextInteractive = mergePluginLayerInteractiveOptions(null, null);
+
+    pluginRecordMapRef.value.forEach((pluginRecord) => {
+      nextInteractive = mergePluginLayerInteractiveOptions(
+        nextInteractive,
+        pluginRecord.instance.getPluginLayerInteractivePatch?.() || null
+      );
+    });
+
+    return nextInteractive;
+  });
+
+  /**
    * 解析当前唯一允许存在的地图吸附服务。
    * @returns 当前吸附服务；未注册时返回 null
    */
@@ -679,6 +743,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
   return {
     renderItems,
     mergedMapInteractive,
+    mergedPluginLayerInteractive,
     getMapSnapService,
     getMapSelectionService,
     resolveSelectedFeatureSnapshot,

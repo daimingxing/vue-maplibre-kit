@@ -86,6 +86,8 @@ function createPluginContext(
     getSelectedFeatureContext: () => null,
     clearHoverState: () => undefined,
     clearSelectedFeature: () => undefined,
+    clearPluginHoverState: () => undefined,
+    clearPluginSelectedFeature: () => undefined,
     toFeatureSnapshot: () => null,
   };
 }

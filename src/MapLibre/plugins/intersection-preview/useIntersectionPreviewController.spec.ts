@@ -1,6 +1,12 @@
+import { ref } from 'vue';
 import { describe, expect, it } from 'vitest';
 import type { MapCommonLineFeature } from '../../shared/map-common-tools';
 import type { MapSourceFeatureRef } from '../../shared/map-common-tools';
+import {
+  createMapBusinessSource,
+  createMapBusinessSourceRegistry,
+} from '../../facades/createMapBusinessSource';
+import { createLineBusinessLayer } from '../../facades/mapBusinessLayer';
 import { useIntersectionPreviewController } from './useIntersectionPreviewController';
 import type { IntersectionPreviewOptions } from './types';
 
@@ -114,5 +120,101 @@ describe('useIntersectionPreviewController', () => {
 
     expect(controller.removeMaterialized(intersectionId)).toBe(true);
     expect(controller.getMaterializedData().features).toHaveLength(0);
+  });
+
+  it('物化正式交点时应优先继承 selected 模式下当前选中线一侧的属性，并允许补丁覆盖', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createMapBusinessSource({
+        sourceId: 'line-source',
+        data: ref({
+          type: 'FeatureCollection',
+          features: [
+            createLineFeature('line-a', [
+              [0, 0],
+              [10, 10],
+            ]),
+            {
+              ...createLineFeature('line-b', [
+                [0, 10],
+                [10, 0],
+              ]),
+              properties: {
+                id: 'line-b',
+                name: '选中线',
+                category: 'selected-line',
+                owner: 'right',
+              },
+            },
+          ],
+        }),
+        promoteId: 'id',
+        layers: [
+          createLineBusinessLayer({
+            layerId: 'line-layer',
+          }),
+        ],
+      }),
+    ]);
+    const options: IntersectionPreviewOptions = {
+      enabled: true,
+      visible: true,
+      scope: 'selected',
+      targetSourceIds: ['line-source'],
+      targetLayerIds: ['line-layer'],
+      sourceRegistry,
+      inheritMaterializedPropertiesFromLayerId: 'line-layer' as any,
+      materializedProperties: {
+        owner: 'patched',
+        status: 'done',
+      },
+      getCandidates: () => [
+        {
+          feature: createLineFeature('line-a', [
+            [0, 0],
+            [10, 10],
+          ]),
+          ref: createFeatureRef('line-a'),
+        },
+        {
+          feature: {
+            ...createLineFeature('line-b', [
+              [0, 10],
+              [10, 0],
+            ]),
+            properties: {
+              id: 'line-b',
+              name: '选中线',
+              category: 'selected-line',
+              owner: 'right',
+            },
+          },
+          ref: createFeatureRef('line-b'),
+        },
+      ],
+    };
+    const controller = useIntersectionPreviewController({
+      getOptions: () => options,
+      getCandidates: () => options.getCandidates?.() || [],
+      getSelectedFeatureContext: () =>
+        ({
+          featureId: 'line-b',
+          sourceId: 'line-source',
+          layerId: 'line-layer',
+        }) as any,
+    });
+
+    controller.refresh();
+
+    const [previewFeature] = controller.getData().features;
+    const intersectionId = String(previewFeature?.id || '');
+    expect(intersectionId).not.toBe('');
+    expect(controller.materialize(intersectionId)).toBe(true);
+
+    const materializedFeature = controller.getMaterializedData().features[0];
+
+    expect(materializedFeature.properties?.name).toBe('选中线');
+    expect(materializedFeature.properties?.category).toBe('selected-line');
+    expect(materializedFeature.properties?.owner).toBe('patched');
+    expect(materializedFeature.properties?.status).toBe('done');
   });
 });

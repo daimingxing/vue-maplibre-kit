@@ -121,6 +121,7 @@ import {
   syncTerradrawLineAndPolygonSnapping,
 } from '../terradraw/terradraw-snap-sync';
 import { useMapInteractive } from '../composables/useMapInteractive';
+import { usePluginLayerInteractive } from '../composables/usePluginLayerInteractive';
 import { useMapPluginHost } from './useMapPluginHost';
 import { useTerradrawControlLifecycle } from './useTerradrawControlLifecycle';
 import { type MapCommonFeature } from '../shared/map-common-tools';
@@ -291,6 +292,12 @@ const map = useMap(props.mapKey as string | symbol | undefined);
 let mapInteractiveBinding: ReturnType<typeof useMapInteractive> | null = null;
 
 /**
+ * 插件托管图层交互绑定实例。
+ * 交点、线草稿等插件图层会走这条独立通道，避免再与普通业务图层交互链耦合。
+ */
+let pluginLayerInteractiveBinding: ReturnType<typeof usePluginLayerInteractive> | null = null;
+
+/**
  * 创建地图插件宿主。
  * mapLibreInit 自身不再直接识别任何具体插件，只消费宿主聚合后的渲染项、交互补丁与服务接口。
  */
@@ -302,6 +309,8 @@ const pluginHost = useMapPluginHost({
   getSelectedFeatureContext: () => mapInteractiveBinding?.getSelectedFeatureContext() || null,
   clearHoverState: () => mapInteractiveBinding?.clearHoverState(),
   clearSelectedFeature: () => mapInteractiveBinding?.clearSelectionState(),
+  clearPluginHoverState: () => pluginLayerInteractiveBinding?.clearHoverState(),
+  clearPluginSelectedFeature: () => pluginLayerInteractiveBinding?.clearSelectionState(),
   toFeatureSnapshot: toMapFeatureSnapshot,
   onPluginStateChange: (payload) => {
     emit('pluginStateChange', payload);
@@ -313,6 +322,15 @@ const pluginRenderItems = pluginHost.renderItems;
 
 /** 业务层交互配置叠加插件补丁后的最终结果。 */
 const mergedMapInteractive = pluginHost.mergedMapInteractive;
+
+/** 插件托管图层的最终交互配置。 */
+const mergedPluginLayerInteractive = pluginHost.mergedPluginLayerInteractive;
+
+pluginLayerInteractiveBinding = usePluginLayerInteractive({
+  mapInstance: map,
+  getInteractive: () => mergedPluginLayerInteractive.value,
+  toFeatureSnapshot: toMapFeatureSnapshot,
+});
 
 mapInteractiveBinding = useMapInteractive({
   mapInstance: map,
@@ -326,6 +344,10 @@ mapInteractiveBinding = useMapInteractive({
  * @returns 当前选中的 MapLibre 要素；未选中时返回 null
  */
 function getSelectedMapFeature() {
+  if (pluginHost.resolveSelectedFeatureSnapshot()) {
+    return pluginLayerInteractiveBinding?.getSelectedFeature() || null;
+  }
+
   return mapInteractiveBinding?.getSelectedFeature() || null;
 }
 
@@ -334,6 +356,10 @@ function getSelectedMapFeature() {
  * @returns 当前选中的普通图层交互上下文；未选中时返回 null
  */
 function getSelectedMapFeatureContext() {
+  if (pluginHost.resolveSelectedFeatureSnapshot()) {
+    return pluginLayerInteractiveBinding?.getSelectedFeatureContext() || null;
+  }
+
   return mapInteractiveBinding?.getSelectedFeatureContext() || null;
 }
 
@@ -341,6 +367,7 @@ function getSelectedMapFeatureContext() {
  * 清空当前普通图层交互封装记录的整个选中集。
  */
 function clearSelectedMapFeature() {
+  pluginLayerInteractiveBinding?.clearSelectionState();
   mapInteractiveBinding?.clearSelectionState();
 }
 

@@ -71,10 +71,16 @@ export interface IntersectionPreviewOptions {
   getCandidates?: () => MapIntersectionCandidate[];
   /** 生成正式交点点要素时注入的默认业务属性。 */
   materializedProperties?: IntersectionPreviewMaterializedProperties;
+  /** 正式交点默认属性继承来源图层 ID。 */
+  inheritMaterializedPropertiesFromLayerId?: string;
   /** 预览交点图层样式局部覆写。 */
   previewStyleOverrides?: IntersectionPreviewStyleOverrides;
   /** 正式交点图层样式局部覆写。 */
   materializedStyleOverrides?: IntersectionPreviewStyleOverrides;
+  /** 鼠标移入交点回调。 */
+  onHoverEnter?: (context: IntersectionPreviewContext) => void;
+  /** 鼠标移出交点回调。 */
+  onHoverLeave?: (context: IntersectionPreviewContext) => void;
   /** 点击交点回调。 */
   onClick?: (context: IntersectionPreviewContext) => void;
   /** 右键交点回调。 */

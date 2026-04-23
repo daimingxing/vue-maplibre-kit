@@ -28,27 +28,25 @@ describe('useLineDraftPreviewController', () => {
     });
 
     const controller = useLineDraftPreviewController({
-      getOptions: () => ({
-        enabled: true,
-        inheritInteractiveFromLayerId: 'line-layer',
-        styleOverrides: {
-          line: {
-            paint: {
-              'line-opacity': 0.6,
+      getOptions: () =>
+        ({
+          enabled: true,
+          styleOverrides: {
+            line: {
+              paint: {
+                'line-opacity': 0.6,
+              },
+            },
+            fill: {
+              paint: {
+                'fill-color': '#1677ff',
+              },
             },
           },
-          fill: {
-            paint: {
-              'fill-color': '#1677ff',
-            },
-          },
-        },
-      }),
-      getMapInteractive: () => null,
+        }) as any,
       getSelectedFeatureContext: () => null,
-      clearHoverState: () => undefined,
-      clearSelectedFeature: () => undefined,
-      toFeatureSnapshot: () => null,
+      clearPluginHoverState: () => undefined,
+      clearPluginSelectedFeature: () => undefined,
     });
 
     expect(controller.lineStyle.value.paint['line-blur']).toBe(2);
@@ -57,4 +55,3 @@ describe('useLineDraftPreviewController', () => {
     expect(controller.fillStyle.value.paint['fill-color']).toBe('#1677ff');
   });
 });
-

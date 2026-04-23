@@ -174,16 +174,19 @@ function createPluginContext(
     getSelectedFeatureContext,
     clearHoverState: () => undefined,
     clearSelectedFeature: () => undefined,
+    clearPluginHoverState: () => undefined,
+    clearPluginSelectedFeature: () => undefined,
     toFeatureSnapshot: () => null,
   };
 }
 
 describe('intersectionPreviewPlugin', () => {
-  it('应在插件内部同时声明预览层与正式交点层，并暴露物化 API', () => {
+  it('应在插件内部同时声明预览层与正式交点层，并通过插件专用交互通道暴露图层交互', () => {
     const optionsRef = ref(createPluginOptions());
     const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
     const renderItems = pluginInstance.getRenderItems?.() || [];
     const patch = pluginInstance.getMapInteractivePatch?.();
+    const pluginLayerPatch = (pluginInstance as any).getPluginLayerInteractivePatch?.();
     const pluginApi = pluginInstance.getApi?.();
 
     expect(renderItems).toHaveLength(1);
@@ -191,10 +194,11 @@ describe('intersectionPreviewPlugin', () => {
     expect(renderItems[0].props.materializedSourceId).toBe(INTERSECTION_MATERIALIZED_SOURCE_ID);
     expect(typeof pluginApi?.materialize).toBe('function');
     expect(typeof pluginApi?.clearMaterialized).toBe('function');
-    expect(patch?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]).toBeTruthy();
-    expect(patch?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]).toBeTruthy();
-    expect(patch?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]?.hitPriority).toBeGreaterThan(0);
-    expect(patch?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]?.hitPriority).toBeGreaterThan(0);
+    expect(patch?.layers).toBeUndefined();
+    expect(pluginLayerPatch?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]).toBeTruthy();
+    expect(pluginLayerPatch?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]).toBeTruthy();
+    expect(pluginLayerPatch?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]?.hitPriority).toBeGreaterThan(0);
+    expect(pluginLayerPatch?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]?.hitPriority).toBeGreaterThan(0);
   });
 
   it('点击预览交点后应自动生成正式点要素', () => {
@@ -210,8 +214,8 @@ describe('intersectionPreviewPlugin', () => {
       throw new Error('当前预览交点为空，无法继续断言');
     }
 
-    pluginInstance
-      .getMapInteractivePatch?.()
+    (pluginInstance as any)
+      .getPluginLayerInteractivePatch?.()
       ?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]
       ?.onClick?.({
         featureId: previewFeature.id,
@@ -364,5 +368,39 @@ describe('intersectionPreviewPlugin', () => {
     expect(renderProps.style.paint['circle-color']).toBe('#111111');
     expect(renderProps.style.paint['circle-radius']).toBe(8);
     expect(renderProps.materializedStyle.paint['circle-radius']).toBe(9);
+  });
+
+  it('应支持交点 hover enter / leave 回调，并通过插件交互配置触发', () => {
+    const onHoverEnter = vi.fn();
+    const onHoverLeave = vi.fn();
+    const optionsRef = ref<IntersectionPreviewOptions>({
+      ...createPluginOptions(),
+      onHoverEnter,
+      onHoverLeave,
+    });
+    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error('未获取到交点插件 API');
+    }
+
+    const [previewFeature] = pluginApi.getData().features;
+    if (!previewFeature?.id) {
+      throw new Error('当前预览交点为空，无法继续断言');
+    }
+
+    const previewLayerConfig = (pluginInstance as any)
+      .getPluginLayerInteractivePatch?.()
+      ?.layers?.[INTERSECTION_PREVIEW_LAYER_ID];
+
+    previewLayerConfig?.onHoverEnter?.({
+      featureId: previewFeature.id,
+    } as any);
+    previewLayerConfig?.onHoverLeave?.({
+      featureId: previewFeature.id,
+    } as any);
+
+    expect(onHoverEnter).toHaveBeenCalledTimes(1);
+    expect(onHoverLeave).toHaveBeenCalledTimes(1);
   });
 });

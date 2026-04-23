@@ -114,6 +114,94 @@ export function useIntersectionPreviewController(
   };
 
   /**
+   * 判断指定来源引用是否命中了“正式交点属性继承来源图层”。
+   * @param layerId 当前参与方图层 ID
+   * @returns 是否命中继承来源图层
+   */
+  const isInheritedLayer = (layerId: string | null | undefined): boolean => {
+    const inheritLayerId = options.getOptions()?.inheritMaterializedPropertiesFromLayerId;
+    return Boolean(inheritLayerId && layerId && inheritLayerId === layerId);
+  };
+
+  /**
+   * 判断两个来源引用是否指向同一条业务线。
+   * @param left 左侧来源引用
+   * @param right 右侧来源引用
+   * @returns 指向同一条线时返回 true
+   */
+  const isSameFeatureRef = (
+    left: { sourceId?: string | null; featureId?: string | number | null; layerId?: string | null } | null,
+    right: { sourceId?: string | null; featureId?: string | number | null; layerId?: string | null } | null
+  ): boolean => {
+    if (!left || !right) {
+      return false;
+    }
+
+    return (
+      left.sourceId === right.sourceId &&
+      left.featureId === right.featureId &&
+      left.layerId === right.layerId
+    );
+  };
+
+  /**
+   * 解析当前正式交点需要继承属性的业务线来源。
+   * @param intersection 当前交点上下文
+   * @returns 命中的正式业务线来源；未命中时返回 null
+   */
+  const resolveInheritedFeatureRef = (
+    intersection: IntersectionPreviewContext
+  ): typeof intersection.leftRef | null => {
+    const leftMatched = isInheritedLayer(intersection.leftRef.layerId || null);
+    const rightMatched = isInheritedLayer(intersection.rightRef.layerId || null);
+
+    if (!leftMatched && !rightMatched) {
+      return null;
+    }
+
+    if (leftMatched && !rightMatched) {
+      return intersection.leftRef;
+    }
+
+    if (!leftMatched && rightMatched) {
+      return intersection.rightRef;
+    }
+
+    if (getCurrentScope() === 'selected') {
+      const selectedContext = options.getSelectedFeatureContext();
+      if (isSameFeatureRef(selectedContext || null, intersection.leftRef)) {
+        return intersection.leftRef;
+      }
+
+      if (isSameFeatureRef(selectedContext || null, intersection.rightRef)) {
+        return intersection.rightRef;
+      }
+    }
+
+    return intersection.leftRef;
+  };
+
+  /**
+   * 解析正式交点首次落点时需要继承的业务属性。
+   * @param intersection 当前交点上下文
+   * @returns 当前交点可继承的业务属性
+   */
+  const resolveInheritedMaterializedProperties = (
+    intersection: IntersectionPreviewContext
+  ): MapCommonProperties => {
+    const sourceRegistry = options.getOptions()?.sourceRegistry;
+    const inheritedRef = resolveInheritedFeatureRef(intersection);
+    if (!sourceRegistry || !inheritedRef?.sourceId || inheritedRef.featureId === null) {
+      return {};
+    }
+
+    const inheritedFeature = sourceRegistry.resolveFeature(inheritedRef);
+    return sanitizeMaterializedProperties(
+      (inheritedFeature?.properties || null) as MapCommonProperties
+    );
+  };
+
+  /**
    * 解析当前交点首次落点时的默认业务属性。
    * @param intersection 当前交点上下文
    * @returns 当前交点应注入的默认业务属性
@@ -121,17 +209,19 @@ export function useIntersectionPreviewController(
   const resolveMaterializedProperties = (
     intersection: IntersectionPreviewContext
   ): MapCommonProperties => {
+    const inheritedProperties = resolveInheritedMaterializedProperties(intersection);
     const propertyResolver = options.getOptions()?.materializedProperties;
     if (!propertyResolver) {
-      return {};
+      return inheritedProperties;
     }
 
     const rawProperties =
-      typeof propertyResolver === 'function'
-        ? propertyResolver(intersection)
-        : propertyResolver;
+      typeof propertyResolver === 'function' ? propertyResolver(intersection) : propertyResolver;
 
-    return sanitizeMaterializedProperties(rawProperties);
+    return {
+      ...inheritedProperties,
+      ...sanitizeMaterializedProperties(rawProperties),
+    };
   };
 
   /**
@@ -309,6 +399,32 @@ export function useIntersectionPreviewController(
   };
 
   /**
+   * 按交点 ID 读取预览交点上下文。
+   * @param intersectionId 目标交点 ID
+   * @returns 命中的预览交点上下文
+   */
+  const getPreviewById = (intersectionId: string | null): IntersectionPreviewContext | null => {
+    if (!intersectionId) {
+      return null;
+    }
+
+    return store.contextMap.value[intersectionId] || null;
+  };
+
+  /**
+   * 按交点 ID 读取正式交点上下文。
+   * @param intersectionId 目标交点 ID
+   * @returns 命中的正式交点上下文
+   */
+  const getMaterializedById = (intersectionId: string | null): IntersectionPreviewContext | null => {
+    if (!intersectionId) {
+      return null;
+    }
+
+    return store.materializedContextMap.value[intersectionId] || null;
+  };
+
+  /**
    * 读取当前选中的交点上下文。
    * @returns 当前选中的交点上下文
    */
@@ -454,6 +570,8 @@ export function useIntersectionPreviewController(
     getData: () => store.data.value,
     getMaterializedData: () => store.materializedData.value,
     getById,
+    getPreviewById,
+    getMaterializedById,
     getSelected,
   };
 }

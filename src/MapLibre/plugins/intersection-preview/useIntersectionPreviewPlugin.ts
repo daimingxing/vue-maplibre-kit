@@ -293,26 +293,68 @@ export const intersectionPreviewPlugin = defineMapPlugin<
         pluginState.value = stateSnapshot;
       },
     });
+    const selectedLayerId = ref<string | null>(null);
 
     /**
      * 根据图层交互上下文解析交点上下文。
      * @param featureId 当前命中的交点 ID
+     * @param layerId 当前命中的图层 ID
      * @returns 命中的交点上下文
      */
-    const resolveIntersectionContext = (featureId: string | number | null) => {
-      return controller.getById(featureId === null ? null : String(featureId));
+    const resolveIntersectionContext = (
+      featureId: string | number | null,
+      layerId: string | null = null
+    ) => {
+      const intersectionId = featureId === null ? null : String(featureId);
+      if (layerId === INTERSECTION_MATERIALIZED_LAYER_ID) {
+        return controller.getMaterializedById(intersectionId);
+      }
+
+      if (layerId === INTERSECTION_PREVIEW_LAYER_ID) {
+        return controller.getPreviewById(intersectionId);
+      }
+
+      return controller.getById(intersectionId);
     };
 
     /**
      * 同步当前交点选中态。
      * @param intersection 当前命中的交点上下文
+     * @param layerId 当前命中的图层 ID
      */
-    const syncSelectedIntersection = (intersection: IntersectionPreviewContext | null): void => {
+    const syncSelectedIntersection = (
+      intersection: IntersectionPreviewContext | null,
+      layerId: string | null = null
+    ): void => {
       controller.setSelected(intersection?.intersectionId || null);
+      selectedLayerId.value = intersection ? layerId : null;
       pluginState.value = {
         ...pluginState.value,
         selectedId: intersection?.intersectionId || null,
       };
+    };
+
+    /**
+     * 读取当前插件真正选中的交点上下文。
+     * 这里会同时区分预览层和正式层，避免正式交点与预览交点共用同一个 ID 时取错快照。
+     *
+     * @returns 当前插件选中的交点上下文
+     */
+    const getSelectedIntersectionContext = (): IntersectionPreviewContext | null => {
+      return resolveIntersectionContext(controller.getSelected()?.intersectionId || null, selectedLayerId.value);
+    };
+
+    /**
+     * 当内部数据变化导致当前插件选中目标失效时，同步清理插件交互状态。
+     */
+    const clearPluginSelectionIfMissing = (): void => {
+      if (getSelectedIntersectionContext()) {
+        return;
+      }
+
+      syncSelectedIntersection(null);
+      context.clearPluginHoverState();
+      context.clearPluginSelectedFeature();
     };
 
     /**
@@ -337,14 +379,13 @@ export const intersectionPreviewPlugin = defineMapPlugin<
       );
     };
 
-    controller.refresh();
-
     /**
      * 生成交点图层交互配置。
      * @param shouldMaterializeOnClick 点击时是否自动落正式交点点要素
      * @returns 交点图层交互配置
      */
     const createIntersectionLayerInteractiveConfig = (
+      layerId: string,
       shouldMaterializeOnClick: boolean
     ) => {
       return {
@@ -354,27 +395,87 @@ export const intersectionPreviewPlugin = defineMapPlugin<
         hitPriority: INTERSECTION_LAYER_HIT_PRIORITY,
         enableFeatureStateHover: true,
         enableFeatureStateSelected: true,
+        onHoverEnter: (contextSnapshot: { featureId: string | number | null }) => {
+          const intersection = resolveIntersectionContext(contextSnapshot.featureId, layerId);
+          intersection && context.getOptions()?.onHoverEnter?.(intersection);
+        },
+        onHoverLeave: (contextSnapshot: { featureId: string | number | null }) => {
+          const intersection = resolveIntersectionContext(contextSnapshot.featureId, layerId);
+          intersection && context.getOptions()?.onHoverLeave?.(intersection);
+        },
         onFeatureSelect: (contextSnapshot: { featureId: string | number | null }) => {
-          syncSelectedIntersection(resolveIntersectionContext(contextSnapshot.featureId));
+          syncSelectedIntersection(
+            resolveIntersectionContext(contextSnapshot.featureId, layerId),
+            layerId
+          );
         },
         onFeatureDeselect: () => {
           syncSelectedIntersection(null);
         },
         onClick: (contextSnapshot: { featureId: string | number | null }) => {
-          const intersection = resolveIntersectionContext(contextSnapshot.featureId);
-          syncSelectedIntersection(intersection);
+          const intersection = resolveIntersectionContext(contextSnapshot.featureId, layerId);
+          syncSelectedIntersection(intersection, layerId);
           if (shouldMaterializeOnClick && intersection) {
             controller.materialize(intersection.intersectionId);
           }
           intersection && context.getOptions()?.onClick?.(intersection);
         },
         onContextMenu: (contextSnapshot: { featureId: string | number | null }) => {
-          const intersection = resolveIntersectionContext(contextSnapshot.featureId);
-          syncSelectedIntersection(intersection);
+          const intersection = resolveIntersectionContext(contextSnapshot.featureId, layerId);
+          syncSelectedIntersection(intersection, layerId);
           intersection && context.getOptions()?.onContextMenu?.(intersection);
         },
       };
     };
+
+    /**
+     * 对外暴露刷新方法。
+     * 刷新后若当前插件选中目标已失效，需要同步清理插件交互层残留状态。
+     */
+    const refresh = (): void => {
+      controller.refresh();
+      clearPluginSelectionIfMissing();
+    };
+
+    /**
+     * 对外暴露清空预览方法。
+     */
+    const clear = (): void => {
+      controller.clear();
+      syncSelectedIntersection(null);
+      context.clearPluginHoverState();
+      context.clearPluginSelectedFeature();
+    };
+
+    /**
+     * 对外暴露物化方法。
+     * @param intersectionId 目标交点 ID
+     * @returns 是否物化成功
+     */
+    const materialize = (intersectionId?: string | null): boolean => {
+      return controller.materialize(intersectionId);
+    };
+
+    /**
+     * 对外暴露删除正式交点方法。
+     * @param intersectionId 目标交点 ID
+     * @returns 是否删除成功
+     */
+    const removeMaterialized = (intersectionId?: string | null): boolean => {
+      const removed = controller.removeMaterialized(intersectionId);
+      clearPluginSelectionIfMissing();
+      return removed;
+    };
+
+    /**
+     * 对外暴露清空全部正式交点方法。
+     */
+    const clearMaterialized = (): void => {
+      controller.clearMaterialized();
+      clearPluginSelectionIfMissing();
+    };
+
+    refresh();
 
     return {
       getRenderItems: () => [
@@ -402,25 +503,33 @@ export const intersectionPreviewPlugin = defineMapPlugin<
               return;
             }
 
-            controller.refresh();
-          },
-          layers: {
-            [INTERSECTION_PREVIEW_LAYER_ID]: createIntersectionLayerInteractiveConfig(
-              context.getOptions()?.materializeOnClick !== false
-            ),
-            [INTERSECTION_MATERIALIZED_LAYER_ID]:
-              createIntersectionLayerInteractiveConfig(false),
+            refresh();
           },
         };
       },
+      getPluginLayerInteractivePatch: () => ({
+        layers: {
+          [INTERSECTION_PREVIEW_LAYER_ID]: createIntersectionLayerInteractiveConfig(
+            INTERSECTION_PREVIEW_LAYER_ID,
+            context.getOptions()?.materializeOnClick !== false
+          ),
+          [INTERSECTION_MATERIALIZED_LAYER_ID]: createIntersectionLayerInteractiveConfig(
+            INTERSECTION_MATERIALIZED_LAYER_ID,
+            false
+          ),
+        },
+      }),
+      resolveSelectedFeatureSnapshot: () => {
+        return getSelectedIntersectionContext()?.feature || null;
+      },
       getApi: () =>
         ({
-          refresh: controller.refresh,
-          clear: controller.clear,
-          materialize: controller.materialize,
-          removeMaterialized: controller.removeMaterialized,
+          refresh,
+          clear,
+          materialize,
+          removeMaterialized,
           updateMaterializedProperties: controller.updateMaterializedProperties,
-          clearMaterialized: controller.clearMaterialized,
+          clearMaterialized,
           show: controller.show,
           hide: controller.hide,
           setScope: controller.setScope,

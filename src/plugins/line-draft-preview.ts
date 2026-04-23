@@ -44,3 +44,6 @@ export type { LineDraftPreviewOptions } from '../MapLibre/plugins/line-draft-pre
 
 /** 线草稿样式覆盖总类型。统一声明草稿线和草稿面的样式覆盖时使用。 */
 export type { LineDraftPreviewStyleOverrides } from '../MapLibre/plugins/line-draft-preview';
+
+/** 线草稿交互上下文类型。处理草稿线 hover / click 事件时使用。 */
+export type { LineDraftPreviewContext } from '../MapLibre/plugins/line-draft-preview';
