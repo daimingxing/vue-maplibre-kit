@@ -62,6 +62,29 @@ export const mapGlobalConfig = defineMapGlobalConfig({
     },
   },
   plugins: {
+    snap: {
+      defaultTolerancePx: 12,
+      preview: {
+        pointColor: '#1677ff',
+        lineColor: '#1677ff',
+      },
+    },
+    lineDraft: {
+      styleOverrides: {
+        line: {
+          paint: {
+            'line-opacity': 0.8,
+          },
+        },
+      },
+    },
+    intersection: {
+      materializedStateStyles: {
+        selected: {
+          color: '#1677ff',
+        },
+      },
+    },
     multiSelect: {
       enabled: true,
       position: 'top-right',
@@ -119,40 +142,64 @@ createApp(App).mount('#app');
 ## 4. 当前支持的全局配置树
 
 ```ts
-{
-  mapOptions?: ...
-  mapControls?: ...
-  plugins?: {
-    snap?: ...
-    lineDraft?: ...
-    multiSelect?: ...
-    dxfExport?: ...
-  }
-  styles?: {
-    circle?: ...
-    line?: ...
-    fill?: ...
-    symbol?: ...
-    raster?: ...
-  }
-}
+defineMapGlobalConfig({
+  mapOptions: {
+    // ...
+  },
+  mapControls: {
+    // ...
+  },
+  plugins: {
+    snap: {
+      // ...
+    },
+    lineDraft: {
+      // ...
+    },
+    intersection: {
+      // ...
+    },
+    multiSelect: {
+      // ...
+    },
+    dxfExport: {
+      // ...
+    },
+  },
+  styles: {
+    circle: {
+      // ...
+    },
+    line: {
+      // ...
+    },
+    fill: {
+      // ...
+    },
+    symbol: {
+      // ...
+    },
+    raster: {
+      // ...
+    },
+  },
+});
 ```
 
 一级入口只有这些：
 
-| 一级入口 | 说明 |
-| --- | --- |
-| `config.mapOptions` | 地图初始化默认参数 |
-| `config.mapControls` | 地图控件默认参数 |
-| `config.plugins.snap` | 吸附插件默认参数 |
-| `config.plugins.lineDraft` | 线草稿预览插件默认参数 |
-| `config.plugins.multiSelect` | 多选插件默认参数 |
-| `config.plugins.dxfExport` | DXF 导出插件默认参数 |
-| `config.styles.circle` | 点图层样式工厂默认值 |
-| `config.styles.line` | 线图层样式工厂默认值 |
-| `config.styles.fill` | 面图层样式工厂默认值 |
-| `config.styles.symbol` | 符号图层样式工厂默认值 |
-| `config.styles.raster` | 栅格图层样式工厂默认值 |
+- `config.mapOptions`：地图初始化默认参数
+- `config.mapControls`：地图控件默认参数
+- `config.plugins.snap`：吸附插件默认参数
+- `config.plugins.lineDraft`：线草稿预览插件默认参数
+- `config.plugins.intersection`：交点预览插件默认参数
+- `config.plugins.multiSelect`：多选插件默认参数
+- `config.plugins.dxfExport`：DXF 导出插件默认参数
+- `config.styles.circle`：点图层样式工厂默认值
+- `config.styles.line`：线图层样式工厂默认值
+- `config.styles.fill`：面图层样式工厂默认值
+- `config.styles.symbol`：符号图层样式工厂默认值
+- `config.styles.raster`：栅格图层样式工厂默认值
 
 ---
 
@@ -718,33 +765,123 @@ plugins: {
 
 ## 8. `plugins.lineDraft` 全局配置项
 
+> 当前全局只负责线草稿和线廊草稿的默认视觉，不负责业务来源绑定、事件回调和草稿生成行为。
+
 ```ts
-config.plugins.lineDraft
+plugins: {
+  lineDraft: {
+    styleOverrides: {
+      line: {
+        layout: {
+          // visibility: 'visible', // 线草稿图层显隐
+        },
+        paint: {
+          // 'line-opacity': 0.8, // 线草稿透明度
+          // 'line-color': '#1677ff', // 线草稿颜色
+          // 'line-width': 3, // 线草稿线宽
+        },
+      },
+      fill: {
+        layout: {
+          // visibility: 'visible', // 线廊草稿图层显隐
+        },
+        paint: {
+          // 'fill-opacity': 0.25, // 线廊草稿透明度
+          // 'fill-color': '#1677ff', // 线廊草稿填充色
+          // 'fill-outline-color': '#1677ff', // 线廊草稿描边色
+        },
+      },
+    },
+  },
+},
 ```
 
-类型来源：
+补充说明：
 
-- [src/config.ts](../src/config.ts)
-- [src/MapLibre/plugins/line-draft-preview/types.ts](../src/MapLibre/plugins/line-draft-preview/types.ts)
-
-### 8.2 参数表
-
-| 参数路径 | 类型 / 取值 | 作用 |
-| --- | --- | --- |
-| `config.plugins.lineDraft.styleOverrides.line.layout.*` | `LineLayer layout` | 线草稿线图层 layout 覆写；字段清单见本文 `11.2 styles.line.layout`。 |
-| `config.plugins.lineDraft.styleOverrides.line.paint.*` | `LineLayer paint` | 线草稿线图层 paint 覆写；字段清单见本文 `11.2 styles.line.paint`。 |
-| `config.plugins.lineDraft.styleOverrides.fill.layout.*` | `FillLayer layout` | 线廊草稿面图层 layout 覆写；字段清单见本文 `11.3 styles.fill.layout`。 |
-| `config.plugins.lineDraft.styleOverrides.fill.paint.*` | `FillLayer paint` | 线廊草稿面图层 paint 覆写；字段清单见本文 `11.3 styles.fill.paint`。 |
-
-### 8.3 明确不进全局的字段
-
-| 字段 | 不进全局的原因 |
-| --- | --- |
-| `inheritInteractiveFromLayerId` | 它依赖页面正式业务图层 ID，属于实例绑定信息。 |
+- 合并顺序是“全局 `styleOverrides` -> 当前实例 `styleOverrides`”，实例级同名字段覆盖全局默认值。
+- 当前全局没有 `enabled`、`onHoverEnter`、`onHoverLeave`、`onClick`、`onDoubleClick`、`onContextMenu` 这些字段。
+- 旧版 `inheritInteractiveFromLayerId` 已不属于当前 API，也不应该继续写进这份全局配置文档。
 
 ---
 
-## 9. `plugins.multiSelect` 全局配置项
+## 9. `plugins.intersection` 全局配置项
+
+> 当前全局只负责预览交点层和正式交点层的默认视觉，不负责“哪些业务线参与求交”和“点击交点后如何物化”。
+
+```ts
+plugins: {
+  intersection: {
+    previewStateStyles: {
+      default: {
+        // radius: 5, // 默认态半径
+        // color: '#ff4d4f', // 默认态填充色
+        // strokeColor: '#ffffff', // 默认态描边色
+        // strokeWidth: 1.5, // 默认态描边宽度
+      },
+      hover: {
+        // radius: 6, // hover 态半径
+        // color: '#fa8c16', // hover 态填充色
+        // strokeColor: '#ffffff', // hover 态描边色
+        // strokeWidth: 2, // hover 态描边宽度
+      },
+      selected: {
+        // radius: 7, // selected 态半径
+        // color: '#fa541c', // selected 态填充色
+        // strokeColor: '#ffffff', // selected 态描边色
+        // strokeWidth: 2, // selected 态描边宽度
+      },
+    },
+    materializedStateStyles: {
+      default: {
+        // radius: 6, // 正式交点默认态半径
+        // color: '#1677ff', // 正式交点默认态填充色
+        // strokeColor: '#ffffff', // 正式交点默认态描边色
+        // strokeWidth: 1.5, // 正式交点默认态描边宽度
+      },
+      hover: {
+        // radius: 7, // 正式交点 hover 态半径
+        // color: '#4096ff', // 正式交点 hover 态填充色
+        // strokeColor: '#ffffff', // 正式交点 hover 态描边色
+        // strokeWidth: 2, // 正式交点 hover 态描边宽度
+      },
+      selected: {
+        // radius: 8, // 正式交点 selected 态半径
+        // color: '#0958d9', // 正式交点 selected 态填充色
+        // strokeColor: '#ffffff', // 正式交点 selected 态描边色
+        // strokeWidth: 2, // 正式交点 selected 态描边宽度
+      },
+    },
+    previewStyleOverrides: {
+      layout: {
+        // visibility: 'visible', // 预览交点图层显隐
+      },
+      paint: {
+        // 'circle-radius-transition': { duration: 120, delay: 0 }, // 预览交点半径过渡
+        // 'circle-opacity': 1, // 预览交点透明度
+      },
+    },
+    materializedStyleOverrides: {
+      layout: {
+        // visibility: 'visible', // 正式交点图层显隐
+      },
+      paint: {
+        // 'circle-radius-transition': { duration: 120, delay: 0 }, // 正式交点半径过渡
+        // 'circle-opacity': 1, // 正式交点透明度
+      },
+    },
+  },
+},
+```
+
+补充说明：
+
+- `previewStateStyles`、`materializedStateStyles` 的合并顺序是“插件内置默认值 -> 全局默认值 -> 当前实例”。
+- `previewStyleOverrides`、`materializedStyleOverrides` 的合并顺序是“全局默认值 -> 当前实例”。
+- 当前全局没有 `enabled`、`visible`、`scope`、`materializeOnClick`、`targetSourceIds`、`targetLayerIds`、`sourceRegistry`、`getCandidates`、`materializedProperties`、`inheritMaterializedPropertiesFromLayerId`、`onHoverEnter`、`onHoverLeave`、`onClick`、`onContextMenu` 这些字段。
+
+---
+
+## 10. `plugins.multiSelect` 全局配置项
 
 ```ts
 plugins: {
@@ -760,7 +897,7 @@ plugins: {
 
 ---
 
-## 10. `plugins.dxfExport` 全局配置项
+## 11. `plugins.dxfExport` 全局配置项
 
 ```ts
 plugins: {
@@ -789,7 +926,7 @@ plugins: {
 },
 ```
 
-### 10.1 关于 `DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS`
+### 11.1 关于 `DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS`
 
 库内的：
 
@@ -819,12 +956,13 @@ plugins: {
 
 ---
 
-## 11. `styles` 全局配置项
+## 12. `styles` 全局配置项
 
 > `styles.*` 只作用于样式工厂默认值路径。  
-> 如果业务层直接传完整 `layer.style`，则视为页面完全接管，不会自动叠加全局 style。
+> 如果业务层直接传完整 `layer.style`，则视为页面完全接管，不会自动叠加全局 style。  
+> `styles.*` 本质就是对应 `LayerSpecification` 的 `layout` / `paint` 局部默认值，下面保持“可直接复制进 `defineMapGlobalConfig`”的真实代码模板风格。
 
-### 11.1 `styles.circle`
+### 12.1 `styles.circle`
 
 ```ts
 styles: {
@@ -858,7 +996,7 @@ styles: {
 },
 ```
 
-### 11.2 `styles.line`
+### 12.2 `styles.line`
 
 ```ts
 styles: {
@@ -897,77 +1035,120 @@ styles: {
 },
 ```
 
-### 11.3 `styles.fill`
+### 12.3 `styles.fill`
 
 ```ts
-import { defineMapGlobalConfig, setMapGlobalConfig } from 'vue-maplibre-kit/config';
-
-export function applyMapGlobalConfig(): void {
-  setMapGlobalConfig(
-    defineMapGlobalConfig({
-      mapOptions: {
-        mapStyle: 'https://your-style.json',
-        center: [114.3, 22.5],
-        zoom: 10,
-        renderWorldCopies: false,
-      },
-      mapControls: {
-        MglScaleControl: {
-          isUse: true,
-          position: 'bottom-left',
-          unit: 'metric',
-        },
-        MaplibreMeasureControl: {
-          isUse: true,
-          position: 'top-right',
-          measureUnitType: 'metric',
-        },
-      },
-      plugins: {
-        dxfExport: {
-          defaults: {
-            sourceCrs: 'EPSG:4326',
-            targetCrs: 'EPSG:3857',
-            pointMode: 'circle',
-            pointRadius: 2,
-          },
-        },
-      },
-      styles: {
-        line: {
-          paint: {
-            'line-color': '#1677ff',
-          },
-        },
-      },
-    })
-  );
-}
+styles: {
+  fill: {
+    layout: {
+      // 'fill-sort-key': 0, // 面要素绘制排序值
+      // visibility: 'visible', // 图层显隐
+    },
+    paint: {
+      // 'fill-antialias': true, // 是否启用填充边缘抗锯齿
+      // 'fill-opacity': 0.35, // 面透明度
+      // 'fill-opacity-transition': { duration: 300, delay: 0 }, // opacity 过渡配置
+      // 'fill-color': '#1677ff', // 面填充色
+      // 'fill-color-transition': { duration: 300, delay: 0 }, // color 过渡配置
+      // 'fill-outline-color': '#ffffff', // 面描边色
+      // 'fill-outline-color-transition': { duration: 300, delay: 0 }, // outline-color 过渡配置
+      // 'fill-translate': [0, 0], // 面屏幕空间偏移量
+      // 'fill-translate-transition': { duration: 300, delay: 0 }, // translate 过渡配置
+      // 'fill-translate-anchor': 'map', // translate 参考系
+      // 'fill-pattern': 'pattern-name', // 面纹理图案名称
+      // 'fill-pattern-transition': { duration: 300, delay: 0 }, // pattern 过渡配置
+    },
+  },
+},
 ```
 
-`src/main.ts`
+### 12.4 `styles.symbol`
 
 ```ts
-import { createApp } from 'vue';
-import App from './App.vue';
-import { applyMapGlobalConfig } from './map-global-config';
+styles: {
+  symbol: {
+    layout: {
+      // 'symbol-placement': 'point', // 标注放置模式
+      // 'symbol-spacing': 250, // 线标注重复间距
+      // 'symbol-avoid-edges': false, // 是否尽量避开瓦片边缘
+      // 'icon-image': 'marker-icon', // 图标名称
+      // 'icon-size': 1, // 图标缩放比例
+      // 'icon-rotate': 0, // 图标旋转角度
+      // 'icon-anchor': 'center', // 图标锚点
+      // 'icon-allow-overlap': false, // 图标是否允许重叠
+      // 'text-field': ['get', 'name'], // 文本内容
+      // 'text-font': ['Noto Sans Regular'], // 文字字体栈
+      // 'text-size': 12, // 文字字号
+      // 'text-offset': [0, 1.2], // 文字偏移
+      // 'text-anchor': 'top', // 文字锚点
+      // 'text-allow-overlap': false, // 文字是否允许重叠
+      // visibility: 'visible', // 图层显隐
+    },
+    paint: {
+      // 'icon-opacity': 1, // 图标透明度
+      // 'icon-opacity-transition': { duration: 300, delay: 0 }, // icon-opacity 过渡配置
+      // 'icon-color': '#1677ff', // 图标着色
+      // 'icon-color-transition': { duration: 300, delay: 0 }, // icon-color 过渡配置
+      // 'icon-halo-color': '#ffffff', // 图标光晕颜色
+      // 'icon-halo-width': 1, // 图标光晕宽度
+      // 'text-opacity': 1, // 文字透明度
+      // 'text-opacity-transition': { duration: 300, delay: 0 }, // text-opacity 过渡配置
+      // 'text-color': '#1f1f1f', // 文字颜色
+      // 'text-color-transition': { duration: 300, delay: 0 }, // text-color 过渡配置
+      // 'text-halo-color': '#ffffff', // 文字描边色
+      // 'text-halo-width': 1.5, // 文字描边宽度
+      // 'text-halo-blur': 0, // 文字描边模糊程度
+      // 'text-translate': [0, 0], // 文字屏幕空间偏移量
+      // 'text-translate-anchor': 'map', // text-translate 参考系
+    },
+  },
+},
+```
 
-applyMapGlobalConfig();
+---
 
-createApp(App).mount('#app');
+### 12.5 `styles.raster`
+
+```ts
+styles: {
+  raster: {
+    layout: {
+      // visibility: 'visible', // 图层显隐
+    },
+    paint: {
+      // 'raster-opacity': 1, // 栅格透明度
+      // 'raster-opacity-transition': { duration: 300, delay: 0 }, // opacity 过渡配置
+      // 'raster-hue-rotate': 0, // 栅格色相旋转角度
+      // 'raster-hue-rotate-transition': { duration: 300, delay: 0 }, // hue-rotate 过渡配置
+      // 'raster-brightness-min': 0, // 栅格最小亮度
+      // 'raster-brightness-min-transition': { duration: 300, delay: 0 }, // brightness-min 过渡配置
+      // 'raster-brightness-max': 1, // 栅格最大亮度
+      // 'raster-brightness-max-transition': { duration: 300, delay: 0 }, // brightness-max 过渡配置
+      // 'raster-saturation': 0, // 栅格饱和度
+      // 'raster-saturation-transition': { duration: 300, delay: 0 }, // saturation 过渡配置
+      // 'raster-contrast': 0, // 栅格对比度
+      // 'raster-contrast-transition': { duration: 300, delay: 0 }, // contrast 过渡配置
+      // 'raster-resampling': 'linear', // 重采样方式：linear / nearest
+      // 'raster-fade-duration': 300, // 栅格切片淡入淡出时长
+    },
+  },
+},
 ```
 
 ---
 
 ## 13. 查找全局配置项时，看哪里
 
-如果以后不想靠记忆找字段，只看这 3 个地方：
+如果以后不想靠记忆找字段，只看这 4 个地方：
 
-1. [src/config.ts](../src/config.ts)
+1. [package.json](../package.json)
+   如果先想确认 npm 入口，就先看这里的 `./config` 导出是否还在。
+
+2. [src/config.ts](../src/config.ts)
    这是官方白名单，先确认某项能不能全局配。
 
-2. [src/demo-map-global-config.ts](../src/demo-map-global-config.ts)
+3. [src/demo-map-global-config.ts](../src/demo-map-global-config.ts)
    这是 demo 里的真实示例，最适合直接照着抄。
 
-3. 这份文档
+4. 这份文档
    这份文档的目标就是把当前全局配置允许写的字段，按真实代码模板列出来。
