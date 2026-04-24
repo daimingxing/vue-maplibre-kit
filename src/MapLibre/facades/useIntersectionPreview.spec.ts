@@ -23,6 +23,8 @@ describe('useIntersectionPreview', () => {
         features: [],
       }),
       getById: () => null,
+      getPreviewById: () => null,
+      getMaterializedById: () => null,
       getSelected: () => null,
     };
     const state = computed(() => ({
@@ -51,6 +53,8 @@ describe('useIntersectionPreview', () => {
     expect(preview.materialize()).toBe(true);
     expect(preview.removeMaterialized('intersection-a')).toBe(true);
     expect(preview.updateMaterializedProperties('intersection-a', { name: '已确认' })).toBe(true);
+    expect(preview.getPreviewById('intersection-a')).toBeNull();
+    expect(preview.getMaterializedById('intersection-a')).toBeNull();
     expect(typeof preview.refresh).toBe('function');
   });
 });

@@ -49,10 +49,19 @@
       <el-button type="primary" size="small" style="flex: 1" @click="handleGenerateLineCorridor">
         生成线廊
       </el-button>
-      <el-button type="success" size="small" style="flex: 1" @click="handleCreateLineDraft">
+      <el-button
+        type="success"
+        size="small"
+        style="flex: 1"
+        :disabled="!canCreateLineDraft"
+        @click="handleCreateLineDraft"
+      >
         创建线草稿
       </el-button>
     </div>
+    <p v-if="showLineDraftBlockedHint" class="popup-panel-hint popup-panel-hint--warning">
+      {{ DRAFT_HINT_TEXT }}
+    </p>
     <el-button
       v-if="hasLineDraftFeatures"
       type="warning"
@@ -118,10 +127,13 @@
 import { computed } from "vue";
 import { InfoFilled, Location } from "@element-plus/icons-vue";
 import {
+  DRAFT_HINT_TEXT,
+  getDraftWarn,
   getLineActionPayload,
   getLinePopupPayload,
   getPointPopupPayload,
   getTerradrawPopupPayload,
+  hasLineSegment,
   type NgLineActionPayload,
   type NgLinePopupPayload,
   type NgPointPopupPayload,
@@ -234,6 +246,16 @@ const lineActionPayload = computed<NgLineActionPayload | null>(() => {
   return getLineActionPayload(props.payload);
 });
 
+/** 当前是否允许创建线草稿。 */
+const canCreateLineDraft = computed(() => {
+  return hasLineSegment(lineActionPayload.value);
+});
+
+/** 当前是否展示“不能创建线草稿”的提示文案。 */
+const showLineDraftBlockedHint = computed(() => {
+  return isLinePopup.value && !canCreateLineDraft.value;
+});
+
 /**
  * 同步区域宽度输入值。
  * @param value 输入框返回的新值
@@ -275,7 +297,8 @@ function handleGenerateLineCorridor(): void {
  * 触发线草稿创建动作。
  */
 function handleCreateLineDraft(): void {
-  if (!lineActionPayload.value) {
+  const draftWarn = getDraftWarn(lineActionPayload.value);
+  if (!lineActionPayload.value || draftWarn) {
     return;
   }
 
@@ -350,6 +373,16 @@ function handleClearLineDraft(): void {
 .popup-panel-clear {
   width: 100%;
   margin-top: 8px;
+}
+
+.popup-panel-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.popup-panel-hint--warning {
+  color: #e6a23c;
 }
 
 .popup-panel-json-board {

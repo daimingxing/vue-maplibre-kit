@@ -685,7 +685,9 @@ export const intersectionPreviewPlugin = defineMapPlugin<
           getData: controller.getData,
           getMaterializedData: controller.getMaterializedData,
           getById: controller.getById,
-          getSelected: controller.getSelected,
+          getPreviewById: controller.getPreviewById,
+          getMaterializedById: controller.getMaterializedById,
+          getSelected: getSelectedIntersectionContext,
         }) as IntersectionPreviewPluginApi,
       state: computed(() => pluginState.value),
     };

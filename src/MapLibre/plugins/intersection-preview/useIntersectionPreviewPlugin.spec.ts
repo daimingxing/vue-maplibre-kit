@@ -228,6 +228,47 @@ describe('intersectionPreviewPlugin', () => {
     expect(materializedData.features[0].properties?.id).toBe(previewFeature.id);
   });
 
+  it('预览点与正式点共存时，选中正式点应返回正式点上下文，并支持显式分层查询', () => {
+    const optionsRef = ref(createPluginOptions());
+    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error('未获取到交点插件 API');
+    }
+
+    const [previewFeature] = pluginApi.getData().features;
+    if (!previewFeature?.id) {
+      throw new Error('当前预览交点为空，无法继续断言');
+    }
+
+    (pluginInstance as any)
+      .getPluginLayerInteractivePatch?.()
+      ?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]
+      ?.onClick?.({
+        featureId: previewFeature.id,
+      } as any);
+
+    const materializedFeature = pluginApi.getMaterializedData().features[0];
+    if (!materializedFeature?.id) {
+      throw new Error('当前正式交点为空，无法继续断言');
+    }
+
+    (pluginInstance as any)
+      .getPluginLayerInteractivePatch?.()
+      ?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]
+      ?.onClick?.({
+        featureId: materializedFeature.id,
+      } as any);
+
+    const selectedContext = pluginApi.getSelected();
+    const previewContext = pluginApi.getPreviewById(String(previewFeature.id));
+    const materializedContext = pluginApi.getMaterializedById(String(materializedFeature.id));
+
+    expect(previewContext?.feature?.properties?.generatedKind).toBe('intersection-preview');
+    expect(materializedContext?.feature?.properties?.generatedKind).toBe('intersection-materialized');
+    expect(selectedContext?.feature?.properties?.generatedKind).toBe('intersection-materialized');
+  });
+
   it('selected 模式下切换选中线后应自动刷新交点', () => {
     const optionsRef = ref<IntersectionPreviewOptions>({
       ...createPluginOptions(),

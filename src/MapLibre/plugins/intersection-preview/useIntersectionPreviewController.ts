@@ -395,7 +395,10 @@ export function useIntersectionPreviewController(
       return null;
     }
 
-    return store.contextMap.value[intersectionId] || store.materializedContextMap.value[intersectionId] || null;
+    // 兼容入口在双层共存时默认返回正式点，避免门面读取到过期的预览层上下文。
+    return (
+      store.materializedContextMap.value[intersectionId] || store.contextMap.value[intersectionId] || null
+    );
   };
 
   /**

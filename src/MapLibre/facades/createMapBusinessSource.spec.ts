@@ -1,4 +1,4 @@
-import { ref, toRaw } from 'vue';
+import { nextTick, ref, toRaw } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import type { FeatureProperties } from '../composables/useMapDataUpdate';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
@@ -50,6 +50,38 @@ function createFeatureCollection(features: MapCommonFeature[]): MapCommonFeature
 }
 
 describe('createMapBusinessSource', () => {
+  it('异步业务源在 null 或 undefined 首屏时会自动兜底为空 FeatureCollection，并允许后续回填', async () => {
+    const data = ref<MapCommonFeatureCollection | null | undefined>(undefined);
+    const source = createMapBusinessSource({
+      sourceId: 'business-async',
+      data,
+      promoteId: 'id',
+    });
+
+    expect(toRaw(source.sourceProps.data as MapCommonFeatureCollection)).toEqual({
+      type: 'FeatureCollection',
+      features: [],
+    });
+    expect(data.value).toEqual({
+      type: 'FeatureCollection',
+      features: [],
+    });
+
+    data.value = null;
+    await nextTick();
+
+    expect(toRaw(source.sourceProps.data as MapCommonFeatureCollection)).toEqual({
+      type: 'FeatureCollection',
+      features: [],
+    });
+
+    data.value = createFeatureCollection([createPointFeature('feature-async')]);
+    await nextTick();
+
+    expect((source.sourceProps.data as MapCommonFeatureCollection).features).toHaveLength(1);
+    expect(source.resolveFeature('feature-async')?.properties?.id).toBe('feature-async');
+  });
+
   it('promoteId 路径初始化时只复制 features 数组，不深拷贝整条 feature', () => {
     const originalFeature = createPointFeature('feature-1', {
       properties: { status: 'normal' },

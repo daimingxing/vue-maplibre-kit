@@ -119,7 +119,7 @@ type MapBusinessSourceBaseOptions = {
   /** 数据源唯一标识。 */
   sourceId: string;
   /** 业务页面持有的原始 GeoJSON 数据引用。 */
-  data: Ref<MapCommonFeatureCollection>;
+  data: Ref<MapCommonFeatureCollection | null | undefined>;
   /** 透传给 `MglGeoJsonSource` 的扩展 source 配置。 */
   sourceOptions?: MapBusinessSourceOptions;
   /** 当前 source 的默认属性治理规则；layer 未声明时会继承这里的配置。 */
@@ -246,6 +246,34 @@ interface NormalizedBusinessSourceSnapshot {
   validationMessage: string;
   /** 当前要素索引表。 */
   featureIndexMap: Map<MapFeatureId, number>;
+}
+
+/**
+ * 创建标准的空业务集合。
+ * @returns 可直接参与后续标准化流程的空 FeatureCollection
+ */
+function createEmptyBusinessFeatureCollection(): MapCommonFeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: [],
+  };
+}
+
+/**
+ * 将业务层传入的原始集合收敛为合法 FeatureCollection。
+ * @param featureCollection 原始业务集合；允许为空，兼容异步首屏
+ * @returns 合法 FeatureCollection；为空时回退到空集合
+ */
+function resolveBusinessSourceCollection(
+  featureCollection: MapCommonFeatureCollection | null | undefined
+): MapCommonFeatureCollection {
+  if (!featureCollection) {
+    // 业务页常见的异步首屏会先给出 undefined / null，这里统一回退为空集合，
+    // 避免 createMapBusinessSource 在 setup 阶段立刻读取 features 时直接崩溃。
+    return createEmptyBusinessFeatureCollection();
+  }
+
+  return featureCollection;
 }
 
 /**
@@ -554,15 +582,16 @@ function buildBusinessSourceValidationMessage(
  * @returns 标准化结果
  */
 function normalizeBusinessSourceData(
-  featureCollection: MapCommonFeatureCollection,
+  featureCollection: MapCommonFeatureCollection | null | undefined,
   options: CreateMapBusinessSourceOptions
 ): NormalizedBusinessSourceSnapshot {
+  const normalizedFeatureCollection = resolveBusinessSourceCollection(featureCollection);
   const strategy = resolveBusinessSourceIdStrategy(options);
   if (strategy === 'invalid') {
     return {
       // 无效策略属于配置错误兜底路径，这里优先保证内部快照与外部输入隔离，
       // 避免业务层继续原地修改原始集合时反向污染 sourceProps.data。
-      featureCollection: clonePlainData(featureCollection),
+      featureCollection: clonePlainData(normalizedFeatureCollection),
       valid: false,
       validationMessage: buildBusinessSourceStrategyMessage(options.sourceId),
       featureIndexMap: new Map(),
@@ -570,7 +599,7 @@ function normalizeBusinessSourceData(
   }
 
   const syncTopLevelId = shouldSyncTopLevelFeatureId(options);
-  const sourceFeatures = (featureCollection.features || []) as MapCommonFeature[];
+  const sourceFeatures = (normalizedFeatureCollection.features || []) as MapCommonFeature[];
   const nextFeatures = sourceFeatures.slice();
   const duplicatedIdSet = new Set<string | number>();
   const usedIdSet = new Set<string | number>();
@@ -604,7 +633,7 @@ function normalizeBusinessSourceData(
   });
 
   const nextCollection: MapCommonFeatureCollection = {
-    ...featureCollection,
+    ...normalizedFeatureCollection,
     features: nextFeatures,
   };
 
@@ -712,7 +741,8 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
         return;
       }
 
-      snapshotRef.value = normalizeBusinessSourceData(nextCollection, options);
+      const normalizedSnapshot = normalizeBusinessSourceData(nextCollection, options);
+      snapshotRef.value = normalizedSnapshot;
       syncBusinessSourceProps(sourceProps, snapshotRef.value, sourceId, sourceOptions, options);
       syncValidationLog();
     },
@@ -874,7 +904,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    * @returns 是否写回成功
    */
   const replaceFeatures = (nextFeatures: MapCommonFeature[]): boolean => {
-    const nextCollection = replaceFeatureCollectionFeatures(data.value, nextFeatures);
+    const nextCollection = replaceFeatureCollectionFeatures(snapshotRef.value.featureCollection, nextFeatures);
     const normalizedSnapshot = normalizeBusinessSourceData(nextCollection, options);
 
     // replace 是业务层显式提交的最新结果，这里直接把标准化后的集合写回本地数据引用。

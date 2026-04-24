@@ -52,6 +52,10 @@ export interface UseIntersectionPreviewResult {
   getMaterializedData: () => MapCommonFeatureCollection | null;
   /** 按交点 ID 读取交点上下文。 */
   getById: (intersectionId: string | null) => IntersectionPreviewContext | null;
+  /** 按交点 ID 读取预览交点上下文。 */
+  getPreviewById: (intersectionId: string | null) => IntersectionPreviewContext | null;
+  /** 按交点 ID 读取正式交点上下文。 */
+  getMaterializedById: (intersectionId: string | null) => IntersectionPreviewContext | null;
   /** 读取当前选中的交点上下文。 */
   getSelected: () => IntersectionPreviewContext | null;
 }
@@ -135,6 +139,10 @@ export function useIntersectionPreview(
     getData: () => getIntersectionPreviewApi()?.getData() || null,
     getMaterializedData: () => getIntersectionPreviewApi()?.getMaterializedData() || null,
     getById: (intersectionId) => getIntersectionPreviewApi()?.getById(intersectionId) || null,
+    getPreviewById: (intersectionId) =>
+      getIntersectionPreviewApi()?.getPreviewById(intersectionId) || null,
+    getMaterializedById: (intersectionId) =>
+      getIntersectionPreviewApi()?.getMaterializedById(intersectionId) || null,
     getSelected: () => getIntersectionPreviewApi()?.getSelected() || null,
   };
 }

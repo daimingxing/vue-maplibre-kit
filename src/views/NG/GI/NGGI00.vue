@@ -150,6 +150,7 @@ import FeaturePropertyEditor from "./components/FeaturePropertyEditor.vue";
 import NGGI00DemoPanel from "./components/NGGI00DemoPanel.vue";
 import NGGI00PopupPanel from "./components/NGGI00PopupPanel.vue";
 import {
+  getDraftWarn,
   NGGI00_POPUP_TYPE,
   createLinePopupPayload,
   createPointPopupPayload,
@@ -2447,6 +2448,12 @@ const handleGenerateLineCorridor = (payload: NgLineActionPayload): void => {
 const handleCreateLineDraft = (payload: NgLineActionPayload): void => {
   if (lineActionForm.extendLengthMeters <= 0) {
     ElMessage.warning("请输入大于 0 的延长长度");
+    return;
+  }
+
+  const draftWarn = getDraftWarn(payload);
+  if (draftWarn) {
+    ElMessage.warning(draftWarn);
     return;
   }
 

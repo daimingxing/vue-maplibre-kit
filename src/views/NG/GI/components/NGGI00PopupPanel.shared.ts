@@ -50,8 +50,15 @@ export interface NgLinePopupPayload extends NgPopupBasePayload {
 export interface NgLineActionPayload {
   lineFeature: MapCommonLineFeature;
   featureRef: MapSourceFeatureRef | null;
+  /** 当前命中的线段索引；为 -1 表示尚未识别到具体线段。 */
   segmentIndex: number;
 }
+
+/** 线草稿受阻时的提示文案。 */
+export const DRAFT_HINT_TEXT = "当前未识别到具体线段，可生成线廊，但不能创建线草稿";
+
+/** 线草稿受阻时的警告文案。 */
+export const DRAFT_WARN_TEXT = "当前未识别到具体线段，无法创建线草稿";
 
 /** TerraDraw 弹窗载荷。 */
 export interface NgTerradrawPopupPayload extends NgPopupBasePayload {
@@ -280,9 +287,28 @@ export function getLineActionPayload(
   return {
     lineFeature: cloneLineFeature(linePayload.lineFeature),
     featureRef: cloneFeatureRef(linePayload.featureRef),
-    // 若当前弹窗还没识别到具体线段，就稳定回退到第 1 段，避免按钮动作直接失败。
-    segmentIndex: linePayload.selectedSegmentIndex >= 0 ? linePayload.selectedSegmentIndex : 0,
+    // 这里保留“未识别到线段”的原始状态，交由上层 UI 和动作层显式拦截，
+    // 避免静默回退到第 1 段后误操作错误线段。
+    segmentIndex: linePayload.selectedSegmentIndex,
   };
+}
+
+/**
+ * 判断当前动作是否已经命中具体线段。
+ * @param payload 线动作载荷
+ * @returns 命中具体线段时返回 true
+ */
+export function hasLineSegment(payload: NgLineActionPayload | null | undefined): boolean {
+  return (payload?.segmentIndex ?? -1) >= 0;
+}
+
+/**
+ * 解析创建线草稿前需要提示的警告文案。
+ * @param payload 线动作载荷
+ * @returns 需要拦截时返回警告文案，否则返回 null
+ */
+export function getDraftWarn(payload: NgLineActionPayload | null | undefined): string | null {
+  return hasLineSegment(payload) ? null : DRAFT_WARN_TEXT;
 }
 
 /**

@@ -83,6 +83,29 @@ function createPluginOptions(): IntersectionPreviewOptions {
 }
 
 describe('useIntersectionPreviewController', () => {
+  it('同一交点同时存在预览点与正式点时，getById 应默认返回正式点上下文', () => {
+    const controller = useIntersectionPreviewController({
+      getOptions: () => createPluginOptions(),
+      getCandidates: () => createPluginOptions().getCandidates?.() || [],
+      getSelectedFeatureContext: () => null,
+    });
+
+    controller.refresh();
+
+    const [previewFeature] = controller.getData().features;
+    const intersectionId = String(previewFeature?.id || '');
+    expect(intersectionId).not.toBe('');
+    expect(controller.materialize(intersectionId)).toBe(true);
+
+    const intersection = controller.getById(intersectionId);
+    const preview = controller.getPreviewById(intersectionId);
+    const materialized = controller.getMaterializedById(intersectionId);
+
+    expect(preview?.feature?.properties?.generatedKind).toBe('intersection-preview');
+    expect(materialized?.feature?.properties?.generatedKind).toBe('intersection-materialized');
+    expect(intersection?.feature?.properties?.generatedKind).toBe('intersection-materialized');
+  });
+
   it('应支持正式交点默认属性、属性更新、删除，并在 refresh 后保留业务补丁', () => {
     const controller = useIntersectionPreviewController({
       getOptions: () => createPluginOptions(),

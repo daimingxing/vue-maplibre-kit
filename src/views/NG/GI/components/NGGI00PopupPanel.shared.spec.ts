@@ -5,10 +5,14 @@ vi.mock("vue-maplibre-kit/plugins/line-draft-preview", () => ({
   LINE_DRAFT_PREVIEW_SOURCE_ID: "lineDraftSource",
 }));
 import {
+  DRAFT_HINT_TEXT,
+  DRAFT_WARN_TEXT,
   NGGI00_POPUP_TYPE,
   createLinePopupPayload,
   createPointPopupPayload,
   createTerradrawPopupPayload,
+  getDraftWarn,
+  hasLineSegment,
   getLineActionPayload,
   getLinePopupPayload,
   getPointPopupPayload,
@@ -113,8 +117,37 @@ describe("NGGI00PopupPanel.shared", () => {
       featureId: "draft_1",
       layerId: LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
     });
-    expect(actionPayload?.segmentIndex).toBe(0);
+    expect(actionPayload?.segmentIndex).toBe(-1);
     expect(actionPayload?.featureRef?.sourceId).toBe(LINE_DRAFT_PREVIEW_SOURCE_ID);
+  });
+
+  it("未命中具体线段时，会给出统一的线草稿阻断判定与提示文案", () => {
+    const actionPayload = getLineActionPayload({
+      type: NGGI00_POPUP_TYPE.line,
+      featureId: "line_1",
+      geometryType: "LineString",
+      featureProps: { id: "line_1" },
+      featureRef: null,
+      lineFeature: {
+        id: "line_1",
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [0, 0],
+            [0, 1],
+          ],
+        },
+        properties: { id: "line_1" },
+      } as any,
+      lineLengthMeters: 100,
+      selectedSegmentIndex: -1,
+      selectedSegmentLengthMeters: 0,
+    });
+
+    expect(hasLineSegment(actionPayload)).toBe(false);
+    expect(DRAFT_HINT_TEXT).toContain("不能创建线草稿");
+    expect(getDraftWarn(actionPayload)).toBe(DRAFT_WARN_TEXT);
   });
 
   it("会创建 TerraDraw 载荷并支持统一提取不同类型的 payload", () => {

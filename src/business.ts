@@ -39,6 +39,9 @@ export { default as MapBusinessSourceLayers } from './MapLibre/facades/MapBusine
 /** 高层业务聚合门面。业务页面优先从这里读取选择、编辑、草稿和动效能力。 */
 export { useBusinessMap } from './MapLibre/facades/useBusinessMap';
 
+/** 线草稿门面。业务页面直接读取线草稿状态和清空动作时使用。 */
+export { useLineDraftPreview } from './MapLibre/facades/useLineDraftPreview';
+
 /** 交点门面。业务页面直接读取交点状态和交点动作时使用。 */
 export { useIntersectionPreview } from './MapLibre/facades/useIntersectionPreview';
 
@@ -201,6 +204,9 @@ export type { MapFeaturePropertyEditorTarget } from './MapLibre/facades/useMapFe
 
 /** 高层业务聚合门面返回类型。 */
 export type { UseBusinessMapResult } from './MapLibre/facades/useBusinessMap';
+
+/** 线草稿门面返回类型。 */
+export type { UseLineDraftPreviewResult } from './MapLibre/facades/useLineDraftPreview';
 
 /** 交点门面返回类型。 */
 export type { UseIntersectionPreviewResult } from './MapLibre/facades/useIntersectionPreview';

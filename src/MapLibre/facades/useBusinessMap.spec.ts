@@ -1,4 +1,6 @@
 import { ref } from 'vue';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { FeatureProperties, MapFeatureId } from '../composables/useMapDataUpdate';
 import {
@@ -200,6 +202,8 @@ function createIntersectionPluginHarness(): {
     getData: () => createFeatureCollection([]),
     getMaterializedData: () => createFeatureCollection([]),
     getById: () => null,
+    getPreviewById: () => null,
+    getMaterializedById: () => null,
     getSelected: () => null,
   } as IntersectionPreviewPluginApi;
 
@@ -384,6 +388,13 @@ function createMapExpose(options: {
 }
 
 describe('useBusinessMap', () => {
+  it('business 入口源码会直接导出线草稿门面', () => {
+    const businessEntrySource = readFileSync(resolve(__dirname, '../../business.ts'), 'utf-8');
+
+    expect(businessEntrySource).toContain("export { useLineDraftPreview }");
+    expect(businessEntrySource).toContain("export type { UseLineDraftPreviewResult }");
+  });
+
   it('会按分组暴露业务 source、查询与动作能力', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { source, sourceRegistry } = createBusinessSourceHarness();
