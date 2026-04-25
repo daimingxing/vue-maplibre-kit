@@ -67,6 +67,23 @@ describe('config', () => {
     });
   });
 
+  it('setMapGlobalConfig 应冻结嵌套配置快照', () => {
+    const config = setMapGlobalConfig({
+      plugins: {
+        dxfExport: {
+          control: {
+            label: '导出CAD',
+          },
+        },
+      },
+    });
+
+    expect(Object.isFrozen(config)).toBe(true);
+    expect(Object.isFrozen(config.plugins)).toBe(true);
+    expect(Object.isFrozen(config.plugins?.dxfExport)).toBe(true);
+    expect(Object.isFrozen(config.plugins?.dxfExport?.control)).toBe(true);
+  });
+
   it('resetMapGlobalConfig 会清空到空对象', () => {
     setMapGlobalConfig({
       mapControls: {

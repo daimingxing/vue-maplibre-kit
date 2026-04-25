@@ -161,12 +161,35 @@ const EMPTY_MAP_GLOBAL_CONFIG = Object.freeze({}) as Readonly<MapKitGlobalConfig
 let currentMapGlobalConfig: Readonly<MapKitGlobalConfig> = EMPTY_MAP_GLOBAL_CONFIG;
 
 /**
- * 深拷贝并冻结全局配置顶层快照。
+ * 深度冻结对象快照。
+ * @param value 待冻结对象
+ * @param frozenSet 已处理对象集合
+ * @returns 冻结后的对象
+ */
+function deepFreeze<T>(value: T, frozenSet = new WeakSet<object>()): Readonly<T> {
+  if (value === null || typeof value !== 'object') {
+    return value as Readonly<T>;
+  }
+
+  if (frozenSet.has(value)) {
+    return value as Readonly<T>;
+  }
+
+  frozenSet.add(value);
+  Reflect.ownKeys(value).forEach((propertyKey) => {
+    deepFreeze((value as Record<PropertyKey, unknown>)[propertyKey], frozenSet);
+  });
+
+  return Object.freeze(value) as Readonly<T>;
+}
+
+/**
+ * 深拷贝并冻结全局配置快照。
  * @param config 原始全局配置
  * @returns 可安全复用的快照对象
  */
 function freezeMapGlobalConfig(config: MapKitGlobalConfig): Readonly<MapKitGlobalConfig> {
-  return Object.freeze(cloneDeep(config)) as Readonly<MapKitGlobalConfig>;
+  return deepFreeze(cloneDeep(config));
 }
 
 /**

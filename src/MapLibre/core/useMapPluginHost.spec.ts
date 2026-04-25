@@ -187,4 +187,44 @@ describe('useMapPluginHost', () => {
 
     scope.stop();
   });
+
+  it('插件移除后已解析的 API 引用应失效', async () => {
+    const downloadDxf = vi.fn(() => 'ok');
+    const descriptorsRef = ref<AnyMapPluginDescriptor[]>([
+      createDescriptor({
+        id: 'api-plugin',
+        plugin: {
+          type: 'api-plugin',
+          createInstance: () => ({
+            getApi: () => ({
+              downloadDxf,
+              status: 'ready',
+            }),
+          }),
+        },
+      }),
+    ]);
+    const { host, scope } = createHostHarness(() => descriptorsRef.value);
+    const pluginApi = host.hostExpose.getApi<{
+      downloadDxf: () => string;
+      status?: string;
+    }>('api-plugin');
+
+    expect(pluginApi?.status).toBe('ready');
+    expect(pluginApi?.downloadDxf()).toBe('ok');
+
+    const detachedDownload = pluginApi?.downloadDxf;
+    descriptorsRef.value = [];
+    await nextTick();
+
+    expect(pluginApi?.status).toBeUndefined();
+    expect(() => pluginApi?.downloadDxf()).toThrow(
+      "[MapPluginHost] 插件 'api-plugin' 已卸载，无法继续调用 API 'downloadDxf'"
+    );
+    expect(() => detachedDownload?.()).toThrow(
+      "[MapPluginHost] 插件 'api-plugin' 已卸载，无法继续调用 API 'downloadDxf'"
+    );
+
+    scope.stop();
+  });
 });

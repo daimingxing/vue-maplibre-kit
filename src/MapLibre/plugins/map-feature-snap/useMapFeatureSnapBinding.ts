@@ -244,15 +244,21 @@ function matchesRuleFilter(
     return true;
   }
 
-  return rule.filter({
-    rule,
-    feature,
-    layerId,
-    sourceId: getFeatureSourceId(feature),
-    sourceLayer: feature.sourceLayer || null,
-    properties: feature.properties || null,
-    map,
-  });
+  try {
+    return rule.filter({
+      rule,
+      feature,
+      layerId,
+      sourceId: getFeatureSourceId(feature),
+      sourceLayer: feature.sourceLayer || null,
+      properties: feature.properties || null,
+      map,
+    });
+  } catch (error) {
+    // 业务自定义过滤器属于插件外部输入，抛错时只跳过当前候选，避免中断鼠标交互链路。
+    console.error(`[MapFeatureSnap] 吸附规则 '${rule.id}' filter 执行失败，已跳过当前候选`, error);
+    return false;
+  }
 }
 
 /**

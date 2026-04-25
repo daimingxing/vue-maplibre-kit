@@ -96,4 +96,69 @@ describe('createMapFeatureSnapBinding', () => {
 
     binding.destroy();
   });
+
+  it('业务过滤器抛错时应跳过当前候选而不中断吸附流程', () => {
+    const error = new Error('filter failed');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const map = {
+      ...createMapStub(),
+      getLayer: vi.fn(() => ({ id: 'business-line-layer' })),
+      queryRenderedFeatures: vi.fn(() => [
+        {
+          id: 'line-a',
+          source: 'business-source',
+          properties: {
+            id: 'line-a',
+          },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [0, 0],
+              [10, 0],
+            ],
+          },
+          layer: {
+            id: 'business-line-layer',
+          },
+        },
+      ]),
+    };
+    const binding = createMapFeatureSnapBinding({
+      map: map as any,
+      getOptions: () => ({
+        enabled: true,
+        ordinaryLayers: {
+          rules: [
+            {
+              id: 'business-rule',
+              layerIds: ['business-line-layer'],
+              filter: () => {
+                throw error;
+              },
+            },
+          ],
+        },
+      }),
+    });
+
+    const result = binding.resolvePointer({
+      point: {
+        x: 5,
+        y: 0,
+      },
+      lngLat: {
+        lng: 5,
+        lat: 0,
+      },
+    });
+
+    expect(result.matched).toBe(false);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[MapFeatureSnap] 吸附规则 'business-rule' filter 执行失败，已跳过当前候选",
+      error
+    );
+
+    binding.destroy();
+    errorSpy.mockRestore();
+  });
 });

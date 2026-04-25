@@ -48,8 +48,23 @@ interface MapPluginRecord {
   descriptorRef: { value: AnyMapPluginDescriptor };
   /** 当前插件实例。 */
   instance: MapPluginInstance;
+  /** 当前插件 API 代理状态。 */
+  apiProxyState?: MapPluginApiProxyState;
+  /** 当前插件 API 代理对象。 */
+  apiProxy?: unknown;
   /** 停止监听当前插件状态。 */
   stopStateWatch?: () => void;
+}
+
+interface MapPluginApiProxyState {
+  /** 当前插件是否仍处于有效生命周期内。 */
+  active: boolean;
+  /** 当前插件 ID，用于生成错误信息。 */
+  pluginId: string;
+  /** 当前插件原始 API，插件销毁后会置空以释放真实实例引用。 */
+  rawApi: Record<PropertyKey, unknown> | null;
+  /** 已知方法名集合，插件销毁后仍用它返回可读错误。 */
+  methodKeySet: Set<PropertyKey>;
 }
 
 interface MapPluginDescriptorDependency {
@@ -61,6 +76,109 @@ interface MapPluginDescriptorDependency {
   plugin: AnyMapPluginDescriptor['plugin'];
   /** 插件配置对象引用。 */
   options: AnyMapPluginDescriptor['options'];
+}
+
+/**
+ * 判断值是否可以被 API 代理包装。
+ * @param value 待判断值
+ * @returns 是否是可代理对象
+ */
+function isProxyableApi(value: unknown): value is Record<PropertyKey, unknown> {
+  return (typeof value === 'object' && value !== null) || typeof value === 'function';
+}
+
+/**
+ * 提取插件 API 当前暴露的方法名。
+ * 这里只记录字符串与 symbol 自有属性，避免遍历原型链引入外部对象实现细节。
+ *
+ * @param rawApi 插件原始 API
+ * @returns 方法名集合
+ */
+function collectApiMethodKeys(rawApi: Record<PropertyKey, unknown>): Set<PropertyKey> {
+  const methodKeySet = new Set<PropertyKey>();
+
+  Reflect.ownKeys(rawApi).forEach((propertyKey) => {
+    if (typeof rawApi[propertyKey] === 'function') {
+      methodKeySet.add(propertyKey);
+    }
+  });
+
+  return methodKeySet;
+}
+
+/**
+ * 创建插件 API 已失效错误。
+ * @param pluginId 插件 ID
+ * @param propertyKey API 方法名
+ * @returns 可读错误对象
+ */
+function createInactiveApiError(pluginId: string, propertyKey: PropertyKey): Error {
+  return new Error(
+    `[MapPluginHost] 插件 '${pluginId}' 已卸载，无法继续调用 API '${String(propertyKey)}'`
+  );
+}
+
+/**
+ * 创建插件 API 代理。
+ * 代理对象会在插件销毁后断开对原始 API 的引用，并让旧方法调用返回明确错误。
+ *
+ * @param state API 代理状态
+ * @returns 插件 API 代理对象
+ */
+function createPluginApiProxy(state: MapPluginApiProxyState): Record<PropertyKey, unknown> {
+  return new Proxy(
+    {},
+    {
+      get(_target, propertyKey) {
+        const rawApi = state.rawApi;
+
+        if (!state.active || !rawApi) {
+          if (state.methodKeySet.has(propertyKey)) {
+            return () => {
+              throw createInactiveApiError(state.pluginId, propertyKey);
+            };
+          }
+
+          return undefined;
+        }
+
+        const propertyValue = rawApi[propertyKey];
+        if (typeof propertyValue !== 'function') {
+          return propertyValue;
+        }
+
+        return (...args: unknown[]) => {
+          const activeRawApi = state.rawApi;
+          if (!state.active || !activeRawApi) {
+            throw createInactiveApiError(state.pluginId, propertyKey);
+          }
+
+          const activePropertyValue = activeRawApi[propertyKey];
+          if (typeof activePropertyValue !== 'function') {
+            return activePropertyValue;
+          }
+
+          return activePropertyValue.apply(activeRawApi, args);
+        };
+      },
+      has(_target, propertyKey) {
+        return Boolean(state.rawApi && propertyKey in state.rawApi);
+      },
+      ownKeys() {
+        return state.rawApi ? Reflect.ownKeys(state.rawApi) : [];
+      },
+      getOwnPropertyDescriptor(_target, propertyKey) {
+        if (!state.rawApi || !(propertyKey in state.rawApi)) {
+          return undefined;
+        }
+
+        return {
+          enumerable: true,
+          configurable: true,
+        };
+      },
+    }
+  );
 }
 
 /**
@@ -424,6 +542,10 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
   function destroyPluginRecord(pluginRecord: MapPluginRecord): void {
     pluginRecord.stopStateWatch?.();
     pluginRecord.instance.destroy?.();
+    if (pluginRecord.apiProxyState) {
+      pluginRecord.apiProxyState.active = false;
+      pluginRecord.apiProxyState.rawApi = null;
+    }
   }
 
   /**
@@ -531,6 +653,38 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
       );
       return fallback;
     }
+  }
+
+  /**
+   * 读取插件 API 的稳定代理。
+   * 业务层可能会保存 API 引用，因此宿主返回代理对象，
+   * 在插件卸载时统一切断旧引用对真实插件实例的持有。
+   *
+   * @param pluginRecord 当前插件记录
+   * @param rawApi 插件原始 API
+   * @returns 可安全跨生命周期传递的 API 代理
+   */
+  function resolvePluginApiProxy<TApi>(pluginRecord: MapPluginRecord, rawApi: TApi): TApi {
+    if (!isProxyableApi(rawApi)) {
+      return rawApi;
+    }
+
+    if (!pluginRecord.apiProxyState) {
+      pluginRecord.apiProxyState = {
+        active: true,
+        pluginId: pluginRecord.descriptorRef.value.id,
+        rawApi,
+        methodKeySet: collectApiMethodKeys(rawApi),
+      };
+      pluginRecord.apiProxy = createPluginApiProxy(pluginRecord.apiProxyState);
+      return pluginRecord.apiProxy as TApi;
+    }
+
+    pluginRecord.apiProxyState.active = true;
+    pluginRecord.apiProxyState.pluginId = pluginRecord.descriptorRef.value.id;
+    pluginRecord.apiProxyState.rawApi = rawApi;
+    pluginRecord.apiProxyState.methodKeySet = collectApiMethodKeys(rawApi);
+    return pluginRecord.apiProxy as TApi;
   }
 
   /**
@@ -758,7 +912,8 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     }
 
     return runPluginMethod(pluginRecord, 'getApi', null as TApi | null, () => {
-      return (pluginRecord.instance.getApi?.() as TApi | null | undefined) || null;
+      const rawApi = (pluginRecord.instance.getApi?.() as TApi | null | undefined) || null;
+      return rawApi ? resolvePluginApiProxy(pluginRecord, rawApi) : null;
     });
   }
 
