@@ -476,7 +476,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    * @param descriptor 当前插件描述对象
    * @returns 新建的插件记录
    */
-  function createPluginRecord(descriptor: AnyMapPluginDescriptor): MapPluginRecord {
+  function createPluginRecord(descriptor: AnyMapPluginDescriptor): MapPluginRecord | null {
     const descriptorRef = shallowRef<AnyMapPluginDescriptor>(descriptor);
     try {
       const instance = descriptor.plugin.createInstance(createPluginContext(descriptor, descriptorRef));
@@ -501,8 +501,35 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
 
       return pluginRecord;
     } catch (error) {
-      console.error(`[MapPluginHost] 插件 '${descriptor.id}' 初始化失败`, error);
-      throw error;
+      console.error(`[MapPluginHost] 插件 '${descriptor.id}' 初始化失败，已跳过`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 在插件方法外层建立错误边界。
+   * 单个插件运行期异常只降级当前插件能力，避免中断宿主聚合链路。
+   *
+   * @param pluginRecord 当前插件记录
+   * @param methodName 当前执行的插件方法名
+   * @param fallback 插件方法失败后的安全返回值
+   * @param runner 实际插件方法调用
+   * @returns 插件方法返回值或安全返回值
+   */
+  function runPluginMethod<T>(
+    pluginRecord: MapPluginRecord,
+    methodName: string,
+    fallback: T,
+    runner: () => T
+  ): T {
+    try {
+      return runner();
+    } catch (error) {
+      console.error(
+        `[MapPluginHost] 插件 '${pluginRecord.descriptorRef.value.id}' ${methodName} 运行失败`,
+        error
+      );
+      return fallback;
     }
   }
 
@@ -550,6 +577,10 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
         }
 
         const nextPluginRecord = createPluginRecord(descriptor);
+        if (!nextPluginRecord) {
+          return;
+        }
+
         createdPluginRecordList.push(nextPluginRecord);
         nextPluginRecordMap.set(descriptor.id, nextPluginRecord);
       });
@@ -597,7 +628,11 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     const nextRenderItems: MapPluginRenderItem[] = [];
 
     pluginRecordMapRef.value.forEach((pluginRecord) => {
-      nextRenderItems.push(...(pluginRecord.instance.getRenderItems?.() || []));
+      nextRenderItems.push(
+        ...runPluginMethod(pluginRecord, 'getRenderItems', [], () => {
+          return pluginRecord.instance.getRenderItems?.() || [];
+        })
+      );
     });
 
     return nextRenderItems;
@@ -612,7 +647,9 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     pluginRecordMapRef.value.forEach((pluginRecord) => {
       nextInteractive = mergeMapInteractiveOptions(
         nextInteractive,
-        pluginRecord.instance.getMapInteractivePatch?.() || null
+        runPluginMethod(pluginRecord, 'getMapInteractivePatch', null, () => {
+          return pluginRecord.instance.getMapInteractivePatch?.() || null;
+        })
       );
     });
 
@@ -628,7 +665,9 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     pluginRecordMapRef.value.forEach((pluginRecord) => {
       nextInteractive = mergePluginLayerInteractiveOptions(
         nextInteractive,
-        pluginRecord.instance.getPluginLayerInteractivePatch?.() || null
+        runPluginMethod(pluginRecord, 'getPluginLayerInteractivePatch', null, () => {
+          return pluginRecord.instance.getPluginLayerInteractivePatch?.() || null;
+        })
       );
     });
 
@@ -684,7 +723,12 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    */
   function resolveSelectedFeatureSnapshot(): MapCommonFeature | null {
     for (const pluginRecord of pluginRecordMapRef.value.values()) {
-      const featureSnapshot = pluginRecord.instance.resolveSelectedFeatureSnapshot?.() || null;
+      const featureSnapshot = runPluginMethod(
+        pluginRecord,
+        'resolveSelectedFeatureSnapshot',
+        null as MapCommonFeature | null,
+        () => pluginRecord.instance.resolveSelectedFeatureSnapshot?.() || null
+      );
       if (featureSnapshot) {
         return featureSnapshot;
       }
@@ -709,7 +753,13 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    */
   function getApi<TApi = unknown>(pluginId: string): TApi | null {
     const pluginRecord = pluginRecordMapRef.value.get(pluginId);
-    return (pluginRecord?.instance.getApi?.() as TApi | null | undefined) || null;
+    if (!pluginRecord) {
+      return null;
+    }
+
+    return runPluginMethod(pluginRecord, 'getApi', null as TApi | null, () => {
+      return (pluginRecord.instance.getApi?.() as TApi | null | undefined) || null;
+    });
   }
 
   /**

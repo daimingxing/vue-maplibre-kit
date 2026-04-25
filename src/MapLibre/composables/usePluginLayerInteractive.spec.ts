@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePluginLayerInteractive } from './usePluginLayerInteractive';
 
 interface MockMapHarness {
@@ -86,6 +86,16 @@ function createMockMapHarness(): MockMapHarness {
 }
 
 describe('usePluginLayerInteractive', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
   it('mousemove 命中插件图层时应按 hitPriority 选择最高优先级目标，并写入 handled 标记', () => {
     const onHoverEnterLow = vi.fn();
     const onHoverEnterHigh = vi.fn();

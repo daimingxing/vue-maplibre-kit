@@ -228,7 +228,7 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     });
   }
 
-  watch(
+  const stopBindingWatch = watch(
     () => ({
       enabled: enabled.value,
       map: getMap(),
@@ -240,8 +240,17 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     { immediate: true, deep: true }
   );
 
-  onBeforeUnmount(() => {
+  /**
+   * 销毁吸附控制器。
+   * 插件被动态移除时不会触发组件卸载钩子，因此需要显式停止当前监听。
+   */
+  function destroy(): void {
+    stopBindingWatch();
     destroyBinding();
+  }
+
+  onBeforeUnmount(() => {
+    destroy();
   });
 
   /**
@@ -284,6 +293,7 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     previewPointStyle,
     previewLineStyle,
     binding: bindingRef,
+    destroy,
     resolveTerradrawSnapOptions,
     resolveMapEvent: (event: any) =>
       bindingRef.value?.resolveMapEvent(event) || createEmptyMapFeatureSnapResult(),

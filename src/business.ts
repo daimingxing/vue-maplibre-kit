@@ -187,11 +187,17 @@ export type { MapLibreRawHandles } from './MapLibre/core/mapLibre-init.types';
 /** 地图初始化配置类型。业务层声明 mapOptions 时优先使用。 */
 export type { MapOptions } from 'maplibre-gl';
 
+/** 业务要素 ID 类型。业务层维护表格行、表单和图层要素关联时使用。 */
+export type { MapFeatureId } from './MapLibre/composables/useMapDataUpdate';
+
 /** feature-state 目标类型。 */
 export type { MapFeatureStateTarget } from './MapLibre/core/mapLibre-init.types';
 
 /** 属性治理规则类型。 */
 export type { MapFeaturePropertyPolicy } from './MapLibre/composables/useMapDataUpdate';
+
+/** 属性面板单项类型。业务层自定义属性编辑器列表时使用。 */
+export type { MapFeaturePropertyPanelItem } from './MapLibre/shared/map-feature-data';
 
 /** 属性面板状态类型。 */
 export type { MapFeaturePropertyPanelState } from './MapLibre/shared/map-feature-data';
@@ -261,3 +267,15 @@ export type { IntersectionPreviewState } from './MapLibre/plugins/intersection-p
 
 /** 通用 Popup 状态门面返回类型。 */
 export type { UseMapPopupStateResult } from './MapLibre/facades/useMapPopupState';
+
+/** 业务 source 类型。业务层需要复用 source 结构或编写辅助函数时使用。 */
+export type { MapBusinessSource } from './MapLibre/facades/createMapBusinessSource';
+
+/** 业务 source 注册表类型。业务层封装页面级 source 集合时使用。 */
+export type { MapBusinessSourceRegistry } from './MapLibre/facades/createMapBusinessSource';
+
+/** 业务图层描述类型。业务层抽取图层声明模板时使用。 */
+export type { MapBusinessLayerDescriptor } from './MapLibre/facades/mapBusinessLayer';
+
+/** 标准来源引用类型。业务层在弹窗、表格和属性编辑器之间传递要素目标时使用。 */
+export type { MapSourceFeatureRef } from './MapLibre/shared/map-common-tools';

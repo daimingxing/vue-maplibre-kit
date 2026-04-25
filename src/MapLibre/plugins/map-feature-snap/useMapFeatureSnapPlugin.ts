@@ -52,7 +52,7 @@ export const mapFeatureSnapPlugin = defineMapPlugin({
         },
       },
       destroy: () => {
-        pluginController.binding.value?.destroy?.();
+        pluginController.destroy();
       },
     };
   },

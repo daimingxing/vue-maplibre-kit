@@ -1,9 +1,16 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMapGlobalConfig, setMapGlobalConfig } from '../../../config';
 import { useMapFeatureSnapController } from './useMapFeatureSnapController';
 
 describe('useMapFeatureSnapController', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
   afterEach(() => {
+    warnSpy.mockRestore();
     resetMapGlobalConfig();
   });
 
@@ -67,5 +74,27 @@ describe('useMapFeatureSnapController', () => {
       useMapTargets: false,
     });
   });
-});
 
+  it('destroy 后应停止配置监听并销毁当前吸附绑定', async () => {
+    const map = {
+      on: vi.fn(),
+      off: vi.fn(),
+    };
+    let enabled = true;
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        enabled,
+      }),
+      getMap: () => map as any,
+    });
+
+    expect(map.on).toHaveBeenCalledTimes(4);
+
+    controller.destroy();
+    enabled = false;
+    await Promise.resolve();
+
+    expect(map.off).toHaveBeenCalledTimes(4);
+    expect(controller.binding.value).toBeNull();
+  });
+});

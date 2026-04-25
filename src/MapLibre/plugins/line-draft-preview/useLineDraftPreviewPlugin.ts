@@ -139,6 +139,9 @@ export const lineDraftPreviewPlugin = defineMapPlugin<
       },
       getApi: () => pluginApi.value,
       state: pluginState,
+      destroy: () => {
+        pluginController.destroy();
+      },
     };
   },
 });

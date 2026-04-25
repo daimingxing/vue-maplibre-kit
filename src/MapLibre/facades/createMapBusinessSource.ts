@@ -745,6 +745,13 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
       snapshotRef.value = normalizedSnapshot;
       syncBusinessSourceProps(sourceProps, snapshotRef.value, sourceId, sourceOptions, options);
       syncValidationLog();
+
+      if (nextCollection == null) {
+        // 异步首屏允许业务侧先给出 null / undefined；
+        // 这里把同一份空集合同步回 ref，避免下游继续读到空值。
+        isInternalSyncing = true;
+        data.value = normalizedSnapshot.featureCollection;
+      }
     },
     { immediate: true }
   );

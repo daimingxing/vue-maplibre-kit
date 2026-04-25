@@ -94,4 +94,14 @@ describe('lineDraftPreviewPlugin', () => {
     expect(onDoubleClick).toHaveBeenCalledTimes(1);
     expect(onContextMenu).toHaveBeenCalledTimes(1);
   });
+
+  it('应在插件实例上暴露 destroy 清理入口', () => {
+    const optionsRef = ref({
+      enabled: true,
+    } as any);
+    const pluginInstance = lineDraftPreviewPlugin.createInstance(createPluginContext(optionsRef));
+
+    expect(typeof pluginInstance.destroy).toBe('function');
+    expect(() => pluginInstance.destroy?.()).not.toThrow();
+  });
 });

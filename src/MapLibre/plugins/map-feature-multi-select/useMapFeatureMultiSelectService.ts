@@ -59,6 +59,7 @@ export function useMapFeatureMultiSelectService(
   toggle: () => void;
   clear: () => void;
   isActive: () => boolean;
+  destroy: () => void;
 } {
   const { getOptions } = options;
   const bindingRef = shallowRef<MapSelectionBindingController | null>(null);
@@ -168,7 +169,7 @@ export function useMapFeatureMultiSelectService(
     };
   };
 
-  watch(
+  const stopOptionsWatch = watch(
     () => ({
       enabled: resolvedOptions.value.enabled,
       deactivateBehavior: resolvedOptions.value.deactivateBehavior,
@@ -185,8 +186,20 @@ export function useMapFeatureMultiSelectService(
     { immediate: true }
   );
 
-  onBeforeUnmount(() => {
+  /**
+   * 销毁多选服务。
+   * 插件动态移除时需要停止配置监听，并释放交互核心绑定。
+   */
+  const destroy = (): void => {
+    stopOptionsWatch();
     bindingRef.value = null;
+    state.value = {
+      ...defaultSelectionState,
+    };
+  };
+
+  onBeforeUnmount(() => {
+    destroy();
   });
 
   const service: MapSelectionService = {
@@ -210,5 +223,6 @@ export function useMapFeatureMultiSelectService(
     toggle,
     clear,
     isActive,
+    destroy,
   };
 }

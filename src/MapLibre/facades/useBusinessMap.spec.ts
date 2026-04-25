@@ -23,6 +23,23 @@ import {
   createMapBusinessSourceRegistry,
   type MapBusinessSource,
 } from './createMapBusinessSource';
+import type {
+  MapBusinessLayerDescriptor as BusinessMapLayerDescriptor,
+  MapBusinessSource as BusinessMapSource,
+  MapBusinessSourceRegistry as BusinessMapSourceRegistry,
+  MapFeatureId as BusinessMapFeatureId,
+  MapFeaturePropertyPanelItem as BusinessMapFeaturePropertyPanelItem,
+  MapSourceFeatureRef as BusinessMapSourceFeatureRef,
+} from '../../business';
+
+type BusinessTypeExportCheck = {
+  layer: BusinessMapLayerDescriptor;
+  source: BusinessMapSource;
+  registry: BusinessMapSourceRegistry;
+  featureId: BusinessMapFeatureId;
+  featureRef: BusinessMapSourceFeatureRef;
+  panelItem: BusinessMapFeaturePropertyPanelItem;
+};
 
 /** 线草稿插件类型常量。 */
 const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
@@ -395,6 +412,19 @@ describe('useBusinessMap', () => {
     expect(businessEntrySource).toContain("export type { UseLineDraftPreviewResult }");
   });
 
+  it('business 入口应直接导出业务层高频类型', () => {
+    const businessEntrySource = readFileSync(resolve(__dirname, '../../business.ts'), 'utf-8');
+    const typeCheck = null as unknown as BusinessTypeExportCheck | null;
+
+    expect(typeCheck).toBeNull();
+    expect(businessEntrySource).toContain("export type { MapBusinessSource }");
+    expect(businessEntrySource).toContain("export type { MapBusinessSourceRegistry }");
+    expect(businessEntrySource).toContain("export type { MapBusinessLayerDescriptor }");
+    expect(businessEntrySource).toContain("export type { MapFeaturePropertyPanelItem }");
+    expect(businessEntrySource).toContain("export type { MapSourceFeatureRef }");
+    expect(businessEntrySource).toContain("export type { MapFeatureId }");
+  });
+
   it('会按分组暴露业务 source、查询与动作能力', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { source, sourceRegistry } = createBusinessSourceHarness();
@@ -417,6 +447,35 @@ describe('useBusinessMap', () => {
     expect(feature?.properties?.name).toBe('原始名称');
     expect(saveResult.success).toBe(true);
     expect(source.resolveFeature('feature-1')?.properties?.name).toBe('已更新');
+    warnSpy.mockRestore();
+  });
+
+  it('地图实例未就绪时业务聚合门面应返回安全降级结果', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { sourceRegistry } = createBusinessSourceHarness();
+    const businessMap = useBusinessMap({
+      mapRef: ref(null),
+      sourceRegistry,
+    });
+
+    businessMap.selection.activate();
+
+    expect(businessMap.selection.isActive.value).toBe(false);
+    expect(businessMap.draft.clear()).toBe(false);
+    expect(businessMap.intersection.visible.value).toBe(false);
+    expect(businessMap.intersection.materialize()).toBe(false);
+    const flashStartResult = businessMap.effect.startFlash({
+      source: 'business-source',
+      id: 'feature-1',
+    });
+    expect(flashStartResult).toBe(true);
+    expect(
+      businessMap.effect.isFeatureFlashing({
+        source: 'business-source',
+        id: 'feature-1',
+      })
+    ).toBe(true);
+    businessMap.effect.clearFlash();
     warnSpy.mockRestore();
   });
 

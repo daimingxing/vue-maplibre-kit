@@ -212,7 +212,7 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
   const data = computed(() => binding.featureCollection.value);
   const selectedFeatureId = ref<string | number | null>(null);
 
-  watch(
+  const stopStateWatch = watch(
     () => ({
       hasFeatures: binding.hasFeatures.value,
       featureCount: binding.featureCount.value,
@@ -222,7 +222,7 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
     },
     { immediate: true }
   );
-  watch(
+  const stopFeatureWatch = watch(
     () => binding.featureCollection.value.features,
     () => {
       if (
@@ -388,6 +388,19 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
     return binding.removeLineDraftFeatureProperties(saveOptions);
   };
 
+  /**
+   * 销毁线草稿控制器。
+   * 动态移除插件时，必须停止内部监听并释放临时草稿数据。
+   */
+  const destroy = (): void => {
+    stopStateWatch();
+    stopFeatureWatch();
+    selectedFeatureId.value = null;
+    binding.destroy();
+    clearPluginHoverState();
+    clearPluginSelectedFeature();
+  };
+
   return {
     enabled,
     data,
@@ -405,5 +418,6 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
     clear,
     saveProperties,
     removeProperties,
+    destroy,
   };
 }
