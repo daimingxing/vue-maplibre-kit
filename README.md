@@ -25,22 +25,22 @@
 
 ### 业务接入方
 
-优先看 `src/business.ts`。  
+优先看 `src/business.ts`。
 这里是给真实业务页面准备的主入口，目标是让业务层先按“我要做什么”找能力，而不是先理解全部底层实现。
 
 ### 插件使用方
 
-先看 `src/plugins/*.ts`。  
+先看 `src/plugins/*.ts`。
 这里是插件子路径公开入口，适合判断某个插件对外暴露了哪些工厂、常量和类型。
 
 ### 几何工具使用方
 
-先看 `src/geometry.ts`。  
+先看 `src/geometry.ts`。
 这里收口了与业务语义弱耦合的几何工具和来源引用工具。
 
 ### 维护者
 
-先看 `src/index.ts`，再看 `src/MapLibre/facades/useBusinessMap.ts`，最后进入 `src/MapLibre/core`。  
+先看 `src/index.ts`，再看 `src/MapLibre/facades/useBusinessMap.ts`，最后进入 `src/MapLibre/core`。
 这样可以先建立“公开 API -> 高层门面 -> 内核宿主”的阅读地图。
 
 ## 仓库导读
