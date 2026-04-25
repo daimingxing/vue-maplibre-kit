@@ -162,6 +162,105 @@ describe('useMapPluginHost', () => {
     errorSpy.mockRestore();
   });
 
+  it('插件 services 读取抛错时应跳过该服务并保留插件实例', () => {
+    const error = new Error('services failed');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const pluginInstance = {
+      getRenderItems: () => [],
+    };
+    Object.defineProperty(pluginInstance, 'services', {
+      get: () => {
+        throw error;
+      },
+    });
+
+    const { host, scope } = createHostHarness([
+      createDescriptor({
+        id: 'service-broken',
+        plugin: {
+          type: 'service-broken',
+          createInstance: () => pluginInstance,
+        },
+      }),
+    ]);
+
+    expect(host.hostExpose.has('service-broken')).toBe(true);
+    expect(host.getMapSnapService()).toBeNull();
+    expect(host.getMapSelectionService()).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[MapPluginHost] 插件 'service-broken' 读取 mapSnap 服务失败",
+      error
+    );
+
+    scope.stop();
+    errorSpy.mockRestore();
+  });
+
+  it('插件 state 读取抛错时应保留插件实例并返回空状态', () => {
+    const error = new Error('state failed');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const pluginInstance = {
+      getRenderItems: () => [],
+    };
+    Object.defineProperty(pluginInstance, 'state', {
+      get: () => {
+        throw error;
+      },
+    });
+
+    const { host, scope } = createHostHarness([
+      createDescriptor({
+        id: 'state-broken',
+        plugin: {
+          type: 'state-broken',
+          createInstance: () => pluginInstance,
+        },
+      }),
+    ]);
+
+    expect(host.hostExpose.has('state-broken')).toBe(true);
+    expect(host.hostExpose.getState('state-broken')).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[MapPluginHost] 插件 'state-broken' 读取 state 失败",
+      error
+    );
+
+    scope.stop();
+    errorSpy.mockRestore();
+  });
+
+  it('插件 state.value 读取抛错时应保留插件实例并返回空状态', () => {
+    const error = new Error('state value failed');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const { host, scope } = createHostHarness([
+      createDescriptor({
+        id: 'state-value-broken',
+        plugin: {
+          type: 'state-value-broken',
+          createInstance: () => ({
+            getRenderItems: () => [],
+            state: {
+              get value() {
+                throw error;
+              },
+            },
+          }),
+        },
+      }),
+    ]);
+
+    expect(host.hostExpose.has('state-value-broken')).toBe(true);
+    expect(host.hostExpose.getState('state-value-broken')).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[MapPluginHost] 插件 'state-value-broken' 读取 state.value 失败",
+      error
+    );
+
+    scope.stop();
+    errorSpy.mockRestore();
+  });
+
   it('插件从描述符列表移除时应销毁旧实例', async () => {
     const destroy = vi.fn();
     const descriptorsRef = ref<AnyMapPluginDescriptor[]>([

@@ -21,6 +21,7 @@ import type {
 import type { MapDxfExportTaskOptions } from './MapLibre/plugins/map-dxf-export/types';
 import type { MapLayerStyleOverrides } from './MapLibre/shared/map-layer-style-config';
 import { cloneDeep } from 'lodash-es';
+import { isReactive, isRef } from 'vue';
 
 /** 地图初始化全局默认配置类型。 */
 export type MapKitGlobalMapOptions = Partial<MapOptions & { mapStyle: string | object }>;
@@ -160,6 +161,51 @@ const EMPTY_MAP_GLOBAL_CONFIG = Object.freeze({}) as Readonly<MapKitGlobalConfig
 /** 当前应用级全局配置快照。 */
 let currentMapGlobalConfig: Readonly<MapKitGlobalConfig> = EMPTY_MAP_GLOBAL_CONFIG;
 
+/** Vue 响应式配置值提示。 */
+const VUE_STATE_CONFIG_WARNING = '[setMapGlobalConfig] 检测到 Vue 响应式配置值，建议传入普通对象快照';
+
+/**
+ * 判断是否为 Vue 响应式对象或 ref。
+ * 使用 Vue 官方运行时 API，避免依赖内部实现细节。
+ *
+ * @param value 待判断值
+ * @returns 是否为 Vue 响应式值
+ */
+function isVueStateValue(value: unknown): value is object {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  return isReactive(value) || isRef(value);
+}
+
+/**
+ * 判断配置中是否包含 Vue 响应式值。
+ * 全局配置按普通对象快照处理，传入响应式值时需要提示业务层先解包。
+ *
+ * @param value 待检查值
+ * @param visitedSet 已检查对象集合
+ * @returns 是否包含 Vue 响应式值
+ */
+function hasVueStateValue(value: unknown, visitedSet = new WeakSet<object>()): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  if (visitedSet.has(value)) {
+    return false;
+  }
+
+  if (isVueStateValue(value)) {
+    return true;
+  }
+
+  visitedSet.add(value);
+  return Reflect.ownKeys(value).some((propertyKey) => {
+    return hasVueStateValue((value as Record<PropertyKey, unknown>)[propertyKey], visitedSet);
+  });
+}
+
 /**
  * 深度冻结对象快照。
  * @param value 待冻结对象
@@ -168,6 +214,10 @@ let currentMapGlobalConfig: Readonly<MapKitGlobalConfig> = EMPTY_MAP_GLOBAL_CONF
  */
 function deepFreeze<T>(value: T, frozenSet = new WeakSet<object>()): Readonly<T> {
   if (value === null || typeof value !== 'object') {
+    return value as Readonly<T>;
+  }
+
+  if (isVueStateValue(value)) {
     return value as Readonly<T>;
   }
 
@@ -189,6 +239,10 @@ function deepFreeze<T>(value: T, frozenSet = new WeakSet<object>()): Readonly<T>
  * @returns 可安全复用的快照对象
  */
 function freezeMapGlobalConfig(config: MapKitGlobalConfig): Readonly<MapKitGlobalConfig> {
+  if (hasVueStateValue(config)) {
+    console.warn(VUE_STATE_CONFIG_WARNING);
+  }
+
   return deepFreeze(cloneDeep(config));
 }
 

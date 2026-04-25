@@ -78,6 +78,8 @@ interface MapPluginDescriptorDependency {
   options: AnyMapPluginDescriptor['options'];
 }
 
+type MapPluginServiceName = 'mapSnap' | 'mapSelection';
+
 /**
  * 判断值是否可以被 API 代理包装。
  * @param value 待判断值
@@ -513,11 +515,11 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     };
 
     pluginRecordMap.forEach((pluginRecord, pluginId) => {
-      if (pluginRecord.instance.services?.mapSnap) {
+      if (getPluginService(pluginRecord, 'mapSnap')) {
         serviceProviderMap.mapSnap.push(pluginId);
       }
 
-      if (pluginRecord.instance.services?.mapSelection) {
+      if (getPluginService(pluginRecord, 'mapSelection')) {
         serviceProviderMap.mapSelection.push(pluginId);
       }
     });
@@ -545,6 +547,72 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     if (pluginRecord.apiProxyState) {
       pluginRecord.apiProxyState.active = false;
       pluginRecord.apiProxyState.rawApi = null;
+    }
+  }
+
+  /**
+   * 读取插件服务。
+   * 插件可以用 getter 暴露 services，因此读取动作也需要隔离异常。
+   *
+   * @param pluginRecord 当前插件记录
+   * @param serviceName 服务名
+   * @returns 当前服务；读取失败或不存在时返回 null
+   */
+  function getPluginService<TName extends MapPluginServiceName>(
+    pluginRecord: MapPluginRecord,
+    serviceName: TName
+  ): MapPluginServices[TName] | null {
+    try {
+      return pluginRecord.instance.services?.[serviceName] || null;
+    } catch (error) {
+      console.error(
+        `[MapPluginHost] 插件 '${pluginRecord.descriptorRef.value.id}' 读取 ${serviceName} 服务失败`,
+        error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 读取插件状态引用。
+   * 插件可以用 getter 暴露 state，因此读取动作也需要隔离异常。
+   *
+   * @param pluginRecord 当前插件记录
+   * @returns 当前状态引用；读取失败或不存在时返回 null
+   */
+  function getPluginStateRef(pluginRecord: MapPluginRecord): MapPluginInstance['state'] | null {
+    try {
+      return pluginRecord.instance.state || null;
+    } catch (error) {
+      console.error(
+        `[MapPluginHost] 插件 '${pluginRecord.descriptorRef.value.id}' 读取 state 失败`,
+        error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 读取插件状态快照。
+   * state.value 可能来自自定义 ref-like 对象，读取失败时降级为空状态。
+   *
+   * @param pluginRecord 当前插件记录
+   * @returns 当前状态快照；读取失败或不存在时返回 null
+   */
+  function getPluginStateValue(pluginRecord: MapPluginRecord): unknown | null {
+    const stateRef = getPluginStateRef(pluginRecord);
+    if (!stateRef) {
+      return null;
+    }
+
+    try {
+      return stateRef.value ?? null;
+    } catch (error) {
+      console.error(
+        `[MapPluginHost] 插件 '${pluginRecord.descriptorRef.value.id}' 读取 state.value 失败`,
+        error
+      );
+      return null;
     }
   }
 
@@ -606,10 +674,11 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
         descriptorRef,
         instance,
       };
+      const stateRef = getPluginStateRef(pluginRecord);
 
-      if (instance.state) {
+      if (stateRef) {
         pluginRecord.stopStateWatch = watch(
-          () => instance.state?.value,
+          () => getPluginStateValue(pluginRecord),
           (stateSnapshot) => {
             onPluginStateChange?.({
               pluginId: descriptorRef.value.id,
@@ -836,7 +905,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     let resolvedService: MapPluginServices['mapSnap'] | null = null;
 
     for (const pluginRecord of pluginRecordMapRef.value.values()) {
-      const currentService = pluginRecord.instance.services?.mapSnap || null;
+      const currentService = getPluginService(pluginRecord, 'mapSnap');
       if (!currentService) {
         continue;
       }
@@ -859,7 +928,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     let resolvedService: MapPluginServices['mapSelection'] | null = null;
 
     for (const pluginRecord of pluginRecordMapRef.value.values()) {
-      const currentService = pluginRecord.instance.services?.mapSelection || null;
+      const currentService = getPluginService(pluginRecord, 'mapSelection');
       if (!currentService) {
         continue;
       }
@@ -924,7 +993,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    */
   function getState<TState = unknown>(pluginId: string): TState | null {
     const pluginRecord = pluginRecordMapRef.value.get(pluginId);
-    return (pluginRecord?.instance.state?.value as TState | null | undefined) || null;
+    return (pluginRecord ? getPluginStateValue(pluginRecord) : null) as TState | null;
   }
 
   /**

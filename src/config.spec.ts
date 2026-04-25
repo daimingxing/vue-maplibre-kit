@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { ref } from 'vue';
 import type { MapOptions } from 'maplibre-gl';
 import {
   defineMapGlobalConfig,
@@ -82,6 +83,28 @@ describe('config', () => {
     expect(Object.isFrozen(config.plugins)).toBe(true);
     expect(Object.isFrozen(config.plugins?.dxfExport)).toBe(true);
     expect(Object.isFrozen(config.plugins?.dxfExport?.control)).toBe(true);
+  });
+
+  it('setMapGlobalConfig 遇到 Vue ref 配置值时应提示并跳过冻结该值', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const labelRef = ref('导出CAD');
+    const config = setMapGlobalConfig({
+      plugins: {
+        dxfExport: {
+          control: {
+            label: labelRef,
+          },
+        },
+      },
+    } as unknown as MapKitGlobalConfig);
+    const storedLabel = config.plugins?.dxfExport?.control?.label as unknown as object;
+
+    expect(Object.isFrozen(storedLabel)).toBe(false);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[setMapGlobalConfig] 检测到 Vue 响应式配置值，建议传入普通对象快照'
+    );
+
+    warnSpy.mockRestore();
   });
 
   it('resetMapGlobalConfig 会清空到空对象', () => {
