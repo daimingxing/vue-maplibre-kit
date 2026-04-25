@@ -136,7 +136,9 @@ createApp(App).mount('#app');
 
 - 全局配置负责“应用统一默认值”
 - 页面配置负责“业务层局部覆写”
-- 对象型配置按内部字段回填默认值，页面字段优先
+- 不同配置项的合并粒度不同，具体以各配置项说明为准
+- `mapOptions` 按顶层字段合并；同名对象字段由页面配置整体接管，不做深度合并
+- `mapControls`、插件样式和图层样式这类库内配置，通常按内部字段回填默认值，页面字段优先
 - MapLibre 表达式数组整体覆盖，不按数组下标合并
 
 ---
@@ -305,7 +307,52 @@ mapOptions: {
 },
 ```
 
-### 5.1 `mapOptions` 里对象型字段的可配置子项
+### 5.1 `mapOptions` 合并语义
+
+`mapOptions` 是 MapLibre 初始化参数，采用“顶层字段合并，同名字段后者覆盖前者”的策略：
+
+```txt
+库内内置 mapOptions
+-> 全局 mapOptions
+-> 页面 mapOptions
+```
+
+如果顶层字段本身是对象，页面一旦配置该字段，就表示当前页面接管这个对象字段，不会继续和全局对象做深度合并。
+
+例如全局配置了：
+
+```ts
+mapOptions: {
+  attributionControl: {
+    compact: true,
+    customAttribution: '© Your Company',
+  },
+}
+```
+
+页面配置了：
+
+```ts
+mapOptions: {
+  attributionControl: {
+    compact: false,
+  },
+}
+```
+
+最终 `attributionControl` 只会保留页面传入的对象：
+
+```ts
+{
+  attributionControl: {
+    compact: false,
+  },
+}
+```
+
+这种行为是刻意保持的初始化参数语义：基础字段可以逐项覆盖，对象型初始化参数由页面显式接管；未配置的顶层字段继续回落到全局默认、库内默认或 MapLibre 原生默认。
+
+### 5.2 `mapOptions` 里对象型字段的可配置子项
 
 ```ts
 mapOptions: {

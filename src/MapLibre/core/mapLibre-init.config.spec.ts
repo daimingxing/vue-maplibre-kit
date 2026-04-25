@@ -36,6 +36,40 @@ describe('mapLibre-init.config', () => {
     });
   });
 
+  it('应让页面 mapOptions 对象字段整体接管全局同名字段', () => {
+    setMapGlobalConfig({
+      mapOptions: {
+        attributionControl: {
+          compact: true,
+          customAttribution: '© Global',
+        },
+        zoom: 10,
+      },
+    });
+
+    const options = resolveMapInitOptions(
+      {
+        mapStyle: 'default-style',
+        attributionControl: false,
+        zoom: 0,
+      },
+      {
+        attributionControl: {
+          compact: false,
+        },
+      },
+    );
+
+    expect(options).toEqual({
+      mapStyle: 'default-style',
+      // mapOptions 只做顶层合并，同名对象字段由页面整体接管，不保留全局对象内部字段。
+      attributionControl: {
+        compact: false,
+      },
+      zoom: 10,
+    });
+  });
+
   it('应按控件 key 合并，保留全局控件默认值并允许页面局部覆写', () => {
     setMapGlobalConfig({
       mapControls: {
