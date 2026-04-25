@@ -5,6 +5,7 @@ import type {
   MaplibreTerradrawControl,
 } from '@watergis/maplibre-gl-terradraw';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+import type { MapControlsConfig } from '../shared/mapLibre-controls-types';
 import {
   createMapLibreRawHandles,
   type MapLibreInitExpose,
@@ -78,4 +79,37 @@ describe('createMapLibreRawHandles', () => {
     expectTypeOf<MapLibreInitExpose['rawHandles']>().toEqualTypeOf<MapLibreRawHandles>();
     expectTypeOf<MapLibreRawHandles['map']>().toEqualTypeOf<MapInstance['map']>();
   });
+
+  it('测量图层样式应支持业务层仅局部覆写 layout 和 paint', () => {
+    const controls = {
+      MaplibreMeasureControl: {
+        lineLayerLabelSpec: {
+          layout: {
+            'text-size': 16,
+          },
+          paint: {
+            'text-color': '#8A2BE2',
+          },
+        },
+        routingLineLayerNodeSpec: {
+          paint: {
+            'circle-radius': 6,
+          },
+        },
+        polygonLayerSpec: {
+          layout: {
+            'text-size': 18,
+          },
+          paint: {
+            'text-halo-width': 3,
+          },
+        },
+      },
+    } satisfies MapControlsConfig;
+
+    expect(controls.MaplibreMeasureControl.lineLayerLabelSpec.layout?.['text-size']).toBe(16);
+  });
 });
+
+
+

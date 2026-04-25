@@ -36,7 +36,7 @@ describe('mapLibre-init.config', () => {
     });
   });
 
-  it('应按控件 key 做浅合并，保留全局控件默认值并允许页面局部覆写', () => {
+  it('应按控件 key 合并，保留全局控件默认值并允许页面局部覆写', () => {
     setMapGlobalConfig({
       mapControls: {
         MglScaleControl: {
@@ -61,5 +61,52 @@ describe('mapLibre-init.config', () => {
       },
     });
   });
+
+  it('应让页面测量样式内部字段覆写全局默认，并保留未覆写的全局字段', () => {
+    setMapGlobalConfig({
+      mapControls: {
+        MaplibreMeasureControl: {
+          lineLayerLabelSpec: {
+            layout: {
+              'text-size': 16,
+              'text-field': ['concat', ['get', 'distance'], ' 米'],
+            },
+            paint: {
+              'text-color': '#8A2BE2',
+              'text-halo-color': '#FFFFFF',
+              'text-halo-width': 2,
+            },
+          },
+        },
+      },
+    });
+
+    const controls = resolveMapControls({
+      MaplibreMeasureControl: {
+        lineLayerLabelSpec: {
+          layout: {
+            'text-field': ['get', 'label'],
+          },
+          paint: {
+            'text-color': '#FF0000',
+          },
+        },
+      },
+    });
+
+    expect(controls.MaplibreMeasureControl?.lineLayerLabelSpec).toEqual({
+      layout: {
+        'text-size': 16,
+        // MapLibre 表达式数组必须整体替换，不能按数组下标合并。
+        'text-field': ['get', 'label'],
+      },
+      paint: {
+        'text-color': '#FF0000',
+        'text-halo-color': '#FFFFFF',
+        'text-halo-width': 2,
+      },
+    });
+  });
 });
+
 

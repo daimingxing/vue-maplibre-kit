@@ -1,4 +1,8 @@
 import type {
+  CircleLayerSpecification,
+  SymbolLayerSpecification,
+} from "maplibre-gl";
+import type {
   TerradrawControlOptions,
   MeasureControlOptions,
 } from "../shared/mapLibre-controls-types";
@@ -456,30 +460,47 @@ export const terradrawStyleConfig: Partial<
  * 2. mapLibre-init 内部会先 cloneDeep 当前公共配置，再与业务页面传入的配置 merge；
  * 3. 因此业务页面仍然可以局部覆写这里的任意默认项，例如只在某个页面切换成英制或修改单位符号。
  */
-export const measureStyleConfig: Partial<
-  Pick<
-    MeasureControlOptions,
-    | "modes"
-    | "open"
-    | "showDeleteConfirmation"
-    | "textFont"
-    | "adapterOptions"
-    | "modeOptions"
+type MeasureStyleConfig = Partial<
+  Omit<
+    Pick<
+      MeasureControlOptions,
+      | "modes"
+      | "open"
+      | "showDeleteConfirmation"
+      | "textFont"
+      | "adapterOptions"
+      | "modeOptions"
+      | "pointLayerLabelSpec"
+      | "lineLayerLabelSpec"
+      | "routingLineLayerNodeSpec"
+      | "polygonLayerSpec"
+      | "measureUnitType"
+      | "distancePrecision"
+      | "distanceUnit"
+      | "areaPrecision"
+      | "areaUnit"
+      | "measureUnitSymbols"
+      | "computeElevation"
+      | "terrainSource"
+      | "elevationCacheConfig"
+    >,
     | "pointLayerLabelSpec"
     | "lineLayerLabelSpec"
     | "routingLineLayerNodeSpec"
     | "polygonLayerSpec"
-    | "measureUnitType"
-    | "distancePrecision"
-    | "distanceUnit"
-    | "areaPrecision"
-    | "areaUnit"
-    | "measureUnitSymbols"
-    | "computeElevation"
-    | "terrainSource"
-    | "elevationCacheConfig"
   >
-> = {
+> & {
+  /** 库内测量点标签完整图层规范；业务层只通过公开类型覆写 layout / paint。 */
+  pointLayerLabelSpec?: SymbolLayerSpecification;
+  /** 库内测量线标签完整图层规范；业务层只通过公开类型覆写 layout / paint。 */
+  lineLayerLabelSpec?: SymbolLayerSpecification;
+  /** 库内测量线节点完整图层规范；业务层只通过公开类型覆写 layout / paint。 */
+  routingLineLayerNodeSpec?: CircleLayerSpecification;
+  /** 库内测量面标签完整图层规范；业务层只通过公开类型覆写 layout / paint。 */
+  polygonLayerSpec?: SymbolLayerSpecification;
+};
+
+export const measureStyleConfig: MeasureStyleConfig = {
   // 当前工具栏显示哪些按钮；不传时走底层默认模式集合。
   // modes: [
   //   'point',

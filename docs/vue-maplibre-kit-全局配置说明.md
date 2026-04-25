@@ -136,6 +136,8 @@ createApp(App).mount('#app');
 
 - 全局配置负责“应用统一默认值”
 - 页面配置负责“业务层局部覆写”
+- 对象型配置按内部字段回填默认值，页面字段优先
+- MapLibre 表达式数组整体覆盖，不按数组下标合并
 
 ---
 
@@ -588,21 +590,41 @@ mapControls: {
     // showDeleteConfirmation: true, // 删除前是否弹确认框
 
     // pointLayerLabelSpec: {
-    //   // 这里写完整的 SymbolLayerSpecification
-    //   // 可参考下文 styles.symbol 的 layout / paint 字段
-    // },
+    //   layout: {
+    //     // 'text-size': 14, // 点测量标签字号
+    //   },
+    //   paint: {
+    //     // 'text-color': '#1f1f1f', // 点测量标签文字颜色
+    //   },
+    // }, // 点测量标签样式片段，只允许覆写 layout / paint
     // lineLayerLabelSpec: {
-    //   // 这里写完整的 SymbolLayerSpecification
-    //   // 可参考下文 styles.symbol 的 layout / paint 字段
-    // },
+    //   layout: {
+    //     // 'text-size': 16, // 线测量标签字号
+    //     // 'text-field': ['get', 'label'], // 线测量标签文本内容
+    //   },
+    //   paint: {
+    //     // 'text-color': '#FF0000', // 线测量标签文字颜色
+    //     // 'text-halo-color': '#FFFFFF', // 线测量标签描边颜色
+    //     // 'text-halo-width': 2, // 线测量标签描边宽度
+    //   },
+    // }, // 线测量标签样式片段，只允许覆写 layout / paint
     // routingLineLayerNodeSpec: {
-    //   // 这里写完整的 CircleLayerSpecification
-    //   // 可参考下文 styles.circle 的 layout / paint 字段
-    // },
+    //   layout: {
+    //     // visibility: 'visible', // 测量线节点显隐
+    //   },
+    //   paint: {
+    //     // 'circle-radius': 6, // 测量线节点半径
+    //     // 'circle-color': '#1677ff', // 测量线节点颜色
+    //   },
+    // }, // 测量线节点样式片段，只允许覆写 layout / paint
     // polygonLayerSpec: {
-    //   // 这里写完整的 SymbolLayerSpecification
-    //   // 可参考下文 styles.symbol 的 layout / paint 字段
-    // },
+    //   layout: {
+    //     // 'text-size': 16, // 面测量标签字号
+    //   },
+    //   paint: {
+    //     // 'text-color': '#1f1f1f', // 面测量标签文字颜色
+    //   },
+    // }, // 面测量标签样式片段，只允许覆写 layout / paint
 
     // measureUnitType: 'metric', // 单位体系：metric / imperial
     // distancePrecision: 2, // 距离结果保留小数位
@@ -718,6 +740,13 @@ mapControls: {
   },
 },
 ```
+
+补充说明：
+
+- `pointLayerLabelSpec`、`lineLayerLabelSpec`、`routingLineLayerNodeSpec`、`polygonLayerSpec` 只允许配置 `layout` / `paint`。
+- `id`、`type`、`source`、`filter` 等内部图层字段由库内默认配置固定维护，业务侧不能配置。
+- 全局默认和页面实例配置会按 `layout` / `paint` 内部字段合并，页面字段优先，未配置字段回落到全局默认。
+- `text-field` 这类 MapLibre 表达式数组按整体覆盖处理，不会按数组下标合并。
 
 ---
 

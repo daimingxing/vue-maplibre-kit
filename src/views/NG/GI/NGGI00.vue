@@ -643,12 +643,13 @@ const mapControls: BusinessKit.MapControlsConfig = {
     // 测量控件同样支持样式自定义，且由于涉及文字标签，它比绘图控件多了一些专属配置
     // ==========================================
     // 示例：如果需要在当前业务页面覆盖全局的测量样式，可以局部重写
-    /* modeOptions: {
+    modeOptions: {
       // 覆盖测量线模式，例如将当前页面的测量线颜色改为亮紫色
       linestring: {
         styles: {
           lineStringColor: '#8A2BE2', // 亮紫色
           lineStringWidth: 4,
+          snappingPointColor: '#8A2BE2', // 吸附提示点颜色
         },
       },
     },
@@ -660,7 +661,7 @@ const mapControls: BusinessKit.MapControlsConfig = {
       paint: {
         'text-color': '#8A2BE2', // 文字颜色同步改为亮紫色
       },
-    }, */
+    },
 
     // ==========================================
     // 测量控件线装饰示例 (Line Pattern 模式)
