@@ -15,6 +15,7 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "style": "./dist/style.css",
   "files": [
     "dist"
   ],
@@ -35,6 +36,7 @@
       "types": "./dist/geometry.d.ts",
       "import": "./dist/geometry.js"
     },
+    "./style.css": "./dist/style.css",
     "./plugins/map-feature-snap": {
       "types": "./dist/plugins/map-feature-snap.d.ts",
       "import": "./dist/plugins/map-feature-snap.js"

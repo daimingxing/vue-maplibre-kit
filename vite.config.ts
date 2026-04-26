@@ -21,6 +21,21 @@ function geojsonPlugin() {
 }
 
 /**
+ * 解析库构建阶段的静态资源文件名。
+ * @param assetInfo Rollup 当前输出资源信息
+ * @returns 对外稳定的资源文件名
+ */
+function resolveAssetFileName(assetInfo: { names?: string[]; name?: string }) {
+  const sourceName = assetInfo.names?.[0] || assetInfo.name || "";
+
+  if (sourceName.endsWith(".css")) {
+    return "style.css";
+  }
+
+  return "assets/[name]-[hash][extname]";
+}
+
+/**
  * 读取当前库构建的多入口配置。
  * @returns 供 Vite library mode 使用的入口对象
  */
@@ -150,7 +165,7 @@ export default defineConfig(({ command }) => {
             output: {
               entryFileNames: "[name].js",
               chunkFileNames: "chunks/[name]-[hash].js",
-              assetFileNames: "assets/[name]-[hash][extname]",
+              assetFileNames: resolveAssetFileName,
             },
           },
         }

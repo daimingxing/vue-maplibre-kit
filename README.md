@@ -59,10 +59,12 @@
 | 完整公开能力 | `vue-maplibre-kit` | 根入口，适合组件、类型、底层能力按需引入 |
 | 几何计算 | `vue-maplibre-kit/geometry` | 几何工具、来源引用工具 |
 | 显式启用插件 | `vue-maplibre-kit/plugins/*` | 插件子路径公开入口 |
+| 地图控件样式 | `vue-maplibre-kit/style.css` | MapLibre、Vue MapLibre、TerraDraw 控件样式 |
 
 ### 最小导入示例
 
 ```ts
+import 'vue-maplibre-kit/style.css';
 import { MapLibreInit } from 'vue-maplibre-kit';
 import { useBusinessMap } from 'vue-maplibre-kit/business';
 import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature-snap';
