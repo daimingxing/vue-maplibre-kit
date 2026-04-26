@@ -17,12 +17,13 @@
 
 按这个顺序最省时间：
 
-1. `README.md`
-2. `src/business.ts`
-3. `src/index.ts`
-4. `src/geometry.ts`
-5. `src/MapLibre/facades/useBusinessMap.ts`
-6. `src/MapLibre/core/mapLibre-init.vue`
+1. `README.md`：先看项目定位、公开入口约定和整体使用方式
+2. `src/business.ts`：业务接入主入口，优先看业务页最常用的组件、门面、图层工厂和高频类型
+3. `src/index.ts`：库根入口，聚合地图根组件、插件体系、通用交互能力和底层类型出口
+4. `src/config.ts`：全局配置入口，集中定义地图默认参数、控件默认值、插件默认值和样式默认值相关 API
+5. `src/geometry.ts`：几何工具入口，统一暴露与业务语义弱耦合的几何计算和来源引用工具
+6. `src/MapLibre/facades/useBusinessMap.ts`：高层业务门面，适合理解业务层如何统一读取选择、编辑、草稿和交点等能力
+7. `src/MapLibre/core/mapLibre-init.vue`：地图核心宿主，适合理解地图实例、控件、TerraDraw 和插件宿主如何装配
 
 ### 我只想知道对外暴露了什么
 
@@ -30,11 +31,27 @@
 
 - `src/index.ts`
 - `src/business.ts`
+- `src/config.ts`
 - `src/geometry.ts`
 - `src/plugins/*.ts`
 - `package.json` 中的 `exports`
 
 ## 按问题找文件
+
+### 我想看全局配置默认值怎么组织
+
+先看：
+
+- `src/config.ts`
+- `src/demo-map-global-config.ts`
+- `src/main.ts`
+
+适用问题：
+
+- 地图全局默认配置有哪些分组
+- 业务项目应该在哪里定义统一默认值
+- 应用启动时应当在什么阶段注册全局配置
+- `defineMapGlobalConfig`、`setMapGlobalConfig`、`getMapGlobalConfig` 各自负责什么
 
 ### 我想看地图初始化与核心宿主
 
