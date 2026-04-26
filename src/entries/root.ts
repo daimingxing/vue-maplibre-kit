@@ -383,21 +383,6 @@ export type { UseMapFeaturePropertyEditorOptions } from '../MapLibre/facades/use
 /** 统一属性编辑门面返回类型。约束 `useMapFeaturePropertyEditor` 结果时使用。 */
 export type { UseMapFeaturePropertyEditorResult } from '../MapLibre/facades/useMapFeaturePropertyEditor';
 
-/** 线草稿门面。读取线草稿状态、数量和清空动作时使用。 */
-export { useLineDraftPreview } from '../MapLibre/facades/useLineDraftPreview';
-
-/** 线草稿门面返回类型。约束 `useLineDraftPreview` 结果时使用。 */
-export type { UseLineDraftPreviewResult } from '../MapLibre/facades/useLineDraftPreview';
-
-/** 交点门面。读取交点状态、切换求交范围和按 ID 读取交点时使用。 */
-export { useIntersectionPreview } from '../MapLibre/facades/useIntersectionPreview';
-
-/** 交点门面返回类型。约束 `useIntersectionPreview` 结果时使用。 */
-export type { UseIntersectionPreviewResult } from '../MapLibre/facades/useIntersectionPreview';
-
-/** DXF 导出插件 API 解析工具。需要主动读取 DXF 插件能力时使用。 */
-export { resolveMapDxfExportApi } from '../MapLibre/facades/mapPluginResolver';
-
 /** 高层业务聚合门面。业务页想少记低层入口时优先从这里开始。 */
 export { useBusinessMap } from '../MapLibre/facades/useBusinessMap';
 
@@ -409,6 +394,9 @@ export type { UseBusinessMapOptions } from '../MapLibre/facades/useBusinessMap';
 
 /** 高层业务聚合门面返回类型。约束 `useBusinessMap` 结果时使用。 */
 export type { UseBusinessMapResult } from '../MapLibre/facades/useBusinessMap';
+
+/** 高层业务聚合里的插件分组类型。约束 `businessMap.plugins` 时使用。 */
+export type { UseBusinessMapPlugins } from '../MapLibre/facades/useBusinessMap';
 
 /** 高层业务聚合里的数据源分组类型。约束 `businessMap.sources` 时使用。 */
 export type { UseBusinessMapSources } from '../MapLibre/facades/useBusinessMap';

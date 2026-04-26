@@ -18,6 +18,8 @@ import type {
   MapFeatureMultiSelectPluginApi,
   MapFeatureMultiSelectState,
 } from '../plugins/map-feature-multi-select';
+import type { MapFeatureSnapPluginApi } from '../plugins/map-feature-snap';
+import type { MapDxfExportPluginApi, MapDxfExportState } from '../plugins/map-dxf-export';
 import type { MapPluginHostExpose, MapSelectionService } from '../plugins/types';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
 import type { MapInstance } from 'vue-maplibre-gl';
@@ -51,6 +53,10 @@ const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
 const INTERSECTION_PREVIEW_PLUGIN_TYPE = 'intersectionPreview';
 /** 多选插件类型常量。 */
 const MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE = 'mapFeatureMultiSelect';
+/** 吸附插件类型常量。 */
+const MAP_FEATURE_SNAP_PLUGIN_TYPE = 'mapFeatureSnap';
+/** DXF 导出插件类型常量。 */
+const MAP_DXF_EXPORT_PLUGIN_TYPE = 'mapDxfExport';
 
 /** 缺省选择态。 */
 const defaultSelectionState: MapSelectionState = {
@@ -349,6 +355,89 @@ function createMultiSelectPluginHarness(): {
 }
 
 /**
+ * 创建吸附插件测试替身。
+ * @returns 吸附插件 API
+ */
+function createSnapPluginHarness(): {
+  api: MapFeatureSnapPluginApi;
+} {
+  const api: MapFeatureSnapPluginApi = {
+    clearPreview: vi.fn(),
+    resolveMapEvent: vi.fn(() => ({
+      snapped: false,
+      point: null,
+      lngLat: null,
+      kind: null,
+      distancePx: null,
+      feature: null,
+      layerId: null,
+      sourceId: null,
+      sourceLayer: null,
+      segment: null,
+      ruleId: null,
+    })),
+    resolveTerradrawSnapOptions: vi.fn(() => ({
+      enabled: true,
+      tolerance: 12,
+      features: [],
+    })),
+  };
+
+  return {
+    api,
+  };
+}
+
+/**
+ * 创建 DXF 导出插件测试替身。
+ * @returns DXF 导出插件 API 与状态
+ */
+function createDxfPluginHarness(): {
+  api: MapDxfExportPluginApi;
+  state: MapDxfExportState;
+} {
+  const state: MapDxfExportState = {
+    isExporting: false,
+    lastFileName: null,
+    lastFeatureCount: 0,
+    lastEntityCount: 0,
+    lastWarnings: [],
+    lastError: null,
+    lastExportAt: null,
+  };
+  const api: MapDxfExportPluginApi = {
+    exportDxf: vi.fn(async () => ({
+      content: '0\nEOF',
+      fileName: 'business.dxf',
+      sourceCount: 1,
+      featureCount: 2,
+      entityCount: 2,
+      warnings: [],
+    })),
+    downloadDxf: vi.fn(async () => ({
+      content: '0\nEOF',
+      fileName: 'business.dxf',
+      sourceCount: 1,
+      featureCount: 2,
+      entityCount: 2,
+      warnings: [],
+    })),
+    getResolvedOptions: vi.fn(() => ({
+      sourceIds: null,
+      fileName: 'business.dxf',
+      pointMode: 'circle',
+      pointRadius: 3,
+      lineWidth: 2,
+    })),
+  };
+
+  return {
+    api,
+    state,
+  };
+}
+
+/**
  * 创建测试用地图公开实例。
  * @param options 需要挂到公开实例上的测试能力
  * @returns 可供聚合门面直接消费的地图公开实例
@@ -360,6 +449,9 @@ function createMapExpose(options: {
   intersectionState?: IntersectionPreviewState | null;
   multiSelectApi?: MapFeatureMultiSelectPluginApi | null;
   multiSelectState?: MapFeatureMultiSelectState | null;
+  snapApi?: MapFeatureSnapPluginApi | null;
+  dxfApi?: MapDxfExportPluginApi | null;
+  dxfState?: MapDxfExportState | null;
   selectionService?: MapSelectionService | null;
   rawMap?: unknown;
 } = {}): MapLibreInitExpose {
@@ -370,6 +462,9 @@ function createMapExpose(options: {
     intersectionState = null,
     multiSelectApi = null,
     multiSelectState = null,
+    snapApi = null,
+    dxfApi = null,
+    dxfState = null,
     selectionService = null,
     rawMap = undefined,
   } = options;
@@ -394,6 +489,14 @@ function createMapExpose(options: {
         return Boolean(multiSelectApi);
       }
 
+      if (pluginId === 'mapFeatureSnap') {
+        return Boolean(snapApi);
+      }
+
+      if (pluginId === 'mapDxfExport') {
+        return Boolean(dxfApi);
+      }
+
       return false;
     },
     getApi: <TApi = unknown>(pluginId?: string) => {
@@ -409,6 +512,14 @@ function createMapExpose(options: {
         return (multiSelectApi as TApi | null) || null;
       }
 
+      if (pluginId === 'mapFeatureSnap') {
+        return (snapApi as TApi | null) || null;
+      }
+
+      if (pluginId === 'mapDxfExport') {
+        return (dxfApi as TApi | null) || null;
+      }
+
       return null;
     },
     getState: <TState = unknown>(pluginId?: string) => {
@@ -422,6 +533,10 @@ function createMapExpose(options: {
 
       if (pluginId === 'mapFeatureMultiSelect') {
         return (multiSelectState as TState | null) || null;
+      }
+
+      if (pluginId === 'mapDxfExport') {
+        return (dxfState as TState | null) || null;
       }
 
       return null;
@@ -446,6 +561,20 @@ function createMapExpose(options: {
         result.push({
           id: 'mapFeatureMultiSelect',
           type: MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE,
+        });
+      }
+
+      if (snapApi) {
+        result.push({
+          id: 'mapFeatureSnap',
+          type: MAP_FEATURE_SNAP_PLUGIN_TYPE,
+        });
+      }
+
+      if (dxfApi) {
+        result.push({
+          id: 'mapDxfExport',
+          type: MAP_DXF_EXPORT_PLUGIN_TYPE,
         });
       }
 
@@ -475,11 +604,25 @@ function createMapExpose(options: {
 }
 
 describe('useBusinessMap', () => {
-  it('business 入口源码会直接导出线草稿门面', () => {
+  it('business 和 root 入口不公开插件第二套读取门面', () => {
     const businessEntrySource = readFileSync(resolve(__dirname, '../../entries/business.ts'), 'utf-8');
+    const rootEntrySource = readFileSync(resolve(__dirname, '../../entries/root.ts'), 'utf-8');
+    const entrySources = `${businessEntrySource}\n${rootEntrySource}`;
 
-    expect(businessEntrySource).toContain("export { useLineDraftPreview }");
-    expect(businessEntrySource).toContain("export type { UseLineDraftPreviewResult }");
+    expect(entrySources).not.toContain("export { useLineDraftPreview }");
+    expect(entrySources).not.toContain("export { useIntersectionPreview }");
+    expect(entrySources).not.toContain("export { useMapFeatureMultiSelect }");
+    expect(entrySources).not.toContain("export { useMapFeatureSnap }");
+    expect(entrySources).not.toContain("export { useMapDxfExport }");
+    expect(entrySources).not.toContain("resolveLineDraftPreviewApi");
+    expect(entrySources).not.toContain("resolveLineDraftPreviewState");
+    expect(entrySources).not.toContain("resolveIntersectionPreviewApi");
+    expect(entrySources).not.toContain("resolveIntersectionPreviewState");
+    expect(entrySources).not.toContain("resolveMapFeatureMultiSelectApi");
+    expect(entrySources).not.toContain("resolveMapFeatureMultiSelectState");
+    expect(entrySources).not.toContain("resolveMapFeatureSnapApi");
+    expect(entrySources).not.toContain("resolveMapDxfExportApi");
+    expect(entrySources).not.toContain("resolveMapDxfExportState");
   });
 
   it('business 入口应直接导出业务层高频类型', () => {
@@ -493,6 +636,7 @@ describe('useBusinessMap', () => {
     expect(businessEntrySource).toContain("export type { MapFeaturePropertyPanelItem }");
     expect(businessEntrySource).toContain("export type { MapSourceFeatureRef }");
     expect(businessEntrySource).toContain("export type { MapFeatureId }");
+    expect(businessEntrySource).toContain("export type { UseBusinessMapPlugins }");
   });
 
   it('plugins 聚合入口应导出业务插件预设工厂和全部插件子入口', () => {
@@ -567,6 +711,8 @@ describe('useBusinessMap', () => {
     expect(businessMap.plugins.lineDraft.clear()).toBe(false);
     expect(businessMap.plugins.intersection.visible.value).toBe(false);
     expect(businessMap.plugins.multiSelect.selectedCount.value).toBe(0);
+    expect(businessMap.plugins.snap.clearPreview()).toBe(false);
+    expect(businessMap.plugins.dxfExport.isExporting.value).toBe(false);
     expect(businessMap.plugins.intersection.materialize()).toBe(false);
     const flashStartResult = businessMap.effect.startFlash({
       source: 'business-source',
@@ -594,6 +740,8 @@ describe('useBusinessMap', () => {
     const lineDraftHarness = createLineDraftPluginHarness();
     const intersectionHarness = createIntersectionPluginHarness();
     const multiSelectHarness = createMultiSelectPluginHarness();
+    const snapHarness = createSnapPluginHarness();
+    const dxfHarness = createDxfPluginHarness();
     const businessMap = useBusinessMap({
       mapRef: shallowRef(
         createMapExpose({
@@ -604,6 +752,9 @@ describe('useBusinessMap', () => {
           intersectionState: intersectionHarness.state,
           multiSelectApi: multiSelectHarness.api,
           multiSelectState: multiSelectHarness.state,
+          snapApi: snapHarness.api,
+          dxfApi: dxfHarness.api,
+          dxfState: dxfHarness.state,
         })
       ),
       sourceRegistry,
@@ -630,6 +781,10 @@ describe('useBusinessMap', () => {
     expect(typeof businessMap.plugins.intersection.refresh).toBe('function');
     businessMap.plugins.multiSelect.activate();
     expect(businessMap.plugins.multiSelect.isActive.value).toBe(true);
+    expect(businessMap.plugins.snap.clearPreview()).toBe(true);
+    expect(snapHarness.api.clearPreview).toHaveBeenCalledTimes(1);
+    expect(businessMap.plugins.dxfExport.isExporting.value).toBe(false);
+    expect(businessMap.plugins.dxfExport.getResolvedOptions()?.fileName).toBe('business.dxf');
     expect(flashStartResult).toBe(true);
     expect(
       businessMap.effect.isFeatureFlashing({

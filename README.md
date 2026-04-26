@@ -56,21 +56,23 @@
 
 | 场景 | 推荐入口 | 说明 |
 | --- | --- | --- |
-| 业务页面接入 | `vue-maplibre-kit/business` | 优先入口，收口高频业务能力 |
+| 业务页面接入 | `vue-maplibre-kit/business` | 优先入口，收口高频业务能力；插件状态和动作统一从 `useBusinessMap().plugins.*` 读取 |
 | 完整公开能力 | `vue-maplibre-kit` | 根入口，适合组件、类型、底层能力按需引入 |
 | 几何计算 | `vue-maplibre-kit/geometry` | 几何工具、来源引用工具 |
-| 常用插件注册 | `vue-maplibre-kit/plugins` | 聚合入口，推荐用 `createBusinessPlugins()` 注册 snap、line-draft、intersection、multi-select |
-| 单插件高级用法 | `vue-maplibre-kit/plugins/*` | 插件子路径公开入口 |
+| 常用插件注册 | `vue-maplibre-kit/plugins` | 聚合入口，推荐用 `createBusinessPlugins()` 注册 snap、line-draft、intersection、multi-select、dxf-export |
+| 单插件高级用法 | `vue-maplibre-kit/plugins/*` | 插件子路径公开入口，仅用于深度定制、常量和高级类型 |
 | 地图控件样式 | `vue-maplibre-kit/style.css` | MapLibre、Vue MapLibre、TerraDraw 控件样式 |
 
 ### 最小导入示例
 
 ```ts
 import 'vue-maplibre-kit/style.css';
-import { MapLibreInit } from 'vue-maplibre-kit';
-import { useBusinessMap } from 'vue-maplibre-kit/business';
+import { MapLibreInit, useBusinessMap } from 'vue-maplibre-kit/business';
 import { createBusinessPlugins } from 'vue-maplibre-kit/plugins';
 ```
+
+业务插件建议只记两步：注册插件用 `createBusinessPlugins()`，读取插件状态和动作统一用 `useBusinessMap().plugins.*`。
+例如 `businessMap.plugins.lineDraft`、`businessMap.plugins.intersection`、`businessMap.plugins.multiSelect`、`businessMap.plugins.snap`、`businessMap.plugins.dxfExport`。
 
 ## 项目术语
 
@@ -93,6 +95,7 @@ import { createBusinessPlugins } from 'vue-maplibre-kit/plugins';
 - **plugin host**：插件宿主，负责插件实例创建、复用、销毁、状态桥接和渲染聚合
 - **plugin api**：插件对外暴露给门面层或业务层调用的能力集合
 - **business plugins**：业务插件预设，常用插件优先用 `createBusinessPlugins()` 生成描述对象列表
+- **businessMap.plugins**：业务层读取插件状态和动作的统一入口，避免分别记忆多个插件 `use*` 门面
 - **managed preview**：由系统托管的预览要素，例如线草稿、交点预览等临时渲染结果
 
 ### TerraDraw 集成

@@ -81,6 +81,9 @@ describe('businessPreset', () => {
         targetSourceIds: ['primary'],
       },
       multiSelect: true,
+      dxfExport: {
+        sourceRegistry,
+      },
     });
 
     expect(plugins.map((plugin) => plugin.type)).toEqual([
@@ -88,7 +91,31 @@ describe('businessPreset', () => {
       'lineDraftPreview',
       'intersectionPreview',
       'mapFeatureMultiSelect',
+      'mapDxfExport',
     ]);
     expect((plugins[0].options as any).ordinaryLayers.rules[0].layerIds).toEqual(['pipe-line']);
+  });
+
+  it('应允许 snap 直接传完整 ordinaryLayers 配置', async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+    const plugins = createBusinessPlugins({
+      snap: {
+        ordinaryLayers: {
+          enabled: true,
+          rules: [
+            {
+              id: 'custom-snap',
+              layerIds: ['custom-line'],
+              snapTo: ['vertex', 'segment'],
+            },
+          ],
+        },
+      },
+    });
+
+    expect(plugins[0].type).toBe('mapFeatureSnap');
+    expect((plugins[0].options as any).layerIds).toBeUndefined();
+    expect((plugins[0].options as any).ordinaryLayers.rules[0].id).toBe('custom-snap');
   });
 });

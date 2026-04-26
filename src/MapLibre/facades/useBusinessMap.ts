@@ -23,6 +23,8 @@ import {
   useMapFeatureMultiSelect,
   type UseMapFeatureMultiSelectResult,
 } from './useMapFeatureMultiSelect';
+import { useMapFeatureSnap, type UseMapFeatureSnapResult } from './useMapFeatureSnap';
+import { useMapDxfExport, type UseMapDxfExportResult } from './useMapDxfExport';
 import { useMapLayerActions, type UseMapLayerActionsResult } from './useMapLayerActions';
 
 /** useBusinessMap 初始化配置。 */
@@ -94,12 +96,16 @@ export interface UseBusinessMapFeatureGroup
 
 /** useBusinessMap 的插件短路径分组。 */
 export interface UseBusinessMapPlugins {
+  /** 要素吸附插件分组。 */
+  snap: UseMapFeatureSnapResult;
   /** 线草稿插件分组。 */
   lineDraft: UseLineDraftPreviewResult;
   /** 交点插件分组。 */
   intersection: UseIntersectionPreviewResult;
   /** 要素多选插件分组。 */
   multiSelect: UseMapFeatureMultiSelectResult;
+  /** DXF 导出插件分组。 */
+  dxfExport: UseMapDxfExportResult;
 }
 
 /**
@@ -195,10 +201,14 @@ export function useBusinessMap(options: UseBusinessMapOptions): UseBusinessMapRe
   const draft = useLineDraftPreview(mapRef);
   const intersection = useIntersectionPreview(mapRef);
   const multiSelect = useMapFeatureMultiSelect(mapRef);
+  const snap = useMapFeatureSnap(mapRef);
+  const dxfExport = useMapDxfExport(mapRef);
   const plugins: UseBusinessMapPlugins = {
+    snap,
     lineDraft: draft,
     intersection,
     multiSelect,
+    dxfExport,
   };
   const effect = useMapEffect(mapRef);
 

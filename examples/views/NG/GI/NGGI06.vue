@@ -12,18 +12,21 @@
       </template>
     </MapLibreInit>
     <aside class="nggi-panel">
-      <h3>NGGI06 四插件总览</h3>
+      <h3>NGGI06 五插件总览</h3>
       <button type="button" @click="previewLine">生成草稿线</button>
       <button type="button" @click="previewRegion">生成线廊</button>
       <button type="button" @click="refreshIntersection">刷新交点</button>
       <button type="button" @click="materializeIntersection">生成正式交点</button>
       <button type="button" @click="removeIntersection">删除正式交点</button>
       <button type="button" @click="toggleMultiSelect">切换多选</button>
+      <button type="button" @click="clearSnapPreview">清理吸附预览</button>
+      <button type="button" @click="exportDxf">导出 DXF 文本</button>
       <button type="button" @click="clearDraft">清空草稿</button>
       <p>交点数：{{ businessMap.plugins.intersection.count.value }}</p>
       <p>正式交点：{{ businessMap.plugins.intersection.materializedCount.value }}</p>
       <p>多选数：{{ businessMap.plugins.multiSelect.selectedCount.value }}</p>
       <p>草稿数：{{ businessMap.plugins.lineDraft.featureCount.value }}</p>
+      <p>DXF 最近文件：{{ businessMap.plugins.dxfExport.lastFileName.value || "未导出" }}</p>
       <p>{{ message }}</p>
       <pre>{{ overviewText }}</pre>
     </aside>
@@ -42,6 +45,7 @@ import {
 import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 import {
   EXAMPLE_LINE_LAYER_ID,
+  EXAMPLE_SOURCE_ID,
   createExampleInteractive,
   createExampleKit,
 } from "./nggi-example.shared";
@@ -64,6 +68,18 @@ const plugins = createBusinessPlugins({
     sourceRegistry: kit.registry,
   },
   multiSelect: { enabled: true, targetLayerIds: [EXAMPLE_LINE_LAYER_ID] },
+  dxfExport: {
+    enabled: true,
+    sourceRegistry: kit.registry,
+    defaults: {
+      fileName: "nggi06-five-plugins.dxf",
+      lineWidth: 2,
+      pointMode: "circle",
+      // DXF 点圆半径使用地图坐标单位，本例坐标范围下 0.003 比较容易看见。
+      pointRadius: 0.003,
+    },
+    control: { enabled: false },
+  },
 });
 
 const overviewText = computed(() =>
@@ -76,6 +92,10 @@ const overviewText = computed(() =>
       selectedFeatureIds: businessMap.plugins.multiSelect
         .getSelectedFeatures()
         .map((feature) => feature.featureId),
+      snapActive: "已通过 createBusinessPlugins 注册，绘制时会参与吸附",
+      dxfExporting: businessMap.plugins.dxfExport.isExporting.value,
+      dxfLastFileName: businessMap.plugins.dxfExport.lastFileName.value,
+      dxfLastEntityCount: businessMap.plugins.dxfExport.lastEntityCount.value,
     },
     null,
     2
@@ -188,6 +208,22 @@ function removeIntersection(): void {
 }
 
 /**
+ * 生成 DXF 文本。
+ * 总览页只展示 dxf-export 插件已经接入统一门面，详细参数请看 NGGI11。
+ */
+async function exportDxf(): Promise<void> {
+  const result = await businessMap.plugins.dxfExport.exportDxf({
+    sourceIds: [EXAMPLE_SOURCE_ID],
+    fileName: "nggi06-summary-only.dxf",
+    // 总览页给一个明显线宽，证明单次导出可以覆盖默认值。
+    lineWidth: 3,
+  });
+  message.value = result
+    ? `DXF 已生成：${result.fileName}，实体 ${result.entityCount} 个`
+    : "DXF 导出插件未注册";
+}
+
+/**
  * 切换多选插件状态。
  */
 function toggleMultiSelect(): void {
@@ -195,6 +231,15 @@ function toggleMultiSelect(): void {
   message.value = success
     ? `多选已${businessMap.plugins.multiSelect.getActive() ? "开启" : "关闭"}`
     : "切换多选失败";
+}
+
+/**
+ * 清理吸附预览。
+ * snap 通常在绘制控件内部自动工作，这里用主动清理动作证明它也接入了 businessMap.plugins。
+ */
+function clearSnapPreview(): void {
+  const success = businessMap.plugins.snap.clearPreview();
+  message.value = success ? "已清理吸附预览" : "吸附插件尚未初始化完成";
 }
 
 /**

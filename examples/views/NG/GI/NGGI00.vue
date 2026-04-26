@@ -141,7 +141,6 @@ import {
   businessSources,
   layerStyles,
   mapExpressions,
-  resolveMapDxfExportApi,
   useBusinessMap,
   useMapPopupState,
 } from "vue-maplibre-kit/business";
@@ -187,20 +186,15 @@ import {
   type MapCommonLineFeature,
 } from "vue-maplibre-kit/geometry";
 import {
-  createLineDraftPreviewPlugin,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
 } from "vue-maplibre-kit/plugins/line-draft-preview";
 import {
-  createIntersectionPreviewPlugin,
-} from "vue-maplibre-kit/plugins/intersection-preview";
-import {
-  createMapDxfExportPlugin,
+  createBusinessPlugins,
+  type BusinessPluginsOptions,
   type MapDxfExportOptions,
   type MapDxfExportTaskOptions,
   type MapDxfLayerNameResolver,
-} from "vue-maplibre-kit/plugins/map-dxf-export";
-import { createMapFeatureMultiSelectPlugin } from "vue-maplibre-kit/plugins/map-feature-multi-select";
-import { createMapFeatureSnapPlugin } from "vue-maplibre-kit/plugins/map-feature-snap";
+} from "vue-maplibre-kit/plugins";
 import type { GeoJSONSource } from "maplibre-gl";
 
 // 业务 source 工厂统一从分组入口读取，避免业务页面在根入口平铺查找。
@@ -1158,8 +1152,8 @@ const businessSourceRegistry = createMapBusinessSourceRegistry([
  * ==========================
  */
 
-// 1. 线草稿预览插件：提供线段临时延长和预览能力
-const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
+// 1. 线草稿预览配置：提供线段临时延长和预览能力
+const lineDraftPreviewOptions = {
   enabled: true,
   // 覆盖默认草稿样式
   styleOverrides: {
@@ -1235,10 +1229,10 @@ const lineDraftPreviewPlugin = createLineDraftPreviewPlugin({
   onContextMenu: (context) => {
     console.log("[NGGI00 草稿线示例] context menu", context);
   },
-});
+} satisfies NonNullable<BusinessPluginsOptions["lineDraft"]>;
 
-// 2. 要素多选插件：提供框选和点击多选能力
-const mapFeatureMultiSelectPlugin = createMapFeatureMultiSelectPlugin({
+// 2. 要素多选配置：提供框选和点击多选能力
+const mapFeatureMultiSelectOptions = {
   // 是否启用多选插件，默认为 true
   enabled: true,
   // 插件控件在地图上的显示位置，可选值如 'top-left', 'top-right', 'bottom-left', 'bottom-right'
@@ -1261,10 +1255,10 @@ const mapFeatureMultiSelectPlugin = createMapFeatureMultiSelectPlugin({
     // 对于主点图层，拦截 id 为 'point_4' 的要素，使其无法被选中
     return properties?.id !== "point_4";
   },
-});
+} satisfies NonNullable<BusinessPluginsOptions["multiSelect"]>;
 
-// 3. 要素吸附插件：配置哪些图层允许作为测绘的吸附目标
-const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
+// 3. 要素吸附配置：配置哪些图层允许作为测绘的吸附目标
+const mapFeatureSnapOptions = {
   // 启用统一吸附扩展。
   enabled: true,
 
@@ -1341,12 +1335,12 @@ const mapFeatureSnapPlugin = createMapFeatureSnapPlugin({
       useMapTargets: true,
     },
   },
-});
+} satisfies NonNullable<BusinessPluginsOptions["snap"]>;
 
 /**
  * DXF 导出插件：第一版只面向业务 source，不包含 TerraDraw / Measure / 手绘要素。
  */
-const mapDxfExportPlugin = createMapDxfExportPlugin({
+const mapDxfExportOptions = {
   // 这里故意把全部可配字段都显式写出来，方便业务开发者直接照着这份示例抄。
   // 是否启用整个 DXF 导出插件。
   enabled: true,
@@ -1475,7 +1469,7 @@ const mapDxfExportPlugin = createMapDxfExportPlugin({
     position: "top-right",
     label: "导出DXF",
   },
-} as MapDxfExportOptions);
+} satisfies MapDxfExportOptions;
 
 /**
  * 交点预览插件示例。
@@ -1484,7 +1478,7 @@ const mapDxfExportPlugin = createMapDxfExportPlugin({
  * 2. 业务层只声明“哪些 source / layer 允许参与求交”
  * 3. 正式交点点位、source、layer、交互和样式都由插件内部托管
  */
-const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
+const intersectionPreviewOptions = {
   // 是否启用整个交点插件。
   // 设为 false 时，插件不会参与渲染，也不会计算交点。
   enabled: true,
@@ -1673,17 +1667,19 @@ const intersectionPreviewPlugin = createIntersectionPreviewPlugin({
     });
     ElMessage.success(`已删除正式交点：${context.intersectionId}`);
   },
-});
+} satisfies NonNullable<BusinessPluginsOptions["intersection"]>;
 
 /**
  * 集中注册当前页面需要启用的地图能力扩展。
  */
 const mapPlugins = [
-  mapFeatureSnapPlugin,
-  lineDraftPreviewPlugin,
-  intersectionPreviewPlugin,
-  mapFeatureMultiSelectPlugin,
-  mapDxfExportPlugin,
+  ...createBusinessPlugins({
+    snap: mapFeatureSnapOptions,
+    lineDraft: lineDraftPreviewOptions,
+    intersection: intersectionPreviewOptions,
+    multiSelect: mapFeatureMultiSelectOptions,
+    dxfExport: mapDxfExportOptions,
+  }),
 ];
 
 /**
@@ -1722,6 +1718,12 @@ const lineDraftPreview = businessMap.plugins.lineDraft;
  * 业务层通过 businessMap.plugins.intersection 读取交点数量、切换范围和手动刷新。
  */
 const intersectionPreview = businessMap.plugins.intersection;
+
+/**
+ * 统一 DXF 导出分组。
+ * 业务层通过 businessMap.plugins.dxfExport 读取导出状态、最终配置和导出动作。
+ */
+const dxfExport = businessMap.plugins.dxfExport;
 
 /**
  * 正式交点常用门面示例。
@@ -2103,15 +2105,6 @@ const getReadableErrorMessage = (error: unknown): string => {
 };
 
 /**
- * 读取当前地图实例上的 DXF 导出插件 API。
- * 业务层只通过 mapInitRef + 公开解析门面取能力，不感知插件宿主内部实现。
- * @returns 当前地图上的 DXF 导出插件 API；尚未挂载时返回 null
- */
-const getMapDxfExportApi = () => {
-  return resolveMapDxfExportApi(mapInitRef.value);
-};
-
-/**
  * 将 DXF 插件解析结果收敛成示例面板只关心的摘要字段。
  * @param options 当前解析后的导出配置
  * @returns 适合示例面板直接消费的轻量结构
@@ -2169,15 +2162,15 @@ const createPrimaryBusinessDxfOverrides = (): MapDxfExportTaskOptions => {
 
 /**
  * 当前示例面板展示的 DXF 默认配置。
- * 这里直接读取插件 API 的 getResolvedOptions()，确保面板看到的是最终生效值。
+ * 这里通过 businessMap.plugins.dxfExport 读取最终配置，避免业务层再记 resolver。
  */
 const dxfDefaultOptions = computed<DxfSummaryOptions | null>(() => {
-  const api = getMapDxfExportApi();
-  if (!api) {
+  const options = dxfExport.getResolvedOptions();
+  if (!options) {
     return null;
   }
 
-  return toDxfSummaryOptions(api.getResolvedOptions());
+  return toDxfSummaryOptions(options);
 });
 
 /**
@@ -2185,12 +2178,12 @@ const dxfDefaultOptions = computed<DxfSummaryOptions | null>(() => {
  * 这里与“导出主业务 DXF”按钮保持同一套 overrides，避免说明与实际行为脱节。
  */
 const dxfPrimaryOptions = computed<DxfSummaryOptions | null>(() => {
-  const api = getMapDxfExportApi();
-  if (!api) {
+  const options = dxfExport.getResolvedOptions(createPrimaryBusinessDxfOverrides());
+  if (!options) {
     return null;
   }
 
-  return toDxfSummaryOptions(api.getResolvedOptions(createPrimaryBusinessDxfOverrides()));
+  return toDxfSummaryOptions(options);
 });
 
 /**
@@ -2199,14 +2192,18 @@ const dxfPrimaryOptions = computed<DxfSummaryOptions | null>(() => {
  * 通过 `downloadDxf(overrides)` 为某一次导出任务临时覆写参数。
  */
 const downloadPrimaryBusinessSourceDxf = async (): Promise<void> => {
-  const dxfExportApi = getMapDxfExportApi();
-  if (!dxfExportApi) {
+  const options = dxfExport.getResolvedOptions(createPrimaryBusinessDxfOverrides());
+  if (!options) {
     ElMessage.warning("DXF 导出插件尚未初始化完成");
     return;
   }
 
   try {
-    const result = await dxfExportApi.downloadDxf(createPrimaryBusinessDxfOverrides());
+    const result = await dxfExport.downloadDxf(createPrimaryBusinessDxfOverrides());
+    if (!result) {
+      ElMessage.warning("DXF 导出插件尚未初始化完成");
+      return;
+    }
 
     if (result.warnings.length > 0) {
       console.warn("[NGGI00 DXF 示例] 本次导出包含警告", result.warnings);

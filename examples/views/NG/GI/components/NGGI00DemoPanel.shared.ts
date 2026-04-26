@@ -129,7 +129,7 @@ export const DXF_GLOBAL_TRUE_COLOR_TEXT =
 
 /** 默认 CRS 配置填写位置说明。 */
 export const DXF_DEFAULT_CRS_CONFIG_PATH_TEXT =
-  "DXF 全局默认 CRS 已在插件封装层统一维护；业务层只有需要覆盖时，才在 createMapDxfExportPlugin({ defaults }) 或 downloadDxf(overrides) 里传 sourceCrs / targetCrs。";
+  "DXF 全局默认 CRS 已在插件封装层统一维护；业务层只有需要覆盖时，才在 createBusinessPlugins({ dxfExport: { defaults } }) 或 downloadDxf(overrides) 里传 sourceCrs / targetCrs。";
 
 /** 全局 TrueColor 规则入口说明。 */
 export const DXF_DEFAULT_TRUE_COLOR_CONFIG_PATH_TEXT =
@@ -141,7 +141,7 @@ export const DXF_OVERRIDE_GUIDE_TEXT =
 
 /** DXF 插件根配置速查说明。 */
 export const DXF_PLUGIN_OPTIONS_GUIDE_TEXT = [
-  "mapDxfExportPlugin 可配项：",
+  "createBusinessPlugins({ dxfExport }) 可配项：",
   "1. enabled?: 是否启用整个 DXF 导出插件。",
   "2. sourceRegistry: 必填，传当前页面的业务 sourceRegistry。",
   "3. defaults?: 页面级默认导出配置，会覆盖封装层统一维护的全局默认 CRS。",

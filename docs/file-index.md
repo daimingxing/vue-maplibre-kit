@@ -80,13 +80,13 @@
 - `src/business.ts`
 - `src/entries/business.ts`
 - `src/MapLibre/facades/useBusinessMap.ts`
-- `src/MapLibre/facades/mapPluginResolver.ts`
 
 适用问题：
 
 - 业务页应该先 import 什么
 - 高层门面聚合了哪些能力
-- 业务层如何通过 `businessMap.plugins.*` 拿到插件 API
+- 业务层如何通过 `useBusinessMap().plugins.*` 统一读取插件状态和动作
+- 业务层如何通过 `createBusinessPlugins()` 统一注册常用插件
 
 ### 我想看业务 source 和图层组织
 
@@ -126,6 +126,7 @@
 - `src/plugins.ts`
 - `src/plugins/*.ts`
 - `src/MapLibre/core/useMapPluginHost.ts`
+- `src/MapLibre/facades/mapPluginResolver.ts`
 - `src/MapLibre/plugins/*/index.ts`
 - 各插件目录下的 `use*Plugin.ts`
 
@@ -135,6 +136,7 @@
 - 插件实例如何创建、复用、销毁
 - 插件渲染项如何汇总到地图宿主
 - 插件 API 如何通过 `createBusinessPlugins()` 和 `businessMap.plugins.*` 暴露给业务层
+- 内部 resolver 如何把插件宿主 API 桥接给业务聚合门面
 
 ### 我想看吸附、多选、交点预览、线草稿
 
@@ -152,6 +154,8 @@
 
 - `src/MapLibre/core/useMapPluginHost.ts`
 - `src/MapLibre/facades/mapPluginResolver.ts`
+
+`mapPluginResolver.ts` 是门面内部桥接层，不是业务页面首选接入入口。业务页面读取插件能力时优先使用 `useBusinessMap().plugins.*`。
 
 ### 我想看 TerraDraw 集成
 

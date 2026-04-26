@@ -1,4 +1,5 @@
 import type { FilterSpecification } from 'maplibre-gl';
+import { createMapDxfExportPlugin } from '../plugins/map-dxf-export';
 import { createLineDraftPreviewPlugin } from '../plugins/line-draft-preview';
 import { createMapFeatureMultiSelectPlugin } from '../plugins/map-feature-multi-select';
 import { createMapFeatureSnapPlugin, type MapFeatureSnapOptions } from '../plugins/map-feature-snap';
@@ -94,8 +95,8 @@ export type MapControlsPresetName = 'minimal' | 'basic' | 'draw' | 'full';
 
 /** 吸附插件简写配置。 */
 export interface BusinessSnapPresetOptions extends Partial<MapFeatureSnapOptions> {
-  /** 参与普通图层吸附的图层 ID。 */
-  layerIds: string[];
+  /** 参与普通图层吸附的图层 ID；未显式传 ordinaryLayers 时，会用它生成一条默认吸附规则。 */
+  layerIds?: string[];
 }
 
 /** 业务插件预设配置。 */
@@ -108,6 +109,8 @@ export interface BusinessPluginsOptions {
   intersection?: IntersectionPreviewOptions;
   /** 多选插件配置；传 true 时启用默认配置。 */
   multiSelect?: boolean | Parameters<typeof createMapFeatureMultiSelectPlugin>[0];
+  /** DXF 导出插件配置。 */
+  dxfExport?: Parameters<typeof createMapDxfExportPlugin>[0];
 }
 
 /**
@@ -254,18 +257,24 @@ function resolveSnapOptions(options: true | BusinessSnapPresetOptions): MapFeatu
     };
   }
 
+  const { layerIds, ...restOptions } = options;
+  const ordinaryLayers = options.ordinaryLayers ||
+    (layerIds
+      ? {
+          enabled: true,
+          rules: [
+            {
+              id: 'ordinary-layer-snap',
+              layerIds,
+            },
+          ],
+        }
+      : undefined);
+
   return {
     enabled: true,
-    ...options,
-    ordinaryLayers: options.ordinaryLayers || {
-      enabled: true,
-      rules: [
-        {
-          id: 'ordinary-layer-snap',
-          layerIds: options.layerIds,
-        },
-      ],
-    },
+    ...restOptions,
+    ordinaryLayers,
   };
 }
 
@@ -297,6 +306,10 @@ export function createBusinessPlugins(options: BusinessPluginsOptions): MapPlugi
         options.multiSelect === true ? { enabled: true } : options.multiSelect
       )
     );
+  }
+
+  if (options.dxfExport) {
+    plugins.push(createMapDxfExportPlugin(options.dxfExport));
   }
 
   return plugins;

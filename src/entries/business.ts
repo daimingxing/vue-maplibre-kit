@@ -44,33 +44,11 @@ export { default as MapBusinessSourceLayers } from '../MapLibre/facades/MapBusin
 /** 高层业务聚合门面。业务页面优先从这里读取选择、编辑、插件和动效能力。 */
 export { useBusinessMap } from '../MapLibre/facades/useBusinessMap';
 
-/** 线草稿门面。业务页面直接读取线草稿状态和清空动作时使用。 */
-export { useLineDraftPreview } from '../MapLibre/facades/useLineDraftPreview';
-
-/** 交点门面。业务页面直接读取交点状态和交点动作时使用。 */
-export { useIntersectionPreview } from '../MapLibre/facades/useIntersectionPreview';
-
-/** 多选插件门面。业务页面直接读取多选状态和动作时使用。 */
-export { useMapFeatureMultiSelect } from '../MapLibre/facades/useMapFeatureMultiSelect';
-
 /** 图层运行时动作门面。业务页面需要临时修改图层显隐、样式或 feature-state 时使用。 */
 export { useMapLayerActions } from '../MapLibre/facades/useMapLayerActions';
 
 /** 通用 Popup 状态门面。业务页面管理弹窗显隐与载荷时优先使用。 */
 export { useMapPopupState } from '../MapLibre/facades/useMapPopupState';
-
-/** DXF 导出插件 API 解析工具。业务页面主动读取 DXF 导出能力时使用。 */
-export { resolveMapDxfExportApi } from '../MapLibre/facades/mapPluginResolver';
-
-/** 线草稿、交点、多选等插件 API 解析工具。高级业务页面主动读取插件能力时使用。 */
-export {
-  resolveIntersectionPreviewApi,
-  resolveIntersectionPreviewState,
-  resolveLineDraftPreviewApi,
-  resolveLineDraftPreviewState,
-  resolveMapFeatureMultiSelectApi,
-  resolveMapFeatureMultiSelectState,
-} from '../MapLibre/facades/mapPluginResolver';
 
 /** 单个业务数据源工厂。 */
 export { createMapBusinessSource } from '../MapLibre/facades/createMapBusinessSource';
@@ -253,14 +231,8 @@ export type { MapFeaturePropertyEditorTarget } from '../MapLibre/facades/useMapF
 /** 高层业务聚合门面返回类型。 */
 export type { UseBusinessMapResult } from '../MapLibre/facades/useBusinessMap';
 
-/** 线草稿门面返回类型。 */
-export type { UseLineDraftPreviewResult } from '../MapLibre/facades/useLineDraftPreview';
-
-/** 交点门面返回类型。 */
-export type { UseIntersectionPreviewResult } from '../MapLibre/facades/useIntersectionPreview';
-
-/** 多选插件门面返回类型。 */
-export type { UseMapFeatureMultiSelectResult } from '../MapLibre/facades/useMapFeatureMultiSelect';
+/** 高层业务聚合里的插件分组类型。约束 `businessMap.plugins` 时使用。 */
+export type { UseBusinessMapPlugins } from '../MapLibre/facades/useBusinessMap';
 
 /** 图层运行时动作门面返回类型。 */
 export type {
