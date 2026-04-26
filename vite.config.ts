@@ -45,6 +45,7 @@ function resolveLibraryEntries() {
     business: fileURLToPath(new URL("./src/business.ts", import.meta.url)),
     geometry: fileURLToPath(new URL("./src/geometry.ts", import.meta.url)),
     config: fileURLToPath(new URL("./src/config.ts", import.meta.url)),
+    plugins: fileURLToPath(new URL("./src/plugins.ts", import.meta.url)),
     "plugins/map-feature-snap": fileURLToPath(
       new URL("./src/plugins/map-feature-snap.ts", import.meta.url)
     ),
@@ -86,6 +87,10 @@ function resolveDevAliases() {
     {
       find: /^vue-maplibre-kit\/geometry$/,
       replacement: fileURLToPath(new URL("./src/geometry.ts", import.meta.url)),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins$/,
+      replacement: fileURLToPath(new URL("./src/plugins.ts", import.meta.url)),
     },
     {
       find: /^vue-maplibre-kit\/plugins\/map-feature-snap$/,

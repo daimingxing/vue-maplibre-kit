@@ -1713,15 +1713,15 @@ const propertyEditor = businessMap.editor;
 
 /**
  * 统一线草稿分组。
- * 业务层通过 businessMap.draft 读取草稿状态与动作。
+ * 业务层通过 businessMap.plugins.lineDraft 读取草稿状态与动作。
  */
-const lineDraftPreview = businessMap.draft;
+const lineDraftPreview = businessMap.plugins.lineDraft;
 
 /**
  * 统一交点分组。
- * 业务层通过 businessMap.intersection 读取交点数量、切换范围和手动刷新。
+ * 业务层通过 businessMap.plugins.intersection 读取交点数量、切换范围和手动刷新。
  */
-const intersectionPreview = businessMap.intersection;
+const intersectionPreview = businessMap.plugins.intersection;
 
 /**
  * 正式交点常用门面示例。
@@ -2411,7 +2411,7 @@ const handleClearLineDraftFeatures = (): void => {
   }
 
   closeBusinessPanels();
-  ElMessage.success("已通过 businessMap.draft 清空全部线草稿");
+  ElMessage.success("已通过 businessMap.plugins.lineDraft 清空全部线草稿");
 };
 
 /**

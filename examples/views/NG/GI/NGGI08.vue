@@ -42,13 +42,12 @@ import {
   MapBusinessSourceLayers,
   MapLibreInit,
   useBusinessMap,
-  useLineDraftPreview,
   type MapCommonLineFeature,
   type MapLayerInteractiveOptions,
   type MapLibreInitExpose,
   type MapSourceFeatureRef,
 } from "vue-maplibre-kit/business";
-import { createLineDraftPreviewPlugin } from "vue-maplibre-kit/plugins/line-draft-preview";
+import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 import { EXAMPLE_LINE_LAYER_ID, createExampleKit } from "./nggi-example.shared";
 
 // 本页只演示 line-draft 插件：选中线段、生成延长线、生成线廊、读写草稿属性。
@@ -56,14 +55,14 @@ const kit = createExampleKit("basic");
 const mapRef = shallowRef<MapLibreInitExpose | null>(null);
 // businessMap 用来把点击事件转换成业务要素，并读取当前选中的线要素。
 const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry: kit.registry });
-// draft 是 line-draft 的专用门面，业务层不需要直接碰插件内部 API。
-const draft = useLineDraftPreview(() => mapRef.value);
+// draft 从 businessMap.plugins 读取，业务层只需要记住统一插件分组。
+const draft = businessMap.plugins.lineDraft;
 const message = ref("等待生成草稿");
 // selectedLine 保存用户点击到的线；如果没点线，按钮会回退使用 line-a 作为静态示例。
 const selectedLine = shallowRef<MapCommonLineFeature | null>(null);
 const selectedLineRef = shallowRef<MapSourceFeatureRef | null>(null);
-const plugins = [
-  createLineDraftPreviewPlugin({
+const plugins = createBusinessPlugins({
+  lineDraft: {
     enabled: true,
     styleOverrides: {
       line: { paint: { "line-color": "#d97706", "line-width": 5 } },
@@ -76,8 +75,8 @@ const plugins = [
     onClick: (context) => {
       showDraftData(`草稿点击：${String(context.generatedKind ?? "未知类型")}`);
     },
-  }),
-];
+  },
+});
 
 const selectedLineText = computed(() => {
   const id = selectedLine.value?.properties?.id || selectedLine.value?.id;

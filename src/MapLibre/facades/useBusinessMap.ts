@@ -123,10 +123,6 @@ export interface UseBusinessMapResult {
   editor: UseMapFeaturePropertyEditorResult;
   /** 插件短路径分组。需要直接调用插件能力时推荐优先使用这里。 */
   plugins: UseBusinessMapPlugins;
-  /** 线草稿分组。`plugins.lineDraft` 的兼容别名，读取草稿数量、判断是否有草稿、清空草稿时使用。 */
-  draft: UseLineDraftPreviewResult;
-  /** 交点分组。`plugins.intersection` 的兼容别名，读取交点数量、切换求交范围和按 ID 读取交点时使用。 */
-  intersection: UseIntersectionPreviewResult;
   /** feature-state 特效分组。闪烁、高亮等页面级效果从这里取。 */
   effect: UseMapEffectResult;
 }
@@ -179,9 +175,8 @@ function createBusinessMapFeatureGroup(
  * 1. 选中态相关 -> `businessMap.selection`
  * 2. 要素查询/动作 -> `businessMap.feature`
  * 3. 属性编辑 -> `businessMap.editor`
- * 4. 线草稿状态 -> `businessMap.draft`
- * 5. 交点状态 -> `businessMap.intersection`
- * 6. 动效 -> `businessMap.effect`
+ * 4. 插件能力 -> `businessMap.plugins`
+ * 5. 动效 -> `businessMap.effect`
  *
  * @param options 聚合入口初始化配置
  * @returns 适合业务页直接消费的高层能力分组
@@ -215,8 +210,6 @@ export function useBusinessMap(options: UseBusinessMapOptions): UseBusinessMapRe
     layers,
     editor,
     plugins,
-    draft,
-    intersection,
     effect,
   };
 }

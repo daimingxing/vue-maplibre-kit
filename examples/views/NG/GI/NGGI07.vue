@@ -24,8 +24,7 @@
 
 <script setup lang="ts">
 import { MapBusinessSourceLayers, MapLibreInit } from "vue-maplibre-kit/business";
-import type { MapFeatureSnapRule } from "vue-maplibre-kit/plugins/map-feature-snap";
-import { createMapFeatureSnapPlugin } from "vue-maplibre-kit/plugins/map-feature-snap";
+import { createBusinessPlugins, type MapFeatureSnapRule } from "vue-maplibre-kit/plugins";
 import {
   EXAMPLE_FILL_LAYER_ID,
   EXAMPLE_LINE_LAYER_ID,
@@ -77,9 +76,10 @@ const snapRules = [
     tolerancePx: 10,
   },
 ] satisfies Array<MapFeatureSnapRule & { name: string; summary: string }>;
-const plugins = [
-  createMapFeatureSnapPlugin({
-    enabled: true,
+const plugins = createBusinessPlugins({
+  // snap 当前主要是注册型插件：配置写在 plugins prop，吸附结果由地图绘制交互即时使用。
+  snap: {
+    layerIds: [EXAMPLE_POINT_LAYER_ID, EXAMPLE_LINE_LAYER_ID, EXAMPLE_FILL_LAYER_ID],
     // 全局默认范围兜底，具体业务规则仍可按类型覆盖。
     defaultTolerancePx: 12,
     preview: {
@@ -99,8 +99,8 @@ const plugins = [
       // 如果项目还有自定义绘图图层，也可以继续扩展插件配置。
       rules: snapRules,
     },
-  }),
-];
+  },
+});
 </script>
 
 <style scoped>

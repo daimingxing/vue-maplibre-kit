@@ -6,7 +6,7 @@
 
 ## 使用规则
 
-- **先看公开入口**：判断能力是否已经通过 `src/index.ts`、`src/business.ts`、`src/geometry.ts`、`src/plugins/*.ts` 暴露
+- **先看公开入口**：判断能力是否已经通过 `src/index.ts`、`src/business.ts`、`src/plugins.ts`、`src/geometry.ts`、`src/plugins/*.ts` 暴露
 - **再看门面层**：如果问题带明显业务语义，优先进入 `src/MapLibre/facades`
 - **最后下钻内部实现**：只有在需要理解宿主、插件或 TerraDraw 细节时，再进入 `core`、`plugins`、`terradraw`
 - **示例页只辅助验证**：`examples/**` 用于演示和验证，不是项目架构的首要真相来源
@@ -19,11 +19,12 @@
 
 1. `README.md`：先看项目定位、公开入口约定和整体使用方式
 2. `src/business.ts`：业务接入主入口，优先看业务页最常用的组件、门面、图层工厂和高频类型
-3. `src/index.ts`：库根入口，聚合地图根组件、插件体系、通用交互能力和底层类型出口
-4. `src/config.ts`：全局配置入口，集中定义地图默认参数、控件默认值、插件默认值和样式默认值相关 API
-5. `src/geometry.ts`：几何工具入口，统一暴露与业务语义弱耦合的几何计算和来源引用工具
-6. `src/MapLibre/facades/useBusinessMap.ts`：高层业务门面，适合理解业务层如何统一读取选择、编辑、草稿和交点等能力
-7. `src/MapLibre/core/mapLibre-init.vue`：地图核心宿主，适合理解地图实例、控件、TerraDraw 和插件宿主如何装配
+3. `src/plugins.ts`：插件聚合入口，优先看常用插件注册方式
+4. `src/index.ts`：库根入口薄转发，实际根入口源码在 `src/entries/root.ts`
+5. `src/config.ts`：全局配置入口，实际配置入口源码在 `src/entries/config.ts`
+6. `src/geometry.ts`：几何工具入口，实际几何入口源码在 `src/entries/geometry.ts`
+7. `src/MapLibre/facades/useBusinessMap.ts`：高层业务门面，适合理解业务层如何统一读取选择、编辑、插件和动效能力
+8. `src/MapLibre/core/mapLibre-init.vue`：地图核心宿主，适合理解地图实例、控件、TerraDraw 和插件宿主如何装配
 
 ### 我只想知道对外暴露了什么
 
@@ -33,6 +34,8 @@
 - `src/business.ts`
 - `src/config.ts`
 - `src/geometry.ts`
+- `src/plugins.ts`
+- `src/entries/*.ts`
 - `src/plugins/*.ts`
 - `package.json` 中的 `exports`
 
@@ -43,6 +46,7 @@
 先看：
 
 - `src/config.ts`
+- `src/entries/config.ts`
 - `src/demo-map-global-config.ts`
 - `src/main.ts`
 
@@ -74,6 +78,7 @@
 先看：
 
 - `src/business.ts`
+- `src/entries/business.ts`
 - `src/MapLibre/facades/useBusinessMap.ts`
 - `src/MapLibre/facades/mapPluginResolver.ts`
 
@@ -81,7 +86,7 @@
 
 - 业务页应该先 import 什么
 - 高层门面聚合了哪些能力
-- 业务层如何拿到插件 API
+- 业务层如何通过 `businessMap.plugins.*` 拿到插件 API
 
 ### 我想看业务 source 和图层组织
 
@@ -118,6 +123,7 @@
 先看：
 
 - `src/MapLibre/plugins/types.ts`
+- `src/plugins.ts`
 - `src/plugins/*.ts`
 - `src/MapLibre/core/useMapPluginHost.ts`
 - `src/MapLibre/plugins/*/index.ts`
@@ -128,7 +134,7 @@
 - 插件描述对象长什么样
 - 插件实例如何创建、复用、销毁
 - 插件渲染项如何汇总到地图宿主
-- 插件 API 如何暴露给业务层
+- 插件 API 如何通过 `createBusinessPlugins()` 和 `businessMap.plugins.*` 暴露给业务层
 
 ### 我想看吸附、多选、交点预览、线草稿
 
@@ -136,10 +142,11 @@
 
 推荐入口：
 
-- 吸附：`plugins/map-feature-snap/*`
-- 多选：`plugins/map-feature-multi-select/*`
-- 交点预览：`plugins/intersection-preview/*`
-- 线草稿：`plugins/line-draft-preview/*`
+- 业务注册：`src/plugins.ts`
+- 吸附高级入口：`src/plugins/map-feature-snap.ts` 与 `src/MapLibre/plugins/map-feature-snap/*`
+- 多选高级入口：`src/plugins/map-feature-multi-select.ts` 与 `src/MapLibre/plugins/map-feature-multi-select/*`
+- 交点预览高级入口：`src/plugins/intersection-preview.ts` 与 `src/MapLibre/plugins/intersection-preview/*`
+- 线草稿高级入口：`src/plugins/line-draft-preview.ts` 与 `src/MapLibre/plugins/line-draft-preview/*`
 
 如果需要联动宿主，再看：
 

@@ -34,11 +34,11 @@ import {
   MapBusinessSourceLayers,
   MapLibreInit,
   createFeatureStateExpression,
-  useMapFeatureMultiSelect,
+  useBusinessMap,
   type MapBusinessLayerDescriptor,
   type MapLibreInitExpose,
 } from "vue-maplibre-kit/business";
-import { createMapFeatureMultiSelectPlugin } from "vue-maplibre-kit/plugins/map-feature-multi-select";
+import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 import {
   EXAMPLE_LINE_LAYER_ID,
   EXAMPLE_POINT_LAYER_ID,
@@ -50,7 +50,8 @@ const kit = createExampleKit("basic");
 applySelectStyles(kit.layers);
 
 const mapRef = shallowRef<MapLibreInitExpose | null>(null);
-const multiSelect = useMapFeatureMultiSelect(() => mapRef.value);
+const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry: kit.registry });
+const multiSelect = businessMap.plugins.multiSelect;
 const message = ref("等待多选操作");
 const interactive = {
   ...createExampleInteractive((text) => {
@@ -60,14 +61,14 @@ const interactive = {
     message.value = `多选变化：${multiSelect.getSelectedFeatures().length} 个要素`;
   },
 };
-const plugins = [
-  createMapFeatureMultiSelectPlugin({
+const plugins = createBusinessPlugins({
+  multiSelect: {
     enabled: true,
     deactivateBehavior: "retain",
     targetLayerIds: [EXAMPLE_POINT_LAYER_ID, EXAMPLE_LINE_LAYER_ID],
     canSelect: (context) => context.layerId !== null,
-  }),
-];
+  },
+});
 
 const selectedItems = computed(getSelectedItems);
 

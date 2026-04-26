@@ -18,8 +18,16 @@ function resolveTestAliases() {
       replacement: fileURLToPath(new URL('./src/business.ts', import.meta.url)),
     },
     {
+      find: /^vue-maplibre-kit\/config$/,
+      replacement: fileURLToPath(new URL('./src/config.ts', import.meta.url)),
+    },
+    {
       find: /^vue-maplibre-kit\/geometry$/,
       replacement: fileURLToPath(new URL('./src/geometry.ts', import.meta.url)),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins$/,
+      replacement: fileURLToPath(new URL('./src/plugins.ts', import.meta.url)),
     },
     {
       find: /^vue-maplibre-kit\/plugins\/map-dxf-export$/,
@@ -33,6 +41,12 @@ function resolveTestAliases() {
       find: /^vue-maplibre-kit\/plugins\/line-draft-preview$/,
       replacement: fileURLToPath(
         new URL('./src/plugins/line-draft-preview.ts', import.meta.url)
+      ),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins\/intersection-preview$/,
+      replacement: fileURLToPath(
+        new URL('./src/plugins/intersection-preview.ts', import.meta.url)
       ),
     },
     {

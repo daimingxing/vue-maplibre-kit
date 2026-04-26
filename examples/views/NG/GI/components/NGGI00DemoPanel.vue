@@ -77,7 +77,7 @@
     <section class="demo-panel-card">
       <div class="demo-panel-head">
         <h3>线草稿状态</h3>
-        <p>线草稿状态现在直接通过 `useBusinessMap(...).draft` 读取。</p>
+        <p>线草稿状态现在直接通过 `useBusinessMap(...).plugins.lineDraft` 读取。</p>
       </div>
       <div class="demo-panel-kv-list">
         <div class="demo-panel-kv">

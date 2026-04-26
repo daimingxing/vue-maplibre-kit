@@ -20,10 +20,10 @@
       <button type="button" @click="removeIntersection">删除正式交点</button>
       <button type="button" @click="toggleMultiSelect">切换多选</button>
       <button type="button" @click="clearDraft">清空草稿</button>
-      <p>交点数：{{ businessMap.intersection.count.value }}</p>
-      <p>正式交点：{{ businessMap.intersection.materializedCount.value }}</p>
+      <p>交点数：{{ businessMap.plugins.intersection.count.value }}</p>
+      <p>正式交点：{{ businessMap.plugins.intersection.materializedCount.value }}</p>
       <p>多选数：{{ businessMap.plugins.multiSelect.selectedCount.value }}</p>
-      <p>草稿数：{{ businessMap.draft.featureCount.value }}</p>
+      <p>草稿数：{{ businessMap.plugins.lineDraft.featureCount.value }}</p>
       <p>{{ message }}</p>
       <pre>{{ overviewText }}</pre>
     </aside>
@@ -35,11 +35,11 @@ import { computed, ref, shallowRef } from "vue";
 import {
   MapBusinessSourceLayers,
   MapLibreInit,
-  createBusinessPlugins,
   useBusinessMap,
   type MapCommonLineFeature,
   type MapLibreInitExpose,
 } from "vue-maplibre-kit/business";
+import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 import {
   EXAMPLE_LINE_LAYER_ID,
   createExampleInteractive,

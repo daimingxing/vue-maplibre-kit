@@ -476,14 +476,14 @@ function createMapExpose(options: {
 
 describe('useBusinessMap', () => {
   it('business 入口源码会直接导出线草稿门面', () => {
-    const businessEntrySource = readFileSync(resolve(__dirname, '../../business.ts'), 'utf-8');
+    const businessEntrySource = readFileSync(resolve(__dirname, '../../entries/business.ts'), 'utf-8');
 
     expect(businessEntrySource).toContain("export { useLineDraftPreview }");
     expect(businessEntrySource).toContain("export type { UseLineDraftPreviewResult }");
   });
 
   it('business 入口应直接导出业务层高频类型', () => {
-    const businessEntrySource = readFileSync(resolve(__dirname, '../../business.ts'), 'utf-8');
+    const businessEntrySource = readFileSync(resolve(__dirname, '../../entries/business.ts'), 'utf-8');
     const typeCheck = null as unknown as BusinessTypeExportCheck | null;
 
     expect(typeCheck).toBeNull();
@@ -493,6 +493,39 @@ describe('useBusinessMap', () => {
     expect(businessEntrySource).toContain("export type { MapFeaturePropertyPanelItem }");
     expect(businessEntrySource).toContain("export type { MapSourceFeatureRef }");
     expect(businessEntrySource).toContain("export type { MapFeatureId }");
+  });
+
+  it('plugins 聚合入口应导出业务插件预设工厂和全部插件子入口', () => {
+    const pluginsEntrySource = readFileSync(resolve(__dirname, '../../entries/plugins.ts'), 'utf-8');
+
+    expect(pluginsEntrySource).toContain("export { createBusinessPlugins }");
+    expect(pluginsEntrySource).toContain("export * from '../plugins/map-feature-snap'");
+    expect(pluginsEntrySource).toContain("export * from '../plugins/line-draft-preview'");
+    expect(pluginsEntrySource).toContain("export * from '../plugins/intersection-preview'");
+    expect(pluginsEntrySource).toContain("export * from '../plugins/map-feature-multi-select'");
+    expect(pluginsEntrySource).toContain("export * from '../plugins/map-dxf-export'");
+  });
+
+  it('plugins 聚合入口应同步 package、Vite、Vitest 和 TypeScript 路径', () => {
+    const packageJson = JSON.parse(
+      readFileSync(resolve(__dirname, '../../../package.json'), 'utf-8')
+    ) as {
+      exports: Record<string, { types?: string; import?: string } | string>;
+    };
+    const viteConfigSource = readFileSync(resolve(__dirname, '../../../vite.config.ts'), 'utf-8');
+    const vitestConfigSource = readFileSync(resolve(__dirname, '../../../vitest.config.ts'), 'utf-8');
+    const tsConfigSource = readFileSync(resolve(__dirname, '../../../tsconfig.app.json'), 'utf-8');
+
+    expect(packageJson.exports['./plugins']).toEqual({
+      types: './dist/plugins.d.ts',
+      import: './dist/plugins.js',
+    });
+    expect(viteConfigSource).toContain('plugins: fileURLToPath(new URL("./src/plugins.ts"');
+    expect(viteConfigSource).toContain('find: /^vue-maplibre-kit\\/plugins$/');
+    expect(vitestConfigSource).toContain("find: /^vue-maplibre-kit\\/config$/");
+    expect(vitestConfigSource).toContain("find: /^vue-maplibre-kit\\/plugins$/");
+    expect(vitestConfigSource).toContain("find: /^vue-maplibre-kit\\/plugins\\/intersection-preview$/");
+    expect(tsConfigSource).toContain('"vue-maplibre-kit/plugins": ["./src/plugins.ts"]');
   });
 
   it('会按分组暴露业务 source、查询与动作能力', () => {
@@ -531,10 +564,10 @@ describe('useBusinessMap', () => {
     businessMap.selection.activate();
 
     expect(businessMap.selection.isActive.value).toBe(false);
-    expect(businessMap.draft.clear()).toBe(false);
-    expect(businessMap.intersection.visible.value).toBe(false);
+    expect(businessMap.plugins.lineDraft.clear()).toBe(false);
+    expect(businessMap.plugins.intersection.visible.value).toBe(false);
     expect(businessMap.plugins.multiSelect.selectedCount.value).toBe(0);
-    expect(businessMap.intersection.materialize()).toBe(false);
+    expect(businessMap.plugins.intersection.materialize()).toBe(false);
     const flashStartResult = businessMap.effect.startFlash({
       source: 'business-source',
       id: 'feature-1',
@@ -585,17 +618,16 @@ describe('useBusinessMap', () => {
     expect(businessMap.selection.isActive.value).toBe(true);
     expect(businessMap.selection.selectedCount.value).toBe(1);
     expect(businessMap.selection.selectedFeatureIds.value).toEqual(['feature-1']);
-    expect(businessMap.draft.hasFeatures.value).toBe(true);
-    expect(businessMap.draft.featureCount.value).toBe(1);
+    expect(businessMap.plugins.lineDraft.hasFeatures.value).toBe(true);
+    expect(businessMap.plugins.lineDraft.featureCount.value).toBe(1);
     expect(businessMap.plugins.lineDraft.getData()?.features).toHaveLength(1);
-    const lineDraftClearResult = businessMap.draft.clear();
+    const lineDraftClearResult = businessMap.plugins.lineDraft.clear();
     expect(lineDraftClearResult).toBe(true);
     expect(lineDraftHarness.state.hasFeatures).toBe(false);
     expect(lineDraftHarness.state.featureCount).toBe(0);
-    expect(businessMap.intersection.count.value).toBe(2);
     expect(businessMap.plugins.intersection.count.value).toBe(2);
-    expect(businessMap.intersection.visible.value).toBe(true);
-    expect(typeof businessMap.intersection.refresh).toBe('function');
+    expect(businessMap.plugins.intersection.visible.value).toBe(true);
+    expect(typeof businessMap.plugins.intersection.refresh).toBe('function');
     businessMap.plugins.multiSelect.activate();
     expect(businessMap.plugins.multiSelect.isActive.value).toBe(true);
     expect(flashStartResult).toBe(true);

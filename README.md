@@ -9,15 +9,16 @@
 第一次进入仓库，优先只看这 6 个文件：
 
 1. `src/business.ts`
-2. `src/index.ts`
-3. `src/geometry.ts`
+2. `src/plugins.ts`
+3. `src/index.ts`
 4. `src/MapLibre/facades/useBusinessMap.ts`
 5. `src/MapLibre/core/mapLibre-init.vue`
 6. `src/MapLibre/core/useMapPluginHost.ts`
 
 如果还要继续下钻：
 
-- 插件体系：看 `src/plugins/*.ts` 和 `src/MapLibre/plugins/README.md`
+- 入口源码：看 `src/entries/*.ts`
+- 插件体系：看 `src/plugins.ts`、`src/plugins/*.ts` 和 `src/MapLibre/plugins/README.md`
 - TerraDraw：看 `src/MapLibre/terradraw/README.md`
 - 精准定位：看 `docs/file-index.md`
 
@@ -35,9 +36,9 @@
 
 1. `README.md`
 2. `src/business.ts`
-3. `src/index.ts`
-4. `src/geometry.ts`
-5. `src/plugins/*.ts`
+3. `src/plugins.ts`
+4. `src/index.ts`
+5. `src/geometry.ts`
 6. `docs/file-index.md`
 
 ### 维护者
@@ -45,8 +46,8 @@
 按这个顺序更容易建立完整心智模型：
 
 1. `src/business.ts`
-2. `src/index.ts`
-3. `src/MapLibre/facades/useBusinessMap.ts`
+2. `src/plugins.ts`
+3. `src/entries/*.ts`
 4. `src/MapLibre/core/mapLibre-init.vue`
 5. `src/MapLibre/core/useMapPluginHost.ts`
 6. `src/MapLibre/terradraw/useTerradrawInteractive.ts`
@@ -58,7 +59,8 @@
 | 业务页面接入 | `vue-maplibre-kit/business` | 优先入口，收口高频业务能力 |
 | 完整公开能力 | `vue-maplibre-kit` | 根入口，适合组件、类型、底层能力按需引入 |
 | 几何计算 | `vue-maplibre-kit/geometry` | 几何工具、来源引用工具 |
-| 显式启用插件 | `vue-maplibre-kit/plugins/*` | 插件子路径公开入口 |
+| 常用插件注册 | `vue-maplibre-kit/plugins` | 聚合入口，推荐用 `createBusinessPlugins()` 注册 snap、line-draft、intersection、multi-select |
+| 单插件高级用法 | `vue-maplibre-kit/plugins/*` | 插件子路径公开入口 |
 | 地图控件样式 | `vue-maplibre-kit/style.css` | MapLibre、Vue MapLibre、TerraDraw 控件样式 |
 
 ### 最小导入示例
@@ -67,7 +69,7 @@
 import 'vue-maplibre-kit/style.css';
 import { MapLibreInit } from 'vue-maplibre-kit';
 import { useBusinessMap } from 'vue-maplibre-kit/business';
-import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature-snap';
+import { createBusinessPlugins } from 'vue-maplibre-kit/plugins';
 ```
 
 ## 项目术语
@@ -90,6 +92,7 @@ import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature
 - **plugin descriptor**：插件描述对象，声明插件类型、实例工厂和配置
 - **plugin host**：插件宿主，负责插件实例创建、复用、销毁、状态桥接和渲染聚合
 - **plugin api**：插件对外暴露给门面层或业务层调用的能力集合
+- **business plugins**：业务插件预设，常用插件优先用 `createBusinessPlugins()` 生成描述对象列表
 - **managed preview**：由系统托管的预览要素，例如线草稿、交点预览等临时渲染结果
 
 ### TerraDraw 集成
@@ -112,7 +115,9 @@ import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature
 
 - `src/index.ts`：根入口
 - `src/business.ts`：业务优先入口
+- `src/plugins.ts`：插件聚合入口
 - `src/geometry.ts`：几何工具入口
+- `src/entries/*.ts`：主题化公开入口源码
 - `src/plugins/*.ts`：插件子路径公开入口
 - `src/MapLibre/core`：地图宿主、插件宿主、控件生命周期
 - `src/MapLibre/facades`：高层业务门面
@@ -159,6 +164,7 @@ import { createMapFeatureSnapPlugin } from 'vue-maplibre-kit/plugins/map-feature
 - `vue-maplibre-kit`
 - `vue-maplibre-kit/business`
 - `vue-maplibre-kit/geometry`
+- `vue-maplibre-kit/plugins`
 - `vue-maplibre-kit/plugins/*`
 
 ## 子目录导读

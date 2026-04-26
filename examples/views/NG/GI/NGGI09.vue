@@ -38,20 +38,21 @@ import { computed, ref, shallowRef } from "vue";
 import {
   MapBusinessSourceLayers,
   MapLibreInit,
-  useIntersectionPreview,
+  useBusinessMap,
   type MapLibreInitExpose,
 } from "vue-maplibre-kit/business";
-import { createIntersectionPreviewPlugin } from "vue-maplibre-kit/plugins/intersection-preview";
+import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 import { EXAMPLE_LINE_LAYER_ID, createExampleKit } from "./nggi-example.shared";
 
 // 本页只演示 intersection 插件：刷新预览交点、生成正式点、修改属性、删除正式点、读取 GeoJSON。
 const kit = createExampleKit("basic");
 const mapRef = shallowRef<MapLibreInitExpose | null>(null);
-// intersection 是交点插件门面，业务层通过它读写预览点和正式点。
-const intersection = useIntersectionPreview(() => mapRef.value);
+// businessMap.plugins.intersection 是业务层统一插件入口。
+const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry: kit.registry });
+const intersection = businessMap.plugins.intersection;
 const message = ref("等待交点操作");
-const plugins = [
-  createIntersectionPreviewPlugin({
+const plugins = createBusinessPlugins({
+  intersection: {
     enabled: true,
     visible: true,
     targetSourceIds: [kit.source.sourceId],
@@ -69,8 +70,8 @@ const plugins = [
     onClick: (context) => {
       message.value = `交点点击：${context.intersectionId}`;
     },
-  }),
-];
+  },
+});
 
 const materializedItems = computed(() =>
   (intersection.getMaterializedData()?.features || []).map((feature) => ({

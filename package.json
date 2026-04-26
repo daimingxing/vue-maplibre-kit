@@ -36,6 +36,10 @@
       "types": "./dist/geometry.d.ts",
       "import": "./dist/geometry.js"
     },
+    "./plugins": {
+      "types": "./dist/plugins.d.ts",
+      "import": "./dist/plugins.js"
+    },
     "./style.css": "./dist/style.css",
     "./plugins/map-feature-snap": {
       "types": "./dist/plugins/map-feature-snap.d.ts",

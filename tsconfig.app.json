@@ -10,6 +10,7 @@
       "vue-maplibre-kit/business": ["./src/business.ts"],
       "vue-maplibre-kit/config": ["./src/config.ts"],
       "vue-maplibre-kit/geometry": ["./src/geometry.ts"],
+      "vue-maplibre-kit/plugins": ["./src/plugins.ts"],
       "vue-maplibre-kit/plugins/map-feature-snap": [
         "./src/plugins/map-feature-snap.ts"
       ],

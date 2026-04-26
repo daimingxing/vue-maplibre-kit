@@ -312,7 +312,7 @@ export function buildLineDraftStatusText(
 ): string {
   return hasLineDraftFeatures
     ? `线草稿能力门面当前已有临时结果（共 ${lineDraftCount} 个）；如果不需要，直接点击这里的“清空线草稿”即可。`
-    : "当前没有线草稿。选中线并点击“创建线草稿”后，这里会通过 businessMap.draft 自动刷新状态。";
+    : "当前没有线草稿。选中线并点击“创建线草稿”后，这里会通过 businessMap.plugins.lineDraft 自动刷新状态。";
 }
 
 /**
@@ -333,7 +333,7 @@ export function buildIntersectionMaterializedStatusText(
     return "当前示例已开启 materializeOnClick。点击地图上的预览交点后，插件会自动生成正式交点点要素；业务层可继续通过 getMaterializedData() 读取 GeoJSON，或通过 updateMaterializedProperties() / removeMaterialized() 追加属性与撤销误点。";
   }
 
-  return `当前已有 ${materializedCount} 个正式交点点要素。它们由插件内部统一托管，业务层可通过 businessMap.intersection 调用 getMaterializedData()、updateMaterializedProperties()、removeMaterialized()、clearMaterialized()。`;
+  return `当前已有 ${materializedCount} 个正式交点点要素。它们由插件内部统一托管，业务层可通过 businessMap.plugins.intersection 调用 getMaterializedData()、updateMaterializedProperties()、removeMaterialized()、clearMaterialized()。`;
 }
 
 /**
