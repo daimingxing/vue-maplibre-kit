@@ -19,13 +19,22 @@
       <button type="button" @click="readDraftData">读取草稿 GeoJSON</button>
       <button type="button" @click="draft.clear">清空</button>
       <p>草稿数：{{ draft.featureCount.value }}</p>
+      <div class="draft-list">
+        <h4>草稿属性</h4>
+        <dl v-for="item in draftItems" :key="item.id">
+          <dt>{{ item.id }}</dt>
+          <dd>类型：{{ item.kind }}</dd>
+          <dd>状态：{{ item.status }}</dd>
+          <dd>editable：{{ item.editable }}</dd>
+        </dl>
+      </div>
       <pre>{{ message }}</pre>
     </aside>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef } from "vue";
+import { computed, ref, shallowRef } from "vue";
 import {
   MapBusinessSourceLayers,
   MapLibreInit,
@@ -51,10 +60,19 @@ const plugins = [
       message.value = `草稿移入：${String(context.featureId ?? "无 ID")}`;
     },
     onClick: (context) => {
-      message.value = `草稿点击：${String(context.generatedKind ?? "未知类型")}`;
+      showDraftData(`草稿点击：${String(context.generatedKind ?? "未知类型")}`);
     },
   }),
 ];
+
+const draftItems = computed(() =>
+  (draft.getData()?.features || []).map((feature) => ({
+    id: String(feature.properties?.id || feature.id || "未知草稿"),
+    kind: String(feature.properties?.generatedKind || "未知类型"),
+    status: String(feature.properties?.status || "未设置"),
+    editable: String(feature.properties?.editable || "未设置"),
+  }))
+);
 
 /**
  * 判断要素是否为线要素。
@@ -121,7 +139,7 @@ function saveDraft(): void {
     status: "pending-submit",
     editable: "已修改草稿属性",
   });
-  message.value = result.message;
+  showDraftData(result.message);
 }
 
 /**
@@ -136,23 +154,23 @@ function removeDraftProp(): void {
   }
 
   const result = draft.removeProperties(featureId, ["editable"]);
-  message.value = result.message;
+  showDraftData(result.message);
 }
 
 /**
- * 读取草稿线和草稿面的 GeoJSON 实例。
+ * 展示当前草稿完整 GeoJSON 集合。
+ * @param title 展示标题
+ */
+function showDraftData(title: string): void {
+  const data = draft.getData();
+  message.value = `${title}\n${JSON.stringify(data, null, 2)}`;
+}
+
+/**
+ * 读取草稿线和草稿面的完整 GeoJSON 实例。
  */
 function readDraftData(): void {
-  const data = draft.getData();
-  message.value = JSON.stringify(
-    {
-      count: data?.features.length || 0,
-      ids: (data?.features || []).map((feature) => feature.properties?.id || feature.id),
-      kinds: (data?.features || []).map((feature) => feature.properties?.generatedKind),
-    },
-    null,
-    2
-  );
+  showDraftData("当前 draft.getData()：");
 }
 </script>
 
@@ -179,6 +197,31 @@ function readDraftData(): void {
 pre {
   overflow: auto;
   max-height: 220px;
+  font-size: 12px;
+}
+
+.draft-list {
+  overflow: auto;
+  max-height: 160px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.draft-list h4 {
+  margin: 8px 0 4px;
+}
+
+.draft-list dl {
+  margin: 0;
+  padding: 6px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.draft-list dt {
+  font-weight: 700;
+}
+
+.draft-list dd {
+  margin: 2px 0 0;
   font-size: 12px;
 }
 </style>

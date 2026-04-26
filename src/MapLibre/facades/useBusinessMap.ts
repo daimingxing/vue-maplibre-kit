@@ -121,11 +121,11 @@ export interface UseBusinessMapResult {
   layers: UseMapLayerActionsResult;
   /** 属性编辑分组。打开属性面板、保存单个字段、删除单个字段时使用。 */
   editor: UseMapFeaturePropertyEditorResult;
-  /** 插件短路径分组。需要直接调用插件能力时优先使用这里。 */
+  /** 插件短路径分组。需要直接调用插件能力时推荐优先使用这里。 */
   plugins: UseBusinessMapPlugins;
-  /** 线草稿分组。读取草稿数量、判断是否有草稿、清空草稿时使用。 */
+  /** 线草稿分组。`plugins.lineDraft` 的兼容别名，读取草稿数量、判断是否有草稿、清空草稿时使用。 */
   draft: UseLineDraftPreviewResult;
-  /** 交点分组。读取交点数量、切换求交范围和按 ID 读取交点时使用。 */
+  /** 交点分组。`plugins.intersection` 的兼容别名，读取交点数量、切换求交范围和按 ID 读取交点时使用。 */
   intersection: UseIntersectionPreviewResult;
   /** feature-state 特效分组。闪烁、高亮等页面级效果从这里取。 */
   effect: UseMapEffectResult;

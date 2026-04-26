@@ -42,6 +42,9 @@
     <!-- 数据源与图层插槽 -->
     <slot name="dataSource"></slot>
 
+    <!-- 默认地图子组件插槽，例如 MglPopup 或业务自定义覆盖组件。 -->
+    <slot></slot>
+
     <!-- 动态地图插件渲染项 -->
     <component
       :is="pluginRenderItem.component"

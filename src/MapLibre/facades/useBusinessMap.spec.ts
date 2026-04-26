@@ -616,6 +616,7 @@ describe('useBusinessMap', () => {
   });
 
   it('会暴露运行时图层快捷动作', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { sourceRegistry } = createBusinessSourceHarness();
     const rawMap = {
       getLayer: vi.fn((layerId: string) => (layerId === 'line-layer' ? { id: layerId } : null)),
@@ -639,8 +640,13 @@ describe('useBusinessMap', () => {
     expect(showResult.success).toBe(true);
     expect(paintResult.success).toBe(true);
     expect(featureStateResult.success).toBe(true);
+    expect(typeof businessMap.layers.addGeoJsonSource).toBe('function');
+    expect(typeof businessMap.layers.addLayer).toBe('function');
+    expect(typeof businessMap.layers.removeLayer).toBe('function');
+    expect(typeof businessMap.layers.removeSource).toBe('function');
     expect(rawMap.setLayoutProperty).toHaveBeenCalledWith('line-layer', 'visibility', 'visible');
     expect(rawMap.setPaintProperty).toHaveBeenCalledWith('line-layer', 'line-color', '#f97316');
     expect(rawMap.setPaintProperty).toHaveBeenCalledWith('line-layer', 'line-width', 4);
+    warnSpy.mockRestore();
   });
 });

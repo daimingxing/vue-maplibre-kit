@@ -71,7 +71,7 @@ export interface LayerGroupItem {
   policy?: MapFeaturePropertyPolicy;
   /** 当前图层允许渲染的几何类型。 */
   geometryTypes?: MapBusinessLayerGeometryType[];
-  /** 当前图层的简单等值过滤条件。 */
+  /** 当前图层的简单等值过滤条件；复杂 MapLibre 过滤表达式请使用 filter。 */
   where?: MapBusinessLayerWhere;
   /** 当前图层的原始 MapLibre 过滤表达式。 */
   filter?: FilterSpecification;
@@ -100,7 +100,7 @@ export interface BusinessSnapPresetOptions extends Partial<MapFeatureSnapOptions
 
 /** 业务插件预设配置。 */
 export interface BusinessPluginsOptions {
-  /** 吸附插件配置；传 true 时只启用插件默认值。 */
+  /** 吸附插件配置；传 true 时只启用基础能力和插件内部默认目标，普通业务图层吸附需传 layerIds 或 ordinaryLayers。 */
   snap?: boolean | BusinessSnapPresetOptions;
   /** 线草稿插件配置；传 true 时启用默认配置。 */
   lineDraft?: boolean | Parameters<typeof createLineDraftPreviewPlugin>[0];

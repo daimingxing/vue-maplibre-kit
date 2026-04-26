@@ -1,6 +1,11 @@
 <template>
   <section class="nggi-page">
-    <MapLibreInit ref="mapRef" :map-options="kit.mapOptions" :controls="kit.controls">
+    <MapLibreInit
+      ref="mapRef"
+      :map-options="kit.mapOptions"
+      :controls="kit.controls"
+      :map-interactive="interactive"
+    >
       <template #dataSource>
         <MapBusinessSourceLayers :source="kit.source" :layers="kit.layers" />
       </template>
@@ -22,6 +27,8 @@ import {
   MapLibreInit,
   createFeatureStateExpression,
   useBusinessMap,
+  type MapBusinessLayerDescriptor,
+  type MapLayerInteractiveOptions,
   type MapLibreInitExpose,
 } from "vue-maplibre-kit/business";
 import {
@@ -37,14 +44,97 @@ const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry:
 const message = ref("等待操作");
 const lineVisible = ref(true);
 
-// feature-state 表达式在样式里常用于 hover/selected 等状态驱动渲染。
-const activeColor = createFeatureStateExpression({
-  default: "#f97316",
-  states: {
-    active: "#ef4444",
+applyStateStyles(kit.layers);
+
+const interactive: MapLayerInteractiveOptions = {
+  enabled: true,
+  layers: {
+    [EXAMPLE_POINT_LAYER_ID]: {
+      hitPriority: 30,
+      enableFeatureStateHover: true,
+    },
+    [EXAMPLE_LINE_LAYER_ID]: {
+      hitPriority: 20,
+      enableFeatureStateHover: true,
+    },
   },
-});
-void activeColor;
+  onHoverEnter: (context) => {
+    message.value = `hover 高亮：${String(context.properties?.name || "未知要素")}`;
+  },
+  onHoverLeave: () => {
+    message.value = "hover 已清理";
+  },
+};
+
+/**
+ * 按图层 ID 读取示例图层描述。
+ * @param layers 图层描述数组
+ * @param layerId 目标图层 ID
+ * @returns 命中的图层描述；未命中时返回 null
+ */
+function findLayer(
+  layers: MapBusinessLayerDescriptor[],
+  layerId: string
+): MapBusinessLayerDescriptor | null {
+  return layers.find((layer) => layer.layerId === layerId) || null;
+}
+
+/**
+ * 将 hover 与主动 feature-state 接入示例图层样式。
+ * @param layers 图层描述数组
+ */
+function applyStateStyles(layers: MapBusinessLayerDescriptor[]): void {
+  const pointLayer = findLayer(layers, EXAMPLE_POINT_LAYER_ID);
+  const lineLayer = findLayer(layers, EXAMPLE_LINE_LAYER_ID);
+
+  if (pointLayer?.style?.paint) {
+    const pointPaint = pointLayer.style.paint as Record<string, unknown>;
+    pointPaint["circle-color"] = createFeatureStateExpression({
+      default: "#f97316",
+      hover: "#facc15",
+      states: {
+        active: "#ef4444",
+      },
+      order: ["active", "hover"],
+    });
+    pointPaint["circle-radius"] = createFeatureStateExpression({
+      default: 7,
+      hover: 10,
+      states: {
+        active: 12,
+      },
+      order: ["active", "hover"],
+    });
+    pointPaint["circle-stroke-color"] = createFeatureStateExpression({
+      default: "#ffffff",
+      hover: "#111827",
+      states: {
+        active: "#7f1d1d",
+      },
+      order: ["active", "hover"],
+    });
+  }
+
+  if (lineLayer?.style?.paint) {
+    const linePaint = lineLayer.style.paint as Record<string, unknown>;
+    linePaint["line-color"] = createFeatureStateExpression({
+      default: "#0f766e",
+      hover: "#facc15",
+      states: {
+        active: "#ef4444",
+      },
+      order: ["active", "hover"],
+    });
+    linePaint["line-width"] = createFeatureStateExpression({
+      default: 4,
+      hover: 7,
+      states: {
+        active: 8,
+      },
+      order: ["active", "hover"],
+    });
+  }
+}
 
 /**
  * 切换线图层显隐。
@@ -72,7 +162,7 @@ function setPointState(): void {
   const result = businessMap.layers.setFeatureState(EXAMPLE_SOURCE_ID, "point-a", {
     active: true,
   });
-  message.value = `${EXAMPLE_POINT_LAYER_ID}：${result.message}`;
+  message.value = `${EXAMPLE_POINT_LAYER_ID} 已写入 active 状态：${result.message}`;
 }
 </script>
 
