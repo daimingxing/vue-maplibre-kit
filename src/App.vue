@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import NGGI00 from './views/NG/GI/NGGI00.vue'
+import NGGI00 from "../examples/views/NG/GI/NGGI00.vue";
 </script>
 
 <style lang="scss">

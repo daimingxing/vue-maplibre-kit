@@ -140,8 +140,8 @@
   证据：`src/MapLibre/core/useMapPluginHost.ts:193`、`src/MapLibre/core/useMapPluginHost.ts:511`、`src/MapLibre/core/useMapPluginHost.ts:710`、`src/MapLibre/core/useMapPluginHost.ts:736`、`src/MapLibre/core/useMapPluginHost.ts:840`
 - 普通图层交互和吸附绑定在销毁时会解绑 map 事件、全局事件和动画帧。
   证据：`src/MapLibre/composables/useMapInteractive.ts:1895`、`src/MapLibre/plugins/map-feature-snap/useMapFeatureSnapBinding.ts:918`
-- 示例层 `src/views/NG/GI/**` 已经使用 `vue-maplibre-kit`、`vue-maplibre-kit/business`、`vue-maplibre-kit/geometry`、插件子路径等公开出口，没有继续直接依赖 `src/MapLibre/**` 私有实现。
-  证据：`src/views/NG/GI/NGGI00.vue:147`、`src/views/NG/GI/NGGI00.vue:188`、`src/views/NG/GI/NGGI00.vue:192`
+- 示例层 `examples/views/NG/GI/**` 已经使用 `vue-maplibre-kit`、`vue-maplibre-kit/business`、`vue-maplibre-kit/geometry`、插件子路径等公开出口，没有继续直接依赖 `src/MapLibre/**` 私有实现。
+  证据：`examples/views/NG/GI/NGGI00.vue:147`、`examples/views/NG/GI/NGGI00.vue:188`、`examples/views/NG/GI/NGGI00.vue:192`
 - `MapLibreInitExpose` 与 `rawHandles` 已作为明确低层逃生口公开，业务层无需直接穿透内部文件。
   证据：`src/MapLibre/core/mapLibre-init.types.ts:48`、`src/MapLibre/core/mapLibre-init.types.ts:90`、`src/MapLibre/core/mapLibre-init.vue:641`
 
