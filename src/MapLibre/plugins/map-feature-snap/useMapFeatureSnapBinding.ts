@@ -45,6 +45,16 @@ export const MAP_FEATURE_SNAP_PREVIEW_POINT_LAYER_ID = '__mapFeatureSnapPreviewP
 /** 吸附预览线图层 ID。 */
 export const MAP_FEATURE_SNAP_PREVIEW_LINE_LAYER_ID = '__mapFeatureSnapPreviewLineLayer';
 
+/**
+ * 交点插件内部图层 ID。
+ * 这里直接使用固定字符串，避免把吸附层绑定到交点插件实现文件上，
+ * 从而把 Vue 渲染层依赖带进纯算法绑定模块。
+ */
+const INTERSECTION_PREVIEW_LAYER_ID = 'intersection-preview-layer';
+const INTERSECTION_MATERIALIZED_LAYER_ID = 'intersection-materialized-layer';
+const INTERSECTION_PREVIEW_SNAP_PRIORITY = 100;
+const INTERSECTION_MATERIALIZED_SNAP_PRIORITY = 110;
+
 const DEFAULT_TOLERANCE_PX = 16;
 const DEFAULT_SNAP_MODES: MapFeatureSnapMode[] = ['vertex', 'segment'];
 
@@ -234,15 +244,21 @@ function matchesRuleFilter(
     return true;
   }
 
-  return rule.filter({
-    rule,
-    feature,
-    layerId,
-    sourceId: getFeatureSourceId(feature),
-    sourceLayer: feature.sourceLayer || null,
-    properties: feature.properties || null,
-    map,
-  });
+  try {
+    return rule.filter({
+      rule,
+      feature,
+      layerId,
+      sourceId: getFeatureSourceId(feature),
+      sourceLayer: feature.sourceLayer || null,
+      properties: feature.properties || null,
+      map,
+    });
+  } catch (error) {
+    // 业务自定义过滤器属于插件外部输入，抛错时只跳过当前候选，避免中断鼠标交互链路。
+    console.error(`[MapFeatureSnap] 吸附规则 '${rule.id}' filter 执行失败，已跳过当前候选`, error);
+    return false;
+  }
 }
 
 /**
@@ -624,6 +640,31 @@ function isSnapPluginEnabled(options: MapFeatureSnapOptions | null | undefined):
 }
 
 /**
+ * 创建交点图层内置吸附规则。
+ * 插件内部交点点位应始终可被吸附，因此这里不要求业务层额外声明规则。
+ *
+ * @returns 交点预览层与正式点层的内置吸附规则
+ */
+function createBuiltInIntersectionSnapRules(): MapFeatureSnapRule[] {
+  return [
+    {
+      id: 'intersection-preview-snap',
+      layerIds: [INTERSECTION_PREVIEW_LAYER_ID],
+      priority: INTERSECTION_PREVIEW_SNAP_PRIORITY,
+      geometryTypes: ['Point'],
+      snapTo: ['vertex'],
+    },
+    {
+      id: 'intersection-materialized-snap',
+      layerIds: [INTERSECTION_MATERIALIZED_LAYER_ID],
+      priority: INTERSECTION_MATERIALIZED_SNAP_PRIORITY,
+      geometryTypes: ['Point'],
+      snapTo: ['vertex'],
+    },
+  ];
+}
+
+/**
  * 读取当前启用的普通图层吸附规则集合。
  * @param options 地图吸附插件配置
  * @returns 当前启用的规则集合
@@ -635,16 +676,20 @@ function getEnabledSnapRules(
     return [];
   }
 
+  const builtInRules = createBuiltInIntersectionSnapRules();
   const ordinaryLayerOptions = options?.ordinaryLayers;
   if (!ordinaryLayerOptions?.rules?.length) {
-    return [];
+    return builtInRules;
   }
 
   if (ordinaryLayerOptions.enabled === false) {
-    return [];
+    return builtInRules;
   }
 
-  return ordinaryLayerOptions.rules.filter((rule) => rule.enabled !== false);
+  return [
+    ...ordinaryLayerOptions.rules.filter((rule) => rule.enabled !== false),
+    ...builtInRules,
+  ];
 }
 
 /**

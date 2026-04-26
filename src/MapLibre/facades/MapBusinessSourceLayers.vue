@@ -42,8 +42,8 @@ interface ResolvedMapBusinessLayer {
 const props = defineProps<{
   /** 当前要渲染的业务 source。 */
   source: MapBusinessSource;
-  /** 当前业务 source 下需要渲染的轻量图层描述数组。 */
-  layers: MapBusinessLayerDescriptor[];
+  /** 当前业务 source 下需要渲染的轻量图层描述数组；不传时回退到 source 内声明。 */
+  layers?: MapBusinessLayerDescriptor[];
 }>();
 
 /**
@@ -71,7 +71,9 @@ function resolveLayerComponent(layerType: MapBusinessLayerDescriptor['type']): C
  * 这里会顺手补齐默认样式和组合过滤表达式。
  */
 const resolvedLayers = computed<ResolvedMapBusinessLayer[]>(() => {
-  return props.layers.map((layer) => {
+  const layerList = props.layers ?? props.source.getLayers();
+
+  return layerList.map((layer) => {
     const style = resolveMapBusinessLayerStyle(layer);
     const filter = buildMapBusinessLayerFilter(layer);
 

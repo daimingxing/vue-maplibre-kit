@@ -323,17 +323,19 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
    */
   const getFeatureRef = (
     contextOrRefLike:
-      | Pick<MapLayerInteractiveContext, 'sourceId' | 'featureId'>
+      | Pick<MapLayerInteractiveContext, 'sourceId' | 'featureId' | 'layerId'>
       | {
           sourceId?: string | null;
           featureId?: MapFeatureId | null;
+          layerId?: string | null;
         }
       | null
       | undefined
   ): MapSourceFeatureRef | null => {
     return createMapSourceFeatureRef(
       contextOrRefLike?.sourceId || null,
-      contextOrRefLike?.featureId ?? null
+      contextOrRefLike?.featureId ?? null,
+      contextOrRefLike?.layerId || null
     );
   };
 
@@ -364,7 +366,7 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
 
   /**
    * 解析线草稿要素的属性面板态。
-   * 线草稿会继承正式来源的 propertyPolicy，
+   * 线草稿会继承正式来源原图层的 propertyPolicy，
    * 同时再额外隐藏自己的内部来源字段。
    *
    * @param featureRef 线草稿来源引用
@@ -382,7 +384,7 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
     const originSource = originRef?.sourceId ? sourceRegistry.getSource(originRef.sourceId) : null;
 
     return resolveMapFeaturePropertyPanelState(targetFeature.properties || {}, {
-      propertyPolicy: originSource?.propertyPolicy || null,
+      propertyPolicy: originSource?.resolvePropertyPolicy(originRef?.layerId) || null,
       protectedKeys: originSource?.protectedPropertyKeys || [],
       hiddenKeys: LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS,
     });
@@ -416,8 +418,24 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
    */
   const resolveSelectedFeature = (): MapCommonFeature | null => {
     const featureRef = getSelectedFeatureRef();
+    const resolvedFeature = resolveFeature(featureRef);
+    const selectedSnapshot = getMapExpose()?.getSelectedMapFeatureSnapshot?.() || null;
 
-    return resolveFeature(featureRef) || getMapExpose()?.getSelectedMapFeatureSnapshot?.() || null;
+    if (!selectedSnapshot) {
+      return resolvedFeature;
+    }
+
+    if (!resolvedFeature) {
+      return selectedSnapshot;
+    }
+
+    // 普通业务图层仍优先回源拿最新要素；
+    // 只有当快照明显不是这条业务要素时，才认为当前选中来自插件托管图层。
+    if (selectedSnapshot.id !== resolvedFeature.id) {
+      return selectedSnapshot;
+    }
+
+    return resolvedFeature;
   };
 
   /**
@@ -429,16 +447,26 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
   const resolveSelectedFeaturePropertyPanelState = (): MapFeaturePropertyPanelState | null => {
     const featureRef = getSelectedFeatureRef();
     const panelState = resolveFeaturePropertyPanelState(featureRef);
+    const selectedSnapshot = getMapExpose()?.getSelectedMapFeatureSnapshot?.() || null;
+
+    if (!selectedSnapshot) {
+      return panelState;
+    }
+
+    const resolvedFeature = resolveFeature(featureRef);
+    if (panelState && resolvedFeature && selectedSnapshot.id === resolvedFeature.id) {
+      return panelState;
+    }
+
+    if (selectedSnapshot.properties) {
+      return resolveMapFeaturePropertyPanelState(selectedSnapshot.properties);
+    }
+
     if (panelState) {
       return panelState;
     }
 
-    const selectedFeature = getMapExpose()?.getSelectedMapFeatureSnapshot?.() || null;
-    if (!selectedFeature?.properties) {
-      return null;
-    }
-
-    return resolveMapFeaturePropertyPanelState(selectedFeature.properties);
+    return null;
   };
 
   /**
@@ -502,7 +530,8 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
   ): MapBusinessSelectionItem => {
     const featureRef = createMapSourceFeatureRef(
       selectedFeature.sourceId || null,
-      selectedFeature.featureId ?? null
+      selectedFeature.featureId ?? null,
+      selectedFeature.layerId || null
     );
     const snapshotFeature = toPlainCommonFeature(selectedFeature.snapshot);
     const resolvedFeature = resolveFeature(featureRef);

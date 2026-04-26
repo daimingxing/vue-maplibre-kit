@@ -3,7 +3,9 @@ import {
   DxfWriter,
   LineTypes,
   LWPolylineFlags,
+  TrueColor,
   point2d,
+  point3d,
   type LWPolylineVertex,
 } from '@tarikjabiri/dxf';
 import proj4 from 'proj4';
@@ -11,10 +13,17 @@ import type { Position } from 'geojson';
 import type { MapBusinessSource } from '../../facades/createMapBusinessSource';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../../shared/map-common-tools';
 import {
+  DEFAULT_DXF_CRS_OPTIONS,
+  DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS,
+  DEFAULT_DXF_TRUE_COLOR_RULES,
+} from './defaults';
+import {
   DEFAULT_DXF_FILE_NAME,
   type ExportBusinessSourcesToDxfOptions,
   type MapDxfExportResult,
   type MapDxfExportTaskOptions,
+  type MapDxfPointMode,
+  type MapDxfTrueColor,
   type ResolvedMapDxfExportTaskOptions,
 } from './types';
 
@@ -95,7 +104,50 @@ interface PolylineVerticesFailure {
  */
 type PolylineVerticesResult = PolylineVerticesSuccess | PolylineVerticesFailure;
 
+/**
+ * 图层名解析结果。
+ */
+interface ResolvedLayerName {
+  rawLayerName: string;
+  layerName: string;
+}
+
+/**
+ * DXF 图层使用记录。
+ */
+interface DxfLayerUsageRecord {
+  sourceId: string;
+  rawLayerName: string;
+}
+
+/**
+ * 归一化后的 TrueColor 结果。
+ */
+interface ResolvedTrueColorValue {
+  normalizedHex: MapDxfTrueColor;
+  layerTrueColorValue: number;
+  entityTrueColorValue: string;
+}
+
+/**
+ * DXF 图层 TrueColor 使用记录。
+ */
+interface DxfLayerTrueColorRecord {
+  sourceId: string;
+  normalizedHex: MapDxfTrueColor;
+}
+
+/**
+ * DXF 实体公共配置。
+ */
+interface DxfEntityOptions {
+  layerName: string;
+  trueColor?: string;
+  lineWidth?: number;
+}
+
 const MAX_SKIP_DETAILS_IN_ERROR = 3;
+const DXF_TRUE_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 /**
  * 判断对象是否显式包含指定字段。
@@ -165,8 +217,65 @@ function normalizeSourceIds(sourceIds: string[] | null | undefined): string[] | 
 }
 
 /**
+ * 归一化统一线宽。
+ * @param rawLineWidth 原始线宽
+ * @param warnings 警告列表
+ * @returns 可用于 DXF 折线的线宽；无效时返回 undefined
+ */
+function normalizeLineWidth(rawLineWidth: unknown, warnings: string[]): number | undefined {
+  if (rawLineWidth === null || rawLineWidth === undefined) {
+    return undefined;
+  }
+
+  const lineWidth = Number(rawLineWidth);
+
+  // DXF 折线宽度必须是大于 0 的有限数值；非正数会导致实体宽度语义失效。
+  if (!Number.isFinite(lineWidth) || lineWidth <= 0) {
+    warnings.push(`DXF lineWidth 值 '${String(rawLineWidth)}' 非法：必须是大于 0 的数字，已跳过线宽设置`);
+    return undefined;
+  }
+
+  return lineWidth;
+}
+
+/**
+ * 归一化点导出模式。
+ * @param rawPointMode 原始点导出模式
+ * @returns 最终生效的点导出模式
+ */
+function normalizePointMode(rawPointMode: unknown): MapDxfPointMode {
+  return rawPointMode === 'circle' ? 'circle' : 'point';
+}
+
+/**
+ * 归一化点半径。
+ * @param rawPointRadius 原始点半径
+ * @param warnings 警告列表
+ * @returns 可用于圆实体的半径；无效时回退到全局默认值
+ */
+function normalizePointRadius(rawPointRadius: unknown, warnings: string[]): number {
+  const fallbackRadius = DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS.pointRadius ?? 1;
+
+  if (rawPointRadius === null || rawPointRadius === undefined) {
+    return fallbackRadius;
+  }
+
+  const pointRadius = Number(rawPointRadius);
+
+  // 点导出为圆时，半径必须大于 0；否则 CAD 中会退化成不可见或非法几何。
+  if (!Number.isFinite(pointRadius) || pointRadius <= 0) {
+    warnings.push(
+      `DXF pointRadius 值 '${String(rawPointRadius)}' 非法：必须是大于 0 的数字，已回退到默认半径 ${fallbackRadius}`
+    );
+    return fallbackRadius;
+  }
+
+  return pointRadius;
+}
+
+/**
  * 合并 DXF 导出任务配置。
- * 合并顺序固定为：封装层默认值 -> 本次局部覆写。
+ * 合并顺序固定为：DXF 全局默认配置 -> 页面 defaults -> 本次局部覆写。
  *
  * @param defaults 封装层默认值
  * @param overrides 本次局部覆写
@@ -176,22 +285,48 @@ export function resolveMapDxfExportTaskOptions(
   defaults?: MapDxfExportTaskOptions | ResolvedMapDxfExportTaskOptions | null,
   overrides?: MapDxfExportTaskOptions | null
 ): ResolvedMapDxfExportTaskOptions {
+  // 先注入库内统一维护的全局默认 CRS；如果页面 defaults 显式传了值（哪怕是 undefined），
+  // 这里也允许它覆盖掉全局值，保留“页面可局部重写默认行为”的能力。
+  const baseDefaults: MapDxfExportTaskOptions | ResolvedMapDxfExportTaskOptions = {
+    ...DEFAULT_DXF_CRS_OPTIONS,
+    ...DEFAULT_DXF_TRUE_COLOR_RULES,
+    ...DEFAULT_DXF_GEOMETRY_STYLE_OPTIONS,
+    ...(defaults || {}),
+  };
+
   const rawSourceIds = hasOwnKey(overrides, 'sourceIds')
     ? overrides.sourceIds
-    : defaults?.sourceIds;
-  const rawFileName = hasOwnKey(overrides, 'fileName') ? overrides.fileName : defaults?.fileName;
+    : baseDefaults.sourceIds;
+  const rawFileName = hasOwnKey(overrides, 'fileName')
+    ? overrides.fileName
+    : baseDefaults.fileName;
   const rawSourceCrs = hasOwnKey(overrides, 'sourceCrs')
     ? overrides.sourceCrs
-    : defaults?.sourceCrs;
+    : baseDefaults.sourceCrs;
   const rawTargetCrs = hasOwnKey(overrides, 'targetCrs')
     ? overrides.targetCrs
-    : defaults?.targetCrs;
+    : baseDefaults.targetCrs;
   const rawFeatureFilter = hasOwnKey(overrides, 'featureFilter')
     ? overrides.featureFilter
-    : defaults?.featureFilter;
+    : baseDefaults.featureFilter;
   const rawLayerNameResolver = hasOwnKey(overrides, 'layerNameResolver')
     ? overrides.layerNameResolver
-    : defaults?.layerNameResolver;
+    : baseDefaults.layerNameResolver;
+  const rawLayerTrueColorResolver = hasOwnKey(overrides, 'layerTrueColorResolver')
+    ? overrides.layerTrueColorResolver
+    : baseDefaults.layerTrueColorResolver;
+  const rawFeatureTrueColorResolver = hasOwnKey(overrides, 'featureTrueColorResolver')
+    ? overrides.featureTrueColorResolver
+    : baseDefaults.featureTrueColorResolver;
+  const rawLineWidth = hasOwnKey(overrides, 'lineWidth') ? overrides.lineWidth : baseDefaults.lineWidth;
+  const rawPointMode = hasOwnKey(overrides, 'pointMode') ? overrides.pointMode : baseDefaults.pointMode;
+  const rawPointRadius = hasOwnKey(overrides, 'pointRadius')
+    ? overrides.pointRadius
+    : baseDefaults.pointRadius;
+  const warnings: string[] = [];
+  const lineWidth = normalizeLineWidth(rawLineWidth, warnings);
+  const pointMode = normalizePointMode(rawPointMode);
+  const pointRadius = pointMode === 'circle' ? normalizePointRadius(rawPointRadius, warnings) : undefined;
 
   return {
     sourceIds: normalizeSourceIds(rawSourceIds),
@@ -200,6 +335,11 @@ export function resolveMapDxfExportTaskOptions(
     targetCrs: rawTargetCrs,
     featureFilter: rawFeatureFilter,
     layerNameResolver: rawLayerNameResolver,
+    layerTrueColorResolver: rawLayerTrueColorResolver,
+    featureTrueColorResolver: rawFeatureTrueColorResolver,
+    lineWidth,
+    pointMode,
+    pointRadius,
   };
 }
 
@@ -360,14 +500,9 @@ function createCoordinateTransform(
   try {
     projConverter = proj4(sourceCrs, targetCrs);
   } catch (error) {
-    const errorMessage = getErrorMessage(error);
-    warnings.push(
-      `坐标系配置无效，已跳过坐标转换：${errorMessage}。将按原坐标导出`
+    throw new Error(
+      `DXF 导出坐标系配置无效：sourceCrs='${sourceCrs}'，targetCrs='${targetCrs}'。Could not parse to valid json: ${sourceCrs}`
     );
-    return (position) => ({
-      ok: true,
-      position: [...position] as Position,
-    });
   }
 
   return (position) => {
@@ -406,7 +541,8 @@ function createCoordinateTransform(
 function createPolylineVertices(
   positions: Position[],
   transform: CoordinateTransform,
-  partLabel: string
+  partLabel: string,
+  lineWidth?: number
 ): PolylineVerticesResult {
   let hasZCoordinate = false;
 
@@ -430,9 +566,17 @@ function createPolylineVertices(
       hasZCoordinate = true;
     }
 
-    vertices.push({
+    const vertex: LWPolylineVertex = {
       point: point2d(transformedPosition[0], transformedPosition[1]),
-    });
+    };
+
+    // 统一线宽系统只允许一个数值全局控制，因此首尾宽度写成同值，避免出现锥形线段。
+    if (lineWidth !== undefined) {
+      vertex.startingWidth = lineWidth;
+      vertex.endWidth = lineWidth;
+    }
+
+    vertices.push(vertex);
   }
 
   return {
@@ -447,16 +591,192 @@ function createPolylineVertices(
  * @param feature 当前要素
  * @param sourceId 所属 sourceId
  * @param taskOptions 导出任务配置
- * @returns 最终图层名
+ * @returns 原始图层名与最终 DXF 图层名
  */
 function resolveLayerName(
   feature: MapCommonFeature,
   sourceId: string,
   taskOptions: ResolvedMapDxfExportTaskOptions
-): string {
+): ResolvedLayerName {
   const resolvedLayerName = taskOptions.layerNameResolver?.(feature, sourceId)?.trim();
   const rawLayerName = resolvedLayerName || sourceId;
-  return sanitizeLayerName(rawLayerName);
+  return {
+    rawLayerName,
+    layerName: sanitizeLayerName(rawLayerName),
+  };
+}
+
+/**
+ * 将 TrueColor 输入值标准化为 DXF 可写入的格式。
+ * 这里只接受 #RRGGBB，非法值会写入 warning，但不会中断导出。
+ *
+ * @param rawTrueColor 原始颜色值
+ * @param warningLabel 告警标签
+ * @param warnings 警告列表
+ * @returns 标准化后的颜色结果；未命中或非法时返回 null
+ */
+function normalizeTrueColorValue(
+  rawTrueColor: unknown,
+  warningLabel: string,
+  warnings: string[]
+): ResolvedTrueColorValue | null {
+  if (rawTrueColor === null || rawTrueColor === undefined) {
+    return null;
+  }
+
+  const colorText = typeof rawTrueColor === 'string' ? rawTrueColor.trim() : String(rawTrueColor);
+  if (!DXF_TRUE_COLOR_PATTERN.test(colorText)) {
+    warnings.push(`${warningLabel} 的 TrueColor 值 '${colorText}' 非法：只支持 #RRGGBB，已跳过本次颜色设置`);
+    return null;
+  }
+
+  const normalizedHex = colorText.toUpperCase() as MapDxfTrueColor;
+  const trueColorValue = TrueColor.fromHex(normalizedHex);
+  return {
+    normalizedHex,
+    layerTrueColorValue: trueColorValue,
+    entityTrueColorValue: String(trueColorValue),
+  };
+}
+
+/**
+ * 解析当前 DXF 图层的 TrueColor。
+ * 解析器接收的是最终 DXF 图层名，因此默认按 sourceId 分层时也能直接着色。
+ *
+ * @param taskOptions 导出任务配置
+ * @param layerName 最终 DXF 图层名
+ * @param sourceId 当前业务 sourceId
+ * @param warnings 警告列表
+ * @returns 标准化后的图层颜色
+ */
+function resolveLayerTrueColor(
+  taskOptions: ResolvedMapDxfExportTaskOptions,
+  layerName: string,
+  sourceId: string,
+  warnings: string[]
+): ResolvedTrueColorValue | null {
+  const rawTrueColor = taskOptions.layerTrueColorResolver?.(layerName, sourceId);
+  return normalizeTrueColorValue(rawTrueColor, `DXF 图层 '${layerName}'`, warnings);
+}
+
+/**
+ * 解析当前要素实体的 TrueColor。
+ * 实体色优先级高于图层色，因此只要命中，就直接写到实体公共颜色字段上。
+ *
+ * @param taskOptions 导出任务配置
+ * @param feature 当前要素
+ * @param sourceId 当前业务 sourceId
+ * @param layerName 最终 DXF 图层名
+ * @param warnings 警告列表
+ * @returns 标准化后的实体颜色
+ */
+function resolveFeatureTrueColor(
+  taskOptions: ResolvedMapDxfExportTaskOptions,
+  feature: MapCommonFeature,
+  sourceId: string,
+  layerName: string,
+  warnings: string[]
+): ResolvedTrueColorValue | null {
+  const rawTrueColor = taskOptions.featureTrueColorResolver?.(feature, sourceId, layerName);
+  return normalizeTrueColorValue(
+    rawTrueColor,
+    `source '${sourceId}' 中要素 '${getFeatureLabel(feature)}'`,
+    warnings
+  );
+}
+
+/**
+ * 记录 DXF 图层使用情况，并在检测到同名合层时追加一次 warning。
+ * @param layerUsageMap 图层使用记录表
+ * @param warnedLayerNameSet 已告警过的最终图层名集合
+ * @param warnings 警告列表
+ * @param sourceId 当前来源 sourceId
+ * @param resolvedLayerName 当前图层名解析结果
+ */
+function trackLayerUsage(
+  layerUsageMap: Map<string, DxfLayerUsageRecord>,
+  warnedLayerNameSet: Set<string>,
+  warnings: string[],
+  sourceId: string,
+  resolvedLayerName: ResolvedLayerName
+): void {
+  const existedLayerUsage = layerUsageMap.get(resolvedLayerName.layerName);
+  if (!existedLayerUsage) {
+    layerUsageMap.set(resolvedLayerName.layerName, {
+      sourceId,
+      rawLayerName: resolvedLayerName.rawLayerName,
+    });
+    return;
+  }
+
+  const isSameUsage =
+    existedLayerUsage.sourceId === sourceId &&
+    existedLayerUsage.rawLayerName === resolvedLayerName.rawLayerName;
+  if (isSameUsage) {
+    return;
+  }
+
+  if (warnedLayerNameSet.has(resolvedLayerName.layerName)) {
+    return;
+  }
+
+  warnings.push(
+    `DXF 图层 '${resolvedLayerName.layerName}' 出现同名合层：首次来源为 source '${existedLayerUsage.sourceId}' / 原始图层名 '${existedLayerUsage.rawLayerName}'，当前来源为 source '${sourceId}' / 原始图层名 '${resolvedLayerName.rawLayerName}'。导出后将合并到同一 DXF layer`
+  );
+  warnedLayerNameSet.add(resolvedLayerName.layerName);
+}
+
+/**
+ * 同步 DXF 图层 TrueColor。
+ * 同一最终 DXF 图层如果命中多个不同颜色，只保留首次命中的颜色并追加一次 warning。
+ *
+ * @param writer DXF 写入器
+ * @param layerTrueColorMap 图层颜色记录表
+ * @param warnedLayerTrueColorSet 已告警过的图层集合
+ * @param warnings 警告列表
+ * @param layerName 最终 DXF 图层名
+ * @param sourceId 当前业务 sourceId
+ * @param resolvedTrueColor 当前命中的图层颜色
+ */
+function syncLayerTrueColor(
+  writer: DxfWriter,
+  layerTrueColorMap: Map<string, DxfLayerTrueColorRecord>,
+  warnedLayerTrueColorSet: Set<string>,
+  warnings: string[],
+  layerName: string,
+  sourceId: string,
+  resolvedTrueColor: ResolvedTrueColorValue | null
+): void {
+  if (!resolvedTrueColor) {
+    return;
+  }
+
+  const existedRecord = layerTrueColorMap.get(layerName);
+  if (!existedRecord) {
+    const dxfLayer = writer.layer(layerName);
+    if (dxfLayer) {
+      dxfLayer.trueColor = resolvedTrueColor.layerTrueColorValue;
+    }
+
+    layerTrueColorMap.set(layerName, {
+      sourceId,
+      normalizedHex: resolvedTrueColor.normalizedHex,
+    });
+    return;
+  }
+
+  if (existedRecord.normalizedHex === resolvedTrueColor.normalizedHex) {
+    return;
+  }
+
+  if (warnedLayerTrueColorSet.has(layerName)) {
+    return;
+  }
+
+  warnings.push(
+    `DXF 图层 '${layerName}' 命中了多个图层 TrueColor：首次颜色为 ${existedRecord.normalizedHex}（source '${existedRecord.sourceId}'），当前颜色为 ${resolvedTrueColor.normalizedHex}（source '${sourceId}'）。将保留首次命中的颜色`
+  );
+  warnedLayerTrueColorSet.add(layerName);
 }
 
 /**
@@ -479,6 +799,35 @@ function ensureLayer(
 }
 
 /**
+ * 创建实体公共配置。
+ * 未显式设置实体色时，CAD 会继续沿用图层颜色。
+ *
+ * @param layerName 最终 DXF 图层名
+ * @param entityTrueColor 实体 TrueColor
+ * @param lineWidth 统一线宽
+ * @returns 实体公共配置
+ */
+function createEntityOptions(
+  layerName: string,
+  entityTrueColor?: string,
+  lineWidth?: number
+): DxfEntityOptions {
+  const entityOptions: DxfEntityOptions = {
+    layerName,
+  };
+
+  if (entityTrueColor) {
+    entityOptions.trueColor = entityTrueColor;
+  }
+
+  if (lineWidth !== undefined) {
+    entityOptions.lineWidth = lineWidth;
+  }
+
+  return entityOptions;
+}
+
+/**
  * 解析可读的要素标识。
  * @param feature 当前要素
  * @returns 可读的要素标识
@@ -493,16 +842,22 @@ function getFeatureLabel(feature: MapCommonFeature): string {
 
 /**
  * 写入点要素。
+ * 根据 pointMode 决定输出为 DXF POINT 还是 CIRCLE。
+ *
  * @param writer DXF 写入器
  * @param positions 点坐标列表
- * @param layerName 图层名
+ * @param entityOptions 实体公共配置
+ * @param pointMode 点导出模式
+ * @param pointRadius 点半径
  * @param transform 坐标转换函数
  * @returns 新增的实体数量
  */
 function addPointEntities(
   writer: DxfWriter,
   positions: Position[],
-  layerName: string,
+  entityOptions: DxfEntityOptions,
+  pointMode: MapDxfPointMode,
+  pointRadius: number | undefined,
   transform: CoordinateTransform,
   warnings: string[],
   skippedFeatures: SkippedFeatureDetail[],
@@ -524,14 +879,28 @@ function addPointEntities(
     }
 
     const transformedPosition = transformedResult.position;
-    writer.addPoint(
-      transformedPosition[0],
-      transformedPosition[1],
-      transformedPosition[2] ?? 0,
-      {
-        layerName,
+    if (pointMode === 'circle') {
+      if (pointRadius === undefined) {
+        throw new Error('DXF pointRadius 未完成归一化，无法按圆导出点要素');
       }
-    );
+
+      writer.addCircle(
+        point3d(
+          transformedPosition[0],
+          transformedPosition[1],
+          transformedPosition[2] ?? 0
+        ),
+        pointRadius,
+        entityOptions
+      );
+    } else {
+      writer.addPoint(
+        transformedPosition[0],
+        transformedPosition[1],
+        transformedPosition[2] ?? 0,
+        entityOptions
+      );
+    }
     addedCount += 1;
   });
 
@@ -566,7 +935,7 @@ function addPointEntities(
  * 写入折线要素。
  * @param writer DXF 写入器
  * @param partList 折线部件集合
- * @param layerName 图层名
+ * @param entityOptions 实体公共配置
  * @param transform 坐标转换函数
  * @param warnings 警告列表
  * @param skippedFeatures 被跳过要素列表
@@ -577,7 +946,7 @@ function addPointEntities(
 function addPolylineEntities(
   writer: DxfWriter,
   partList: PolylinePart[],
-  layerName: string,
+  entityOptions: DxfEntityOptions,
   transform: CoordinateTransform,
   warnings: string[],
   skippedFeatures: SkippedFeatureDetail[],
@@ -599,7 +968,12 @@ function addPolylineEntities(
       return 0;
     }
 
-    const verticesResult = createPolylineVertices(part.positions, transform, part.label);
+    const verticesResult = createPolylineVertices(
+      part.positions,
+      transform,
+      part.label,
+      entityOptions.lineWidth
+    );
 
     if (!verticesResult.ok) {
       recordSkippedFeature(
@@ -617,8 +991,11 @@ function addPolylineEntities(
 
   polylineList.forEach((vertices) => {
     writer.addLWPolyline(vertices, {
-      layerName,
+      layerName: entityOptions.layerName,
+      trueColor: entityOptions.trueColor,
       flags: closed ? LWPolylineFlags.Closed : LWPolylineFlags.None,
+      // 使用 constantWidth 让整条折线宽度一致，符合“只给一个统一线宽参数”的设计目标。
+      constantWidth: entityOptions.lineWidth,
     });
   });
 
@@ -667,7 +1044,9 @@ function createPolygonParts(
  * @param writer DXF 写入器
  * @param feature 当前要素
  * @param sourceId 所属 sourceId
- * @param layerName 目标图层名
+ * @param entityOptions 实体公共配置
+ * @param pointMode 点导出模式
+ * @param pointRadius 点半径
  * @param transform 坐标转换函数
  * @param warnings 警告列表
  * @returns 新增的实体数量
@@ -676,7 +1055,9 @@ function addFeatureGeometryToDxf(
   writer: DxfWriter,
   feature: MapCommonFeature,
   sourceId: string,
-  layerName: string,
+  entityOptions: DxfEntityOptions,
+  pointMode: MapDxfPointMode,
+  pointRadius: number | undefined,
   transform: CoordinateTransform,
   warnings: string[],
   skippedFeatures: SkippedFeatureDetail[]
@@ -688,7 +1069,9 @@ function addFeatureGeometryToDxf(
       return addPointEntities(
         writer,
         [feature.geometry.coordinates],
-        layerName,
+        entityOptions,
+        pointMode,
+        pointRadius,
         transform,
         warnings,
         skippedFeatures,
@@ -698,7 +1081,9 @@ function addFeatureGeometryToDxf(
       return addPointEntities(
         writer,
         feature.geometry.coordinates,
-        layerName,
+        entityOptions,
+        pointMode,
+        pointRadius,
         transform,
         warnings,
         skippedFeatures,
@@ -708,7 +1093,7 @@ function addFeatureGeometryToDxf(
       return addPolylineEntities(
         writer,
         createLineParts([feature.geometry.coordinates]),
-        layerName,
+        entityOptions,
         transform,
         warnings,
         skippedFeatures,
@@ -718,7 +1103,7 @@ function addFeatureGeometryToDxf(
       return addPolylineEntities(
         writer,
         createLineParts(feature.geometry.coordinates),
-        layerName,
+        entityOptions,
         transform,
         warnings,
         skippedFeatures,
@@ -728,7 +1113,7 @@ function addFeatureGeometryToDxf(
       return addPolylineEntities(
         writer,
         createPolygonParts(feature.geometry.coordinates),
-        layerName,
+        entityOptions,
         transform,
         warnings,
         skippedFeatures,
@@ -741,7 +1126,7 @@ function addFeatureGeometryToDxf(
         feature.geometry.coordinates.flatMap((polygonCoordinates, polygonIndex) =>
           createPolygonParts(polygonCoordinates, polygonIndex)
         ),
-        layerName,
+        entityOptions,
         transform,
         warnings,
         skippedFeatures,
@@ -767,6 +1152,10 @@ export function exportBusinessSourcesToDxf(
   const warnings: string[] = [];
   const skippedFeatures: SkippedFeatureDetail[] = [];
   const addedLayerSet = new Set<string>(['0']);
+  const layerUsageMap = new Map<string, DxfLayerUsageRecord>();
+  const warnedLayerNameSet = new Set<string>();
+  const layerTrueColorMap = new Map<string, DxfLayerTrueColorRecord>();
+  const warnedLayerTrueColorSet = new Set<string>();
   const transform = createCoordinateTransform(taskOptions, warnings);
   const sourceList = sourceRegistry.listSources();
   const targetSources = resolveTargetSources(sourceList, taskOptions.sourceIds);
@@ -790,13 +1179,48 @@ export function exportBusinessSourcesToDxf(
       }
 
       featureCount += 1;
-      const layerName = resolveLayerName(normalizedFeature, source.sourceId, taskOptions);
-      ensureLayer(writer, addedLayerSet, layerName);
+      const resolvedLayerName = resolveLayerName(normalizedFeature, source.sourceId, taskOptions);
+      trackLayerUsage(
+        layerUsageMap,
+        warnedLayerNameSet,
+        warnings,
+        source.sourceId,
+        resolvedLayerName
+      );
+      ensureLayer(writer, addedLayerSet, resolvedLayerName.layerName);
+      const resolvedLayerTrueColor = resolveLayerTrueColor(
+        taskOptions,
+        resolvedLayerName.layerName,
+        source.sourceId,
+        warnings
+      );
+      syncLayerTrueColor(
+        writer,
+        layerTrueColorMap,
+        warnedLayerTrueColorSet,
+        warnings,
+        resolvedLayerName.layerName,
+        source.sourceId,
+        resolvedLayerTrueColor
+      );
+      const resolvedFeatureTrueColor = resolveFeatureTrueColor(
+        taskOptions,
+        normalizedFeature,
+        source.sourceId,
+        resolvedLayerName.layerName,
+        warnings
+      );
       entityCount += addFeatureGeometryToDxf(
         writer,
         normalizedFeature,
         source.sourceId,
-        layerName,
+        createEntityOptions(
+          resolvedLayerName.layerName,
+          resolvedFeatureTrueColor?.entityTrueColorValue,
+          taskOptions.lineWidth
+        ),
+        taskOptions.pointMode,
+        taskOptions.pointRadius,
         transform,
         warnings,
         skippedFeatures

@@ -60,6 +60,9 @@ export const mapFeatureMultiSelectPlugin = defineMapPlugin({
       services: {
         mapSelection: multiSelectService.service,
       },
+      destroy: () => {
+        multiSelectService.destroy();
+      },
     };
   },
 });

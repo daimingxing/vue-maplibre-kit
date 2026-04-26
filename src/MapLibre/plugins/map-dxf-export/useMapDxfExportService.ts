@@ -6,6 +6,7 @@ import {
   type MapDxfExportTaskOptions,
   type ResolvedMapDxfExportTaskOptions,
 } from '../../exporters/dxf';
+import { getMapGlobalDxfExportDefaults } from '../../shared/map-global-config';
 import type {
   MapDxfExportOptions,
   MapDxfExportState,
@@ -35,14 +36,21 @@ const defaultDxfExportState: MapDxfExportState = {
  * @returns 归一化后的插件配置
  */
 function normalizeMapDxfExportOptions(rawOptions: MapDxfExportOptions): ResolvedMapDxfExportOptions {
+  const globalDefaults = getMapGlobalDxfExportDefaults();
+  const globalControl = globalDefaults?.control;
+  const localControl = rawOptions.control;
+
   return {
     enabled: rawOptions.enabled !== false,
     sourceRegistry: rawOptions.sourceRegistry,
-    defaults: resolveMapDxfExportTaskOptions(rawOptions.defaults),
+    defaults: resolveMapDxfExportTaskOptions(globalDefaults?.defaults, rawOptions.defaults),
     control: {
-      enabled: rawOptions.control?.enabled !== false,
-      position: rawOptions.control?.position || DEFAULT_CONTROL_POSITION,
-      label: rawOptions.control?.label?.trim() || DEFAULT_CONTROL_LABEL,
+      enabled: localControl?.enabled ?? globalControl?.enabled ?? true,
+      position: localControl?.position ?? globalControl?.position ?? DEFAULT_CONTROL_POSITION,
+      label:
+        localControl?.label?.trim() ||
+        globalControl?.label?.trim() ||
+        DEFAULT_CONTROL_LABEL,
     },
   };
 }

@@ -15,6 +15,6 @@
     "src/**/*.test.ts",
     "src/App.vue",
     "src/main.ts",
-    "src/views/**"
+    "examples/**"
   ]
 }

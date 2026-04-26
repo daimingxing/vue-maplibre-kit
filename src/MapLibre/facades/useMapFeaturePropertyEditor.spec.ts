@@ -1,7 +1,15 @@
 import { ref } from 'vue';
 import { describe, expect, it } from 'vitest';
+import type {
+  MaplibreMeasureControl,
+  MaplibreTerradrawControl,
+} from '@watergis/maplibre-gl-terradraw';
+import type { TerraDraw } from 'terra-draw';
 import type { FeatureProperties, MapFeatureId } from '../composables/useMapDataUpdate';
-import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
+import {
+  createMapLibreRawHandles,
+  type MapLibreInitExpose,
+} from '../core/mapLibre-init.types';
 import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/useLineDraftPreviewController';
 import {
   LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS,
@@ -18,15 +26,20 @@ import {
   saveFeaturePropertiesInCollection,
 } from '../shared/map-feature-data';
 import type { TerradrawFeature } from '../shared/mapLibre-controls-types';
+import type { MapInstance } from 'vue-maplibre-gl';
 import {
   createMapBusinessSource,
   createMapBusinessSourceRegistry,
   type MapBusinessSource,
 } from './createMapBusinessSource';
+import { createCircleBusinessLayer } from './mapBusinessLayer';
 import { useMapFeaturePropertyEditor } from './useMapFeaturePropertyEditor';
 
 /** 线草稿插件类型常量。 */
 const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
+
+/** TerraDraw 测试替身统一使用的最小实例形状。 */
+type TerradrawStub = Pick<TerraDraw, 'hasFeature' | 'getSnapshotFeature' | 'updateFeatureProperties'>;
 
 /**
  * 创建测试用点要素。
@@ -87,21 +100,71 @@ function createBusinessSourceHarness(): {
       createFeatureCollection([
         createPointFeature('feature-1', {
           name: '原始名称',
+          mark: '锁定值',
           tag: '临时字段',
         }),
       ])
     ),
     promoteId: 'id',
-    propertyPolicy: {
-      readonlyKeys: ['id'],
-      fixedKeys: ['mark'],
-    },
+    layers: [
+      createCircleBusinessLayer({
+        layerId: 'circleLayer',
+        propertyPolicy: {
+          readonlyKeys: ['id'],
+          fixedKeys: ['mark'],
+        },
+      }),
+    ],
   });
 
   return {
     source,
     sourceRegistry: createMapBusinessSourceRegistry([source]),
   };
+}
+
+/**
+ * 创建绘图控件测试替身。
+ * 这里仅实现当前用例实际会访问的 `getTerraDrawInstance()`，
+ * 其余控件能力不参与本组测试，避免再用 `as any` 直接跳过类型约束。
+ *
+ * @param terradraw TerraDraw 最小替身
+ * @returns 可供公开实例复用的绘图控件替身
+ */
+function createDrawControlStub(
+  terradraw: TerradrawStub | null | undefined
+): MaplibreTerradrawControl | null {
+  if (!terradraw) {
+    return null;
+  }
+
+  const control = {
+    getTerraDrawInstance: () => terradraw,
+  } satisfies Pick<MaplibreTerradrawControl, 'getTerraDrawInstance'>;
+
+  return control as unknown as MaplibreTerradrawControl;
+}
+
+/**
+ * 创建测量控件测试替身。
+ * 测量控件与绘图控件在本组测试里只共享 `getTerraDrawInstance()` 这一入口，
+ * 因此这里同样返回最小可用替身。
+ *
+ * @param terradraw TerraDraw 最小替身
+ * @returns 可供公开实例复用的测量控件替身
+ */
+function createMeasureControlStub(
+  terradraw: TerradrawStub | null | undefined
+): MaplibreMeasureControl | null {
+  if (!terradraw) {
+    return null;
+  }
+
+  const control = {
+    getTerraDrawInstance: () => terradraw,
+  } satisfies Pick<MaplibreMeasureControl, 'getTerraDrawInstance'>;
+
+  return control as unknown as MaplibreMeasureControl;
 }
 
 /**
@@ -113,17 +176,16 @@ function createBusinessSourceHarness(): {
  */
 function createMapExpose(
   api?: LineDraftPreviewPluginApi | null,
-  drawTerradraw?: {
-    hasFeature: (featureId: MapFeatureId) => boolean;
-    getSnapshotFeature: (featureId: MapFeatureId) => TerradrawFeature | null;
-    updateFeatureProperties: (featureId: MapFeatureId, patch: FeatureProperties) => void;
-  } | null,
-  measureTerradraw?: {
-    hasFeature: (featureId: MapFeatureId) => boolean;
-    getSnapshotFeature: (featureId: MapFeatureId) => TerradrawFeature | null;
-    updateFeatureProperties: (featureId: MapFeatureId, patch: FeatureProperties) => void;
-  } | null
+  drawTerradraw?: TerradrawStub | null,
+  measureTerradraw?: TerradrawStub | null
 ): MapLibreInitExpose {
+  const mapInstance = {
+    component: undefined,
+    map: undefined,
+    isMounted: false,
+    isLoaded: false,
+    language: undefined,
+  } as MapInstance;
   const pluginHost: MapPluginHostExpose = {
     has: (pluginId) => pluginId === 'lineDraftPreview' && Boolean(api),
     getApi: <TApi = unknown>() => (api as TApi | null) || null,
@@ -140,18 +202,13 @@ function createMapExpose(
   };
 
   return {
-    getDrawControl: () =>
-      drawTerradraw
-        ? ({
-            getTerraDrawInstance: () => drawTerradraw,
-          } as any)
-        : null,
-    getMeasureControl: () =>
-      measureTerradraw
-        ? ({
-            getTerraDrawInstance: () => measureTerradraw,
-          } as any)
-        : null,
+    rawHandles: createMapLibreRawHandles({
+      mapInstance,
+      getDrawControl: () => createDrawControlStub(drawTerradraw),
+      getMeasureControl: () => createMeasureControlStub(measureTerradraw),
+    }),
+    getDrawControl: () => createDrawControlStub(drawTerradraw),
+    getMeasureControl: () => createMeasureControlStub(measureTerradraw),
     getDrawFeatures: () => null,
     getMeasureFeatures: () => null,
     getSelectedMapFeature: () => null,
@@ -178,6 +235,7 @@ function createLineDraftApi(source: MapBusinessSource): {
     name: '草稿名称',
     managedPreviewOriginSourceId: source.sourceId,
     managedPreviewOriginFeatureId: 'feature-1',
+    managedPreviewOriginLayerId: 'circleLayer',
     managedPreviewOriginKey: `${source.sourceId}::feature-1`,
   });
 
@@ -348,7 +406,7 @@ describe('useMapFeaturePropertyEditor', () => {
     const result = propertyEditor.saveItem(
       {
         type: 'map',
-        featureRef: source.toFeatureRef('feature-1'),
+        featureRef: source.toFeatureRef('feature-1', 'circleLayer'),
       },
       {
         key: 'name',
@@ -372,7 +430,7 @@ describe('useMapFeaturePropertyEditor', () => {
     const result = propertyEditor.removeItem(
       {
         type: 'map',
-        featureRef: source.toFeatureRef('feature-1'),
+        featureRef: source.toFeatureRef('feature-1', 'circleLayer'),
       },
       'tag'
     );
@@ -381,6 +439,29 @@ describe('useMapFeaturePropertyEditor', () => {
     expect(result.target).toBe('business');
     expect(result.editorState.rawProperties.tag).toBeUndefined();
     expect(source.resolveFeature('feature-1')?.properties?.tag).toBeUndefined();
+  });
+
+  it('map 目标会按图层 propertyPolicy 阻止固定字段删除', () => {
+    const { source, sourceRegistry } = createBusinessSourceHarness();
+    const propertyEditor = useMapFeaturePropertyEditor({
+      mapRef: ref(createMapExpose()),
+      sourceRegistry,
+    });
+
+    const result = propertyEditor.removeItem(
+      {
+        type: 'map',
+        featureRef: source.toFeatureRef('feature-1', 'circleLayer'),
+      },
+      'mark'
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.blockedKeys).toEqual(['mark']);
+    expect(result.editorState.panelState.items.find((item) => item.key === 'mark')?.removable).toBe(
+      false
+    );
+    expect(source.resolveFeature('feature-1')?.properties?.mark).toBe('锁定值');
   });
 
   it('lineDraft 来源会自动分流到线草稿属性写回', () => {
@@ -407,6 +488,7 @@ describe('useMapFeaturePropertyEditor', () => {
     expect(lineDraftHarness.getFeature().properties?.name).toBe('草稿已更新');
     expect(result.editorState.rawProperties.name).toBe('草稿已更新');
     expect(result.editorState.panelState.properties.managedPreviewOriginSourceId).toBeUndefined();
+    expect(result.editorState.panelState.properties.managedPreviewOriginLayerId).toBeUndefined();
   });
 
   it('terradraw 目标可以统一保存和删除属性，并返回最新属性快照', () => {

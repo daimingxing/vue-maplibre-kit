@@ -1,3 +1,32 @@
+/**
+ * 文件导读：TerraDraw 默认配置收口点。
+ *
+ * 适合解决的问题：
+ * - 项目级默认模式、样式、行为开关定义在哪里
+ * - 业务传入配置会怎样与默认配置合并
+ * - 某个 mode 的默认样式和交互参数应该去哪改
+ * - Measure 与 TerraDraw 的默认视觉风格如何统一
+ *
+ * 建议阅读顺序：
+ * 1. `terradrawStyleConfig`：看 TerraDraw 默认模式与样式
+ * 2. `measureStyleConfig`：看测量控件默认样式
+ * 3. 各 mode 的注释模板：看这个仓库认可的可配项范围
+ *
+ * 检索关键词：
+ * - modeOptions
+ * - styles
+ * - pointerEvents
+ * - adapterOptions
+ * - measure
+ *
+ * 不必先来这里的问题：
+ * - TerraDraw 模式如何实例化，请先看 `terradraw-mode-factory.ts`
+ * - TerraDraw 交互主流程，请先看 `useTerradrawInteractive.ts`
+ */
+import type {
+  CircleLayerSpecification,
+  SymbolLayerSpecification,
+} from "maplibre-gl";
 import type {
   TerradrawControlOptions,
   MeasureControlOptions,
@@ -456,30 +485,47 @@ export const terradrawStyleConfig: Partial<
  * 2. mapLibre-init 内部会先 cloneDeep 当前公共配置，再与业务页面传入的配置 merge；
  * 3. 因此业务页面仍然可以局部覆写这里的任意默认项，例如只在某个页面切换成英制或修改单位符号。
  */
-export const measureStyleConfig: Partial<
-  Pick<
-    MeasureControlOptions,
-    | "modes"
-    | "open"
-    | "showDeleteConfirmation"
-    | "textFont"
-    | "adapterOptions"
-    | "modeOptions"
+type MeasureStyleConfig = Partial<
+  Omit<
+    Pick<
+      MeasureControlOptions,
+      | "modes"
+      | "open"
+      | "showDeleteConfirmation"
+      | "textFont"
+      | "adapterOptions"
+      | "modeOptions"
+      | "pointLayerLabelSpec"
+      | "lineLayerLabelSpec"
+      | "routingLineLayerNodeSpec"
+      | "polygonLayerSpec"
+      | "measureUnitType"
+      | "distancePrecision"
+      | "distanceUnit"
+      | "areaPrecision"
+      | "areaUnit"
+      | "measureUnitSymbols"
+      | "computeElevation"
+      | "terrainSource"
+      | "elevationCacheConfig"
+    >,
     | "pointLayerLabelSpec"
     | "lineLayerLabelSpec"
     | "routingLineLayerNodeSpec"
     | "polygonLayerSpec"
-    | "measureUnitType"
-    | "distancePrecision"
-    | "distanceUnit"
-    | "areaPrecision"
-    | "areaUnit"
-    | "measureUnitSymbols"
-    | "computeElevation"
-    | "terrainSource"
-    | "elevationCacheConfig"
   >
-> = {
+> & {
+  /** 库内测量点标签完整图层规范；业务层只通过公开类型覆写 layout / paint。 */
+  pointLayerLabelSpec?: SymbolLayerSpecification;
+  /** 库内测量线标签完整图层规范；业务层只通过公开类型覆写 layout / paint。 */
+  lineLayerLabelSpec?: SymbolLayerSpecification;
+  /** 库内测量线节点完整图层规范；业务层只通过公开类型覆写 layout / paint。 */
+  routingLineLayerNodeSpec?: CircleLayerSpecification;
+  /** 库内测量面标签完整图层规范；业务层只通过公开类型覆写 layout / paint。 */
+  polygonLayerSpec?: SymbolLayerSpecification;
+};
+
+export const measureStyleConfig: MeasureStyleConfig = {
   // 当前工具栏显示哪些按钮；不传时走底层默认模式集合。
   // modes: [
   //   'point',

@@ -46,6 +46,7 @@ export type {
   LineDraftPreviewStateChangePayload,
 };
 export type {
+  LineDraftPreviewContext,
   LineDraftPreviewFillStyleOverrides,
   LineDraftPreviewLineStyleOverrides,
   LineDraftPreviewOptions,

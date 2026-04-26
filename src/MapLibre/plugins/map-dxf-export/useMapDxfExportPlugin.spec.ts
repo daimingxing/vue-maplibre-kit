@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { resetMapGlobalConfig, setMapGlobalConfig } from '../../../config';
 import { createMapBusinessSource, createMapBusinessSourceRegistry } from '../../facades/createMapBusinessSource';
 import type { MapPluginContext } from '../types';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../../shared/map-common-tools';
@@ -85,6 +86,8 @@ function createPluginContext(
     getSelectedFeatureContext: () => null,
     clearHoverState: () => undefined,
     clearSelectedFeature: () => undefined,
+    clearPluginHoverState: () => undefined,
+    clearPluginSelectedFeature: () => undefined,
     toFeatureSnapshot: () => null,
   };
 }
@@ -92,6 +95,7 @@ function createPluginContext(
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  resetMapGlobalConfig();
 });
 
 describe('mapDxfExportPlugin', () => {
@@ -105,6 +109,8 @@ describe('mapDxfExportPlugin', () => {
     const renderItems = pluginInstance.getRenderItems?.() || [];
 
     expect(pluginApi.getResolvedOptions().fileName).toBe('map-export.dxf');
+    expect(pluginApi.getResolvedOptions().sourceCrs).toBe('EPSG:4326');
+    expect(pluginApi.getResolvedOptions().targetCrs).toBe('EPSG:3857');
     expect(renderItems).toHaveLength(1);
     expect(renderItems[0].props.position).toBe('top-right');
     expect(renderItems[0].props.label).toBe('导出DXF');
@@ -120,6 +126,40 @@ describe('mapDxfExportPlugin', () => {
     const pluginInstance = mapDxfExportPlugin.createInstance(createPluginContext(optionsRef));
 
     expect(pluginInstance.getRenderItems?.()).toEqual([]);
+  });
+
+  it('应继承全局 DXF defaults 与 control 配置，并允许实例 defaults 覆写', () => {
+    setMapGlobalConfig({
+      plugins: {
+        dxfExport: {
+          defaults: {
+            sourceCrs: 'EPSG:4490',
+            targetCrs: 'EPSG:4547',
+          },
+          control: {
+            label: '导出CAD',
+            position: 'bottom-left',
+          },
+        },
+      },
+    });
+    const optionsRef = ref({
+      ...createPluginOptions(),
+      defaults: {
+        targetCrs: 'EPSG:3857',
+      },
+    });
+    const pluginInstance = mapDxfExportPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error('未获取到 DXF 导出插件 API');
+    }
+    const renderItems = pluginInstance.getRenderItems?.() || [];
+
+    expect(pluginApi.getResolvedOptions().sourceCrs).toBe('EPSG:4490');
+    expect(pluginApi.getResolvedOptions().targetCrs).toBe('EPSG:3857');
+    expect(renderItems[0].props.position).toBe('bottom-left');
+    expect(renderItems[0].props.label).toBe('导出CAD');
   });
 
   it('应在导出进行中暴露 isExporting 状态', async () => {
@@ -140,13 +180,7 @@ describe('mapDxfExportPlugin', () => {
   });
 
   it('应在导出成功后更新状态并触发下载', async () => {
-    const optionsRef = ref({
-      ...createPluginOptions(),
-      defaults: {
-        sourceCrs: 'EPSG:4326',
-        targetCrs: 'EPSG:4326',
-      },
-    });
+    const optionsRef = ref(createPluginOptions());
     const pluginInstance = mapDxfExportPlugin.createInstance(createPluginContext(optionsRef));
     const pluginApi = pluginInstance.getApi?.();
     if (!pluginApi) {
@@ -179,6 +213,34 @@ describe('mapDxfExportPlugin', () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledTimes(1);
     expect(click).toHaveBeenCalledTimes(1);
+  });
+
+  it('getResolvedOptions 应返回已合并的 TrueColor 解析器字段', () => {
+    const pageLayerTrueColorResolver = vi.fn(() => '#112233');
+    const pageFeatureTrueColorResolver = vi.fn(() => '#223344');
+    const overrideLayerTrueColorResolver = vi.fn(() => '#445566');
+    const optionsRef = ref({
+      ...createPluginOptions(),
+      defaults: {
+        layerTrueColorResolver: pageLayerTrueColorResolver,
+        featureTrueColorResolver: pageFeatureTrueColorResolver,
+      },
+    });
+    const pluginInstance = mapDxfExportPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error('未获取到 DXF 导出插件 API');
+    }
+
+    const defaultOptions = pluginApi.getResolvedOptions();
+    const overrideOptions = pluginApi.getResolvedOptions({
+      layerTrueColorResolver: overrideLayerTrueColorResolver,
+    });
+
+    expect(defaultOptions.layerTrueColorResolver).toBe(pageLayerTrueColorResolver);
+    expect(defaultOptions.featureTrueColorResolver).toBe(pageFeatureTrueColorResolver);
+    expect(overrideOptions.layerTrueColorResolver).toBe(overrideLayerTrueColorResolver);
+    expect(overrideOptions.featureTrueColorResolver).toBe(pageFeatureTrueColorResolver);
   });
 
   it('应在导出失败后更新错误状态', async () => {

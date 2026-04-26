@@ -1,6 +1,9 @@
 import { ref } from 'vue';
 import { describe, expect, it } from 'vitest';
-import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
+import {
+  createMapLibreRawHandles,
+  type MapLibreInitExpose,
+} from '../core/mapLibre-init.types';
 import type { MapPluginHostExpose } from '../plugins/types';
 import type {
   MapLayerInteractiveContext,
@@ -9,11 +12,13 @@ import type {
   TerradrawFeature,
 } from '../shared/mapLibre-controls-types';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
+import type { MapInstance } from 'vue-maplibre-gl';
 import {
   createMapBusinessSource,
   createMapBusinessSourceRegistry,
   type MapBusinessSource,
 } from './createMapBusinessSource';
+import { createCircleBusinessLayer, createFillBusinessLayer } from './mapBusinessLayer';
 import { useMapFeatureQuery } from './useMapFeatureQuery';
 
 /**
@@ -132,6 +137,14 @@ function createBusinessSourceHarness(): {
       ])
     ),
     promoteId: 'id',
+    layers: [
+      createCircleBusinessLayer({
+        layerId: 'circleLayer',
+      }),
+      createFillBusinessLayer({
+        layerId: 'fillLayer',
+      }),
+    ],
   });
 
   return {
@@ -177,7 +190,21 @@ function createSelectedFeatureRecord(options: {
  * 创建测试用地图公开实例。
  * @returns 可供 useMapFeatureQuery 直接消费的公开实例
  */
-function createMapExpose(): MapLibreInitExpose {
+function createMapExpose(options: {
+  selectedMapFeatureContext?: (() => MapLayerInteractiveContext | null) | null;
+  selectedMapFeatureSnapshot?: (() => MapCommonFeature | null) | null;
+} = {}): MapLibreInitExpose {
+  const {
+    selectedMapFeatureContext = null,
+    selectedMapFeatureSnapshot = null,
+  } = options;
+  const mapInstance = {
+    component: undefined,
+    map: undefined,
+    isMounted: false,
+    isLoaded: false,
+    language: undefined,
+  } as MapInstance;
   const pluginHost: MapPluginHostExpose = {
     has: () => false,
     getApi: () => null,
@@ -186,13 +213,18 @@ function createMapExpose(): MapLibreInitExpose {
   };
 
   return {
+    rawHandles: createMapLibreRawHandles({
+      mapInstance,
+      getDrawControl: () => null,
+      getMeasureControl: () => null,
+    }),
     getDrawControl: () => null,
     getMeasureControl: () => null,
     getDrawFeatures: () => [] as TerradrawFeature[],
     getMeasureFeatures: () => [] as TerradrawFeature[],
     getSelectedMapFeature: () => null,
-    getSelectedMapFeatureContext: () => null,
-    getSelectedMapFeatureSnapshot: () => null,
+    getSelectedMapFeatureContext: () => selectedMapFeatureContext?.() || null,
+    getSelectedMapFeatureSnapshot: () => selectedMapFeatureSnapshot?.() || null,
     getMapSelectionService: () => null,
     getTerradrawPropertyPolicy: () => null,
     clearSelectedMapFeature: () => undefined,
@@ -244,6 +276,7 @@ describe('useMapFeatureQuery', () => {
     expect(businessContext.featureRef).toEqual({
       sourceId: 'business-source',
       featureId: 'feature-1',
+      layerId: 'circleLayer',
     });
     expect(businessContext.feature?.properties?.name).toBe('最新业务名称');
     expect(businessContext.properties?.name).toBe('最新业务名称');
@@ -423,5 +456,32 @@ describe('useMapFeatureQuery', () => {
     expect(businessContext.added[0].isLine).toBe(true);
     expect(businessContext.added[0].featureRef).toBeNull();
     expect(businessContext.removed[0].featureId).toBe('feature-1');
+  });
+
+  it('resolveSelectedFeature 在插件要素被选中时应优先返回插件快照，而不是旧的业务图层选中引用', () => {
+    const { sourceRegistry } = createBusinessSourceHarness();
+    const pluginSelectedFeature = createPointFeature('intersection-1', {
+      name: '正式交点',
+      generatedKind: 'intersection-materialized',
+    });
+    const featureQuery = useMapFeatureQuery({
+      mapRef: ref(
+        createMapExpose({
+          selectedMapFeatureContext: () =>
+            ({
+              featureId: 'feature-1',
+              layerId: 'circleLayer',
+              sourceId: 'business-source',
+            }) as MapLayerInteractiveContext,
+          selectedMapFeatureSnapshot: () => pluginSelectedFeature,
+        })
+      ),
+      sourceRegistry,
+    });
+
+    const selectedFeature = featureQuery.resolveSelectedFeature();
+
+    expect(selectedFeature?.id).toBe('intersection-1');
+    expect(selectedFeature?.properties?.generatedKind).toBe('intersection-materialized');
   });
 });

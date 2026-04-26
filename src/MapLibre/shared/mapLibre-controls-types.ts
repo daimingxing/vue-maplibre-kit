@@ -36,6 +36,26 @@ export type TerradrawFeatureId = string | number;
 
 export type { MapFeatureSnapKind, MapFeatureSnapResult, MapFeatureSnapSegmentInfo };
 
+/** 仅允许业务层覆写 MapLibre 图层 layout / paint 的样式片段。 */
+export interface MeasureLayerStyleOverrides<Layout, Paint> {
+  /** 图层布局样式片段；id、type、source、filter 由底层默认配置固定维护。 */
+  layout?: Partial<NonNullable<Layout>>;
+  /** 图层绘制样式片段；用于覆盖颜色、大小、描边等视觉字段。 */
+  paint?: Partial<NonNullable<Paint>>;
+}
+
+/** 测量符号图层样式覆写。 */
+export type MeasureSymbolLayerStyleOverrides = MeasureLayerStyleOverrides<
+  SymbolLayerSpecification['layout'],
+  SymbolLayerSpecification['paint']
+>;
+
+/** 测量圆点图层样式覆写。 */
+export type MeasureCircleLayerStyleOverrides = MeasureLayerStyleOverrides<
+  CircleLayerSpecification['layout'],
+  CircleLayerSpecification['paint']
+>;
+
 /** TerraDraw 线装饰模式 */
 export type TerradrawLineDecorationMode = 'symbol-repeat' | 'line-pattern' | 'segment-stretch';
 
@@ -441,6 +461,8 @@ export interface MapLayerSelectionChangeContext extends MapLayerInteractiveConte
 export interface MapLayerInteractiveLayerOptions {
   /** hover 命中要素时使用的鼠标样式；传 false 则不处理光标 */
   cursor?: string | false;
+  /** 命中优先级；值越大越优先，同值时按 layers 声明顺序决策 */
+  hitPriority?: number;
   /** 是否自动维护 feature-state.hover；默认 true */
   enableFeatureStateHover?: boolean;
   /** 是否自动维护 feature-state.selected；默认 true */
@@ -465,7 +487,7 @@ export interface MapLayerInteractiveLayerOptions {
 export interface MapLayerInteractiveOptions {
   /** 是否启用该业务交互封装；默认 true */
   enabled?: boolean;
-  /** 参与交互的图层配置，声明顺序即命中优先级 */
+  /** 参与交互的图层配置；先按 hitPriority 决策，同优先级再按声明顺序决策 */
   layers?: Record<string, MapLayerInteractiveLayerOptions>;
   /** 交互管理器初始化完成后的回调 */
   onReady?: (context: MapLayerInteractiveContext) => void;
@@ -626,14 +648,14 @@ export interface MeasureControlOptions extends BaseControlOptions {
   open?: boolean;
   /** 是否在删除测量要素前弹出确认框 */
   showDeleteConfirmation?: boolean;
-  /** 自定义测量点标签的样式规范 */
-  pointLayerLabelSpec?: SymbolLayerSpecification;
-  /** 自定义测量线标签的样式规范 */
-  lineLayerLabelSpec?: SymbolLayerSpecification;
-  /** 自定义测量路由线节点的样式规范 */
-  routingLineLayerNodeSpec?: CircleLayerSpecification;
-  /** 自定义测量面标签的样式规范 */
-  polygonLayerSpec?: SymbolLayerSpecification;
+  /** 自定义测量点标签的样式片段，仅允许覆写 layout / paint */
+  pointLayerLabelSpec?: MeasureSymbolLayerStyleOverrides;
+  /** 自定义测量线标签的样式片段，仅允许覆写 layout / paint */
+  lineLayerLabelSpec?: MeasureSymbolLayerStyleOverrides;
+  /** 自定义测量路由线节点的样式片段，仅允许覆写 layout / paint */
+  routingLineLayerNodeSpec?: MeasureCircleLayerStyleOverrides;
+  /** 自定义测量面标签的样式片段，仅允许覆写 layout / paint */
+  polygonLayerSpec?: MeasureSymbolLayerStyleOverrides;
   /** 测量单位体系：metric 为公制，imperial 为英制 */
   measureUnitType?: MeasureUnitType;
   /** 测距结果保留的小数位数 */

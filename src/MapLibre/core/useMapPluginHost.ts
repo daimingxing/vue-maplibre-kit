@@ -1,3 +1,29 @@
+/**
+ * 文件导读：插件宿主。
+ *
+ * 适合解决的问题：
+ * - 插件实例如何创建、复用、销毁
+ * - 插件状态变化如何回流到宿主
+ * - 插件渲染项、交互配置如何汇总到地图侧
+ * - 插件 API 为什么能在门面层被稳定读取
+ *
+ * 建议阅读顺序：
+ * 1. `useMapPluginHost()`：看宿主暴露了哪些核心能力
+ * 2. `syncPluginRecords()`：看描述对象如何驱动实例增删改
+ * 3. `createPluginContext()` 与状态监听逻辑：看实例运行时上下文如何建立
+ * 4. 渲染聚合与交互合并相关函数：看宿主如何把插件能力拼回地图
+ *
+ * 检索关键词：
+ * - plugin record
+ * - api proxy
+ * - render items
+ * - interactive layers
+ * - state change
+ *
+ * 不必先来这里的问题：
+ * - 业务页面该先调用什么 API，请先看 `facades/useBusinessMap.ts`
+ * - 某个插件内部状态如何组织，请进入对应 `plugins/*`
+ */
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import type { Map as MaplibreMap } from 'maplibre-gl';
 import { type MapInstance } from 'vue-maplibre-gl';
@@ -6,6 +32,7 @@ import type {
   MapPluginContext,
   MapPluginHostExpose,
   MapPluginInstance,
+  MapPluginLayerInteractiveOptions,
   MapPluginRenderItem,
   MapPluginServices,
   MapPluginStateChangePayload,
@@ -32,6 +59,10 @@ interface UseMapPluginHostOptions {
   clearHoverState: () => void;
   /** 清理普通图层选中状态。 */
   clearSelectedFeature: () => void;
+  /** 清理插件托管图层 hover 状态。 */
+  clearPluginHoverState: () => void;
+  /** 清理插件托管图层选中状态。 */
+  clearPluginSelectedFeature: () => void;
   /** 将渲染态要素转换为标准 GeoJSON 快照。 */
   toFeatureSnapshot: (feature: any) => MapCommonFeature | null;
   /** 插件状态变化时的统一回调。 */
@@ -43,8 +74,23 @@ interface MapPluginRecord {
   descriptorRef: { value: AnyMapPluginDescriptor };
   /** 当前插件实例。 */
   instance: MapPluginInstance;
+  /** 当前插件 API 代理状态。 */
+  apiProxyState?: MapPluginApiProxyState;
+  /** 当前插件 API 代理对象。 */
+  apiProxy?: unknown;
   /** 停止监听当前插件状态。 */
   stopStateWatch?: () => void;
+}
+
+interface MapPluginApiProxyState {
+  /** 当前插件是否仍处于有效生命周期内。 */
+  active: boolean;
+  /** 当前插件 ID，用于生成错误信息。 */
+  pluginId: string;
+  /** 当前插件原始 API，插件销毁后会置空以释放真实实例引用。 */
+  rawApi: Record<PropertyKey, unknown> | null;
+  /** 已知方法名集合，插件销毁后仍用它返回可读错误。 */
+  methodKeySet: Set<PropertyKey>;
 }
 
 interface MapPluginDescriptorDependency {
@@ -56,6 +102,111 @@ interface MapPluginDescriptorDependency {
   plugin: AnyMapPluginDescriptor['plugin'];
   /** 插件配置对象引用。 */
   options: AnyMapPluginDescriptor['options'];
+}
+
+type MapPluginServiceName = 'mapSnap' | 'mapSelection';
+
+/**
+ * 判断值是否可以被 API 代理包装。
+ * @param value 待判断值
+ * @returns 是否是可代理对象
+ */
+function isProxyableApi(value: unknown): value is Record<PropertyKey, unknown> {
+  return (typeof value === 'object' && value !== null) || typeof value === 'function';
+}
+
+/**
+ * 提取插件 API 当前暴露的方法名。
+ * 这里只记录字符串与 symbol 自有属性，避免遍历原型链引入外部对象实现细节。
+ *
+ * @param rawApi 插件原始 API
+ * @returns 方法名集合
+ */
+function collectApiMethodKeys(rawApi: Record<PropertyKey, unknown>): Set<PropertyKey> {
+  const methodKeySet = new Set<PropertyKey>();
+
+  Reflect.ownKeys(rawApi).forEach((propertyKey) => {
+    if (typeof rawApi[propertyKey] === 'function') {
+      methodKeySet.add(propertyKey);
+    }
+  });
+
+  return methodKeySet;
+}
+
+/**
+ * 创建插件 API 已失效错误。
+ * @param pluginId 插件 ID
+ * @param propertyKey API 方法名
+ * @returns 可读错误对象
+ */
+function createInactiveApiError(pluginId: string, propertyKey: PropertyKey): Error {
+  return new Error(
+    `[MapPluginHost] 插件 '${pluginId}' 已卸载，无法继续调用 API '${String(propertyKey)}'`
+  );
+}
+
+/**
+ * 创建插件 API 代理。
+ * 代理对象会在插件销毁后断开对原始 API 的引用，并让旧方法调用返回明确错误。
+ *
+ * @param state API 代理状态
+ * @returns 插件 API 代理对象
+ */
+function createPluginApiProxy(state: MapPluginApiProxyState): Record<PropertyKey, unknown> {
+  return new Proxy(
+    {},
+    {
+      get(_target, propertyKey) {
+        const rawApi = state.rawApi;
+
+        if (!state.active || !rawApi) {
+          if (state.methodKeySet.has(propertyKey)) {
+            return () => {
+              throw createInactiveApiError(state.pluginId, propertyKey);
+            };
+          }
+
+          return undefined;
+        }
+
+        const propertyValue = rawApi[propertyKey];
+        if (typeof propertyValue !== 'function') {
+          return propertyValue;
+        }
+
+        return (...args: unknown[]) => {
+          const activeRawApi = state.rawApi;
+          if (!state.active || !activeRawApi) {
+            throw createInactiveApiError(state.pluginId, propertyKey);
+          }
+
+          const activePropertyValue = activeRawApi[propertyKey];
+          if (typeof activePropertyValue !== 'function') {
+            return activePropertyValue;
+          }
+
+          return activePropertyValue.apply(activeRawApi, args);
+        };
+      },
+      has(_target, propertyKey) {
+        return Boolean(state.rawApi && propertyKey in state.rawApi);
+      },
+      ownKeys() {
+        return state.rawApi ? Reflect.ownKeys(state.rawApi) : [];
+      },
+      getOwnPropertyDescriptor(_target, propertyKey) {
+        if (!state.rawApi || !(propertyKey in state.rawApi)) {
+          return undefined;
+        }
+
+        return {
+          enumerable: true,
+          configurable: true,
+        };
+      },
+    }
+  );
 }
 
 /**
@@ -319,6 +470,45 @@ function mergeMapInteractiveOptions(
 }
 
 /**
+ * 合并插件专用图层交互配置。
+ * 合并规则与普通图层 layers 一致，但不承接地图级回调。
+ * @param baseConfig 基础配置
+ * @param patchConfig 插件补丁配置
+ * @returns 合并后的插件交互配置
+ */
+function mergePluginLayerInteractiveOptions(
+  baseConfig: MapPluginLayerInteractiveOptions | null | undefined,
+  patchConfig: MapPluginLayerInteractiveOptions | null | undefined
+): MapPluginLayerInteractiveOptions | null {
+  if (!baseConfig && !patchConfig) {
+    return null;
+  }
+
+  if (!baseConfig) {
+    return patchConfig
+      ? {
+          ...patchConfig,
+          layers: mergeLayerInteractiveLayers(undefined, patchConfig.layers),
+        }
+      : null;
+  }
+
+  if (!patchConfig) {
+    return {
+      ...baseConfig,
+      layers: mergeLayerInteractiveLayers(baseConfig.layers, undefined),
+    };
+  }
+
+  return {
+    ...baseConfig,
+    ...patchConfig,
+    enabled: patchConfig.enabled ?? baseConfig.enabled,
+    layers: mergeLayerInteractiveLayers(baseConfig.layers, patchConfig.layers),
+  };
+}
+
+/**
  * 创建地图插件宿主。
  * @param options 宿主初始化参数
  * @returns 插件聚合结果与对外查询接口
@@ -332,6 +522,8 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     getSelectedFeatureContext,
     clearHoverState,
     clearSelectedFeature,
+    clearPluginHoverState,
+    clearPluginSelectedFeature,
     toFeatureSnapshot,
     onPluginStateChange,
   } = options;
@@ -349,11 +541,11 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     };
 
     pluginRecordMap.forEach((pluginRecord, pluginId) => {
-      if (pluginRecord.instance.services?.mapSnap) {
+      if (getPluginService(pluginRecord, 'mapSnap')) {
         serviceProviderMap.mapSnap.push(pluginId);
       }
 
-      if (pluginRecord.instance.services?.mapSelection) {
+      if (getPluginService(pluginRecord, 'mapSelection')) {
         serviceProviderMap.mapSelection.push(pluginId);
       }
     });
@@ -378,6 +570,76 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
   function destroyPluginRecord(pluginRecord: MapPluginRecord): void {
     pluginRecord.stopStateWatch?.();
     pluginRecord.instance.destroy?.();
+    if (pluginRecord.apiProxyState) {
+      pluginRecord.apiProxyState.active = false;
+      pluginRecord.apiProxyState.rawApi = null;
+    }
+  }
+
+  /**
+   * 读取插件服务。
+   * 插件可以用 getter 暴露 services，因此读取动作也需要隔离异常。
+   *
+   * @param pluginRecord 当前插件记录
+   * @param serviceName 服务名
+   * @returns 当前服务；读取失败或不存在时返回 null
+   */
+  function getPluginService<TName extends MapPluginServiceName>(
+    pluginRecord: MapPluginRecord,
+    serviceName: TName
+  ): MapPluginServices[TName] | null {
+    try {
+      return pluginRecord.instance.services?.[serviceName] || null;
+    } catch (error) {
+      console.error(
+        `[MapPluginHost] 插件 '${pluginRecord.descriptorRef.value.id}' 读取 ${serviceName} 服务失败`,
+        error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 读取插件状态引用。
+   * 插件可以用 getter 暴露 state，因此读取动作也需要隔离异常。
+   *
+   * @param pluginRecord 当前插件记录
+   * @returns 当前状态引用；读取失败或不存在时返回 null
+   */
+  function getPluginStateRef(pluginRecord: MapPluginRecord): MapPluginInstance['state'] | null {
+    try {
+      return pluginRecord.instance.state || null;
+    } catch (error) {
+      console.error(
+        `[MapPluginHost] 插件 '${pluginRecord.descriptorRef.value.id}' 读取 state 失败`,
+        error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 读取插件状态快照。
+   * state.value 可能来自自定义 ref-like 对象，读取失败时降级为空状态。
+   *
+   * @param pluginRecord 当前插件记录
+   * @returns 当前状态快照；读取失败或不存在时返回 null
+   */
+  function getPluginStateValue(pluginRecord: MapPluginRecord): unknown | null {
+    const stateRef = getPluginStateRef(pluginRecord);
+    if (!stateRef) {
+      return null;
+    }
+
+    try {
+      return stateRef.value ?? null;
+    } catch (error) {
+      console.error(
+        `[MapPluginHost] 插件 '${pluginRecord.descriptorRef.value.id}' 读取 state.value 失败`,
+        error
+      );
+      return null;
+    }
   }
 
   /**
@@ -419,6 +681,8 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
       getSelectedFeatureContext,
       clearHoverState,
       clearSelectedFeature,
+      clearPluginHoverState,
+      clearPluginSelectedFeature,
       toFeatureSnapshot,
     };
   }
@@ -428,7 +692,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    * @param descriptor 当前插件描述对象
    * @returns 新建的插件记录
    */
-  function createPluginRecord(descriptor: AnyMapPluginDescriptor): MapPluginRecord {
+  function createPluginRecord(descriptor: AnyMapPluginDescriptor): MapPluginRecord | null {
     const descriptorRef = shallowRef<AnyMapPluginDescriptor>(descriptor);
     try {
       const instance = descriptor.plugin.createInstance(createPluginContext(descriptor, descriptorRef));
@@ -436,10 +700,11 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
         descriptorRef,
         instance,
       };
+      const stateRef = getPluginStateRef(pluginRecord);
 
-      if (instance.state) {
+      if (stateRef) {
         pluginRecord.stopStateWatch = watch(
-          () => instance.state?.value,
+          () => getPluginStateValue(pluginRecord),
           (stateSnapshot) => {
             onPluginStateChange?.({
               pluginId: descriptorRef.value.id,
@@ -453,9 +718,68 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
 
       return pluginRecord;
     } catch (error) {
-      console.error(`[MapPluginHost] 插件 '${descriptor.id}' 初始化失败`, error);
-      throw error;
+      console.error(`[MapPluginHost] 插件 '${descriptor.id}' 初始化失败，已跳过`, error);
+      return null;
     }
+  }
+
+  /**
+   * 在插件方法外层建立错误边界。
+   * 单个插件运行期异常只降级当前插件能力，避免中断宿主聚合链路。
+   *
+   * @param pluginRecord 当前插件记录
+   * @param methodName 当前执行的插件方法名
+   * @param fallback 插件方法失败后的安全返回值
+   * @param runner 实际插件方法调用
+   * @returns 插件方法返回值或安全返回值
+   */
+  function runPluginMethod<T>(
+    pluginRecord: MapPluginRecord,
+    methodName: string,
+    fallback: T,
+    runner: () => T
+  ): T {
+    try {
+      return runner();
+    } catch (error) {
+      console.error(
+        `[MapPluginHost] 插件 '${pluginRecord.descriptorRef.value.id}' ${methodName} 运行失败`,
+        error
+      );
+      return fallback;
+    }
+  }
+
+  /**
+   * 读取插件 API 的稳定代理。
+   * 业务层可能会保存 API 引用，因此宿主返回代理对象，
+   * 在插件卸载时统一切断旧引用对真实插件实例的持有。
+   *
+   * @param pluginRecord 当前插件记录
+   * @param rawApi 插件原始 API
+   * @returns 可安全跨生命周期传递的 API 代理
+   */
+  function resolvePluginApiProxy<TApi>(pluginRecord: MapPluginRecord, rawApi: TApi): TApi {
+    if (!isProxyableApi(rawApi)) {
+      return rawApi;
+    }
+
+    if (!pluginRecord.apiProxyState) {
+      pluginRecord.apiProxyState = {
+        active: true,
+        pluginId: pluginRecord.descriptorRef.value.id,
+        rawApi,
+        methodKeySet: collectApiMethodKeys(rawApi),
+      };
+      pluginRecord.apiProxy = createPluginApiProxy(pluginRecord.apiProxyState);
+      return pluginRecord.apiProxy as TApi;
+    }
+
+    pluginRecord.apiProxyState.active = true;
+    pluginRecord.apiProxyState.pluginId = pluginRecord.descriptorRef.value.id;
+    pluginRecord.apiProxyState.rawApi = rawApi;
+    pluginRecord.apiProxyState.methodKeySet = collectApiMethodKeys(rawApi);
+    return pluginRecord.apiProxy as TApi;
   }
 
   /**
@@ -502,6 +826,10 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
         }
 
         const nextPluginRecord = createPluginRecord(descriptor);
+        if (!nextPluginRecord) {
+          return;
+        }
+
         createdPluginRecordList.push(nextPluginRecord);
         nextPluginRecordMap.set(descriptor.id, nextPluginRecord);
       });
@@ -549,7 +877,11 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     const nextRenderItems: MapPluginRenderItem[] = [];
 
     pluginRecordMapRef.value.forEach((pluginRecord) => {
-      nextRenderItems.push(...(pluginRecord.instance.getRenderItems?.() || []));
+      nextRenderItems.push(
+        ...runPluginMethod(pluginRecord, 'getRenderItems', [], () => {
+          return pluginRecord.instance.getRenderItems?.() || [];
+        })
+      );
     });
 
     return nextRenderItems;
@@ -564,7 +896,27 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     pluginRecordMapRef.value.forEach((pluginRecord) => {
       nextInteractive = mergeMapInteractiveOptions(
         nextInteractive,
-        pluginRecord.instance.getMapInteractivePatch?.() || null
+        runPluginMethod(pluginRecord, 'getMapInteractivePatch', null, () => {
+          return pluginRecord.instance.getMapInteractivePatch?.() || null;
+        })
+      );
+    });
+
+    return nextInteractive;
+  });
+
+  /**
+   * 合并当前所有插件对插件托管图层交互的补丁。
+   */
+  const mergedPluginLayerInteractive = computed<MapPluginLayerInteractiveOptions | null>(() => {
+    let nextInteractive = mergePluginLayerInteractiveOptions(null, null);
+
+    pluginRecordMapRef.value.forEach((pluginRecord) => {
+      nextInteractive = mergePluginLayerInteractiveOptions(
+        nextInteractive,
+        runPluginMethod(pluginRecord, 'getPluginLayerInteractivePatch', null, () => {
+          return pluginRecord.instance.getPluginLayerInteractivePatch?.() || null;
+        })
       );
     });
 
@@ -579,7 +931,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     let resolvedService: MapPluginServices['mapSnap'] | null = null;
 
     for (const pluginRecord of pluginRecordMapRef.value.values()) {
-      const currentService = pluginRecord.instance.services?.mapSnap || null;
+      const currentService = getPluginService(pluginRecord, 'mapSnap');
       if (!currentService) {
         continue;
       }
@@ -602,7 +954,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
     let resolvedService: MapPluginServices['mapSelection'] | null = null;
 
     for (const pluginRecord of pluginRecordMapRef.value.values()) {
-      const currentService = pluginRecord.instance.services?.mapSelection || null;
+      const currentService = getPluginService(pluginRecord, 'mapSelection');
       if (!currentService) {
         continue;
       }
@@ -620,7 +972,12 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    */
   function resolveSelectedFeatureSnapshot(): MapCommonFeature | null {
     for (const pluginRecord of pluginRecordMapRef.value.values()) {
-      const featureSnapshot = pluginRecord.instance.resolveSelectedFeatureSnapshot?.() || null;
+      const featureSnapshot = runPluginMethod(
+        pluginRecord,
+        'resolveSelectedFeatureSnapshot',
+        null as MapCommonFeature | null,
+        () => pluginRecord.instance.resolveSelectedFeatureSnapshot?.() || null
+      );
       if (featureSnapshot) {
         return featureSnapshot;
       }
@@ -645,7 +1002,14 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    */
   function getApi<TApi = unknown>(pluginId: string): TApi | null {
     const pluginRecord = pluginRecordMapRef.value.get(pluginId);
-    return (pluginRecord?.instance.getApi?.() as TApi | null | undefined) || null;
+    if (!pluginRecord) {
+      return null;
+    }
+
+    return runPluginMethod(pluginRecord, 'getApi', null as TApi | null, () => {
+      const rawApi = (pluginRecord.instance.getApi?.() as TApi | null | undefined) || null;
+      return rawApi ? resolvePluginApiProxy(pluginRecord, rawApi) : null;
+    });
   }
 
   /**
@@ -655,7 +1019,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
    */
   function getState<TState = unknown>(pluginId: string): TState | null {
     const pluginRecord = pluginRecordMapRef.value.get(pluginId);
-    return (pluginRecord?.instance.state?.value as TState | null | undefined) || null;
+    return (pluginRecord ? getPluginStateValue(pluginRecord) : null) as TState | null;
   }
 
   /**
@@ -679,6 +1043,7 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
   return {
     renderItems,
     mergedMapInteractive,
+    mergedPluginLayerInteractive,
     getMapSnapService,
     getMapSelectionService,
     resolveSelectedFeatureSnapshot,

@@ -16,6 +16,10 @@ import type {
 import type { MapSnapBinding, MapSelectionService } from '../plugins/types';
 import type { MapCommonFeature } from '../shared/map-common-tools';
 import { createSelectionChangeContextMethods } from './mapSelection';
+import {
+  isMapInteractiveEventHandled,
+  markMapInteractiveEventHandled,
+} from './mapInteractiveEventHandled';
 
 export interface UseMapInteractiveOptions {
   /** 地图实例引用，通常是通过 useMap() 获取的 */
@@ -45,10 +49,6 @@ interface MapInteractiveBinding {
   clearSelectionState: () => void;
   getSelectedFeature: () => MapGeoJSONFeature | null;
   getSelectedFeatureContext: () => MapLayerInteractiveContext | null;
-}
-
-interface InteractiveMouseEvent extends MouseEvent {
-  __mapInteractiveHandled__?: boolean;
 }
 
 interface BoxSelectionSession {
@@ -115,6 +115,68 @@ function cloneSerializable<T>(value: T): T {
   }
 
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/**
+ * 读取单个图层声明的命中优先级。
+ * @param layerConfig 当前图层交互配置
+ * @returns 标准化后的命中优先级
+ */
+function getLayerHitPriority(
+  layerConfig: MapLayerInteractiveLayerOptions | null | undefined
+): number {
+  return layerConfig?.hitPriority ?? 0;
+}
+
+/**
+ * 按命中优先级对图层声明排序。
+ * 同优先级时保留原始声明顺序，避免打乱业务层既有命中语义。
+ *
+ * @param layerEntries 当前图层声明列表
+ * @returns 已按命中优先级排序的图层声明列表
+ */
+export function sortLayerEntriesByHitPriority(
+  layerEntries: Array<[string, MapLayerInteractiveLayerOptions]>
+): Array<[string, MapLayerInteractiveLayerOptions]> {
+  return layerEntries
+    .map((entry, index) => ({
+      entry,
+      index,
+    }))
+    .sort((left, right) => {
+      const priorityDiff =
+        getLayerHitPriority(right.entry[1]) - getLayerHitPriority(left.entry[1]);
+
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
+      return left.index - right.index;
+    })
+    .map((item) => item.entry);
+}
+
+/**
+ * 判断吸附结果是否应该覆盖当前真实命中目标。
+ * 只有当吸附目标优先级更高，或当前没有真实命中目标时，才允许覆盖。
+ *
+ * @param rawLayerConfig 当前真实命中图层配置
+ * @param snapLayerConfig 当前吸附命中图层配置
+ * @returns 是否允许吸附结果覆盖真实命中目标
+ */
+export function shouldSnapOverrideRawTarget(
+  rawLayerConfig: MapLayerInteractiveLayerOptions | null | undefined,
+  snapLayerConfig: MapLayerInteractiveLayerOptions | null | undefined
+): boolean {
+  if (!snapLayerConfig) {
+    return false;
+  }
+
+  if (!rawLayerConfig) {
+    return true;
+  }
+
+  return getLayerHitPriority(snapLayerConfig) > getLayerHitPriority(rawLayerConfig);
 }
 
 /**
@@ -301,6 +363,7 @@ function createMapInteractiveBinding(
 
   /**
    * 获取当前仍然存在于地图中的交互图层 ID，并保持业务声明的优先级顺序。
+   * 命中决策会再叠加 hitPriority，高优先级图层可覆盖这里的声明顺序。
    * @returns 当前可参与 hit-test 的图层 ID 列表
    */
   const getLayerIdsInPriorityOrder = (): string[] => {
@@ -921,25 +984,6 @@ function createMapInteractiveBinding(
    * @param event 当前地图鼠标事件
    * @returns 已标记时返回 true
    */
-  const isEventHandled = (event: MapMouseEvent): boolean => {
-    return Boolean(
-      (event.originalEvent as InteractiveMouseEvent | undefined)?.__mapInteractiveHandled__
-    );
-  };
-
-  /**
-   * 在原始鼠标事件上写入已处理标记，供其他交互模块共享判断。
-   * @param event 当前地图鼠标事件
-   */
-  const markEventHandled = (event: MapMouseEvent): void => {
-    const originalEvent = event.originalEvent as InteractiveMouseEvent | undefined;
-    if (!originalEvent) {
-      return;
-    }
-
-    originalEvent.__mapInteractiveHandled__ = true;
-  };
-
   /**
    * 将空白点击回调延后到微任务阶段，便于等待其他交互模块先行写入处理标记。
    * @param event 当前地图鼠标事件
@@ -950,7 +994,7 @@ function createMapInteractiveBinding(
     pointerContext: Partial<MapLayerInteractiveContext>
   ): void => {
     const emitBlankClick = () => {
-      if (isEventHandled(event)) {
+      if (isMapInteractiveEventHandled(event)) {
         return;
       }
 
@@ -1005,7 +1049,7 @@ function createMapInteractiveBinding(
       return null;
     }
 
-    for (const [layerId] of getLayerEntries()) {
+    for (const [layerId] of sortLayerEntriesByHitPriority(getLayerEntries())) {
       if (!availableLayerIdSet.has(layerId)) {
         continue;
       }
@@ -1032,13 +1076,14 @@ function createMapInteractiveBinding(
     const rawTarget = getEventTarget(event);
     const snapResult = getSnapBinding?.()?.resolveMapEvent(event) || null;
     let effectiveTarget = rawTarget;
+    const rawLayerConfig = getLayerConfig(rawTarget?.layerId || null);
     const snapLayerConfig = getLayerConfig(snapResult?.targetLayerId || null);
 
     if (
       snapResult?.matched &&
       snapResult.targetFeature &&
       snapResult.targetLayerId &&
-      snapLayerConfig
+      shouldSnapOverrideRawTarget(rawLayerConfig, snapLayerConfig)
     ) {
       effectiveTarget = {
         feature: snapResult.targetFeature,
@@ -1689,6 +1734,10 @@ const applyHoverTarget = (
     topLevelCallbackResolver: TopLevelInteractiveCallbackResolver,
     getLayerCallback: LayerInteractiveCallbackResolver
   ): void => {
+    if (isMapInteractiveEventHandled(event)) {
+      return;
+    }
+
     const { effectiveTarget: target, pointerContext } = resolveEventTarget(event);
 
     if (eventType === 'click') {
@@ -1700,7 +1749,7 @@ const applyHoverTarget = (
       if (isMultiSelectActive) {
         if (target) {
           toggleMultiSelectedTarget(target, pointerContext);
-          markEventHandled(event);
+          markMapInteractiveEventHandled(event);
         } else {
           scheduleBlankClick(event, pointerContext);
         }
@@ -1732,7 +1781,7 @@ const applyHoverTarget = (
       return;
     }
 
-    markEventHandled(event);
+    markMapInteractiveEventHandled(event);
     emitLayerCallback(target, eventType, getLayerCallback, pointerContext);
   };
 
@@ -1741,6 +1790,12 @@ const applyHoverTarget = (
    * @param event 当前地图鼠标事件
    */
   const handleMouseMove = (event: MapMouseEvent): void => {
+    if (isMapInteractiveEventHandled(event)) {
+      cancelScheduledHoverSync();
+      clearHoverState(true, createPointerContext(event, { hitFeature: null, snapResult: null }));
+      return;
+    }
+
     scheduleHoverTargetSync(event);
   };
 

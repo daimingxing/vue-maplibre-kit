@@ -5,6 +5,7 @@ import type {
   RasterLayerSpecification,
   SymbolLayerSpecification,
 } from 'maplibre-gl';
+import { getMapGlobalStyleDefaults } from './map-global-config';
 
 export interface MapLayerStyle<Layout, Paint> {
   layout: Layout;
@@ -25,11 +26,18 @@ function mergeLayerSection<T>(base: T, override?: Partial<NonNullable<T>>): T {
 
 function createLayerStyle<Layout, Paint>(
   defaultStyle: MapLayerStyle<Layout, Paint>,
+  globalOverrides: MapLayerStyleOverrides<Layout, Paint> = {},
   overrides: MapLayerStyleOverrides<Layout, Paint> = {}
 ): MapLayerStyle<Layout, Paint> {
   return {
-    layout: mergeLayerSection(defaultStyle.layout, overrides.layout),
-    paint: mergeLayerSection(defaultStyle.paint, overrides.paint),
+    layout: mergeLayerSection(
+      mergeLayerSection(defaultStyle.layout, globalOverrides.layout),
+      overrides.layout
+    ),
+    paint: mergeLayerSection(
+      mergeLayerSection(defaultStyle.paint, globalOverrides.paint),
+      overrides.paint
+    ),
   };
 }
 
@@ -221,7 +229,7 @@ export function createFillLayerStyle(
     FillLayerSpecification['paint']
   > = {}
 ): MapLayerStyle<FillLayerSpecification['layout'], FillLayerSpecification['paint']> {
-  return createLayerStyle(defaultFillLayerStyle, overrides);
+  return createLayerStyle(defaultFillLayerStyle, getMapGlobalStyleDefaults('fill') || {}, overrides);
 }
 
 export function createLineLayerStyle(
@@ -230,7 +238,7 @@ export function createLineLayerStyle(
     LineLayerSpecification['paint']
   > = {}
 ): MapLayerStyle<LineLayerSpecification['layout'], LineLayerSpecification['paint']> {
-  return createLayerStyle(defaultLineLayerStyle, overrides);
+  return createLayerStyle(defaultLineLayerStyle, getMapGlobalStyleDefaults('line') || {}, overrides);
 }
 
 export function createCircleLayerStyle(
@@ -239,7 +247,11 @@ export function createCircleLayerStyle(
     CircleLayerSpecification['paint']
   > = {}
 ): MapLayerStyle<CircleLayerSpecification['layout'], CircleLayerSpecification['paint']> {
-  return createLayerStyle(defaultCircleLayerStyle, overrides);
+  return createLayerStyle(
+    defaultCircleLayerStyle,
+    getMapGlobalStyleDefaults('circle') || {},
+    overrides
+  );
 }
 
 export function createSymbolLayerStyle(
@@ -248,7 +260,11 @@ export function createSymbolLayerStyle(
     SymbolLayerSpecification['paint']
   > = {}
 ): MapLayerStyle<SymbolLayerSpecification['layout'], SymbolLayerSpecification['paint']> {
-  return createLayerStyle(defaultSymbolLayerStyle, overrides);
+  return createLayerStyle(
+    defaultSymbolLayerStyle,
+    getMapGlobalStyleDefaults('symbol') || {},
+    overrides
+  );
 }
 
 /**
@@ -262,5 +278,9 @@ export function createRasterLayerStyle(
     RasterLayerSpecification['paint']
   > = {}
 ): MapLayerStyle<RasterLayerSpecification['layout'], RasterLayerSpecification['paint']> {
-  return createLayerStyle(defaultRasterLayerStyle, overrides);
+  return createLayerStyle(
+    defaultRasterLayerStyle,
+    getMapGlobalStyleDefaults('raster') || {},
+    overrides
+  );
 }

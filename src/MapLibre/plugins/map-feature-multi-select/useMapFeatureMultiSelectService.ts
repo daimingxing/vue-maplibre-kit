@@ -3,6 +3,7 @@ import type {
   MapSelectionState,
   ResolvedMapSelectionToolOptions,
 } from '../../shared/mapLibre-controls-types';
+import { getMapGlobalMultiSelectDefaults } from '../../shared/map-global-config';
 import type { MapSelectionBindingController, MapSelectionService } from '../types';
 import type { MapFeatureMultiSelectOptions, ResolvedMapFeatureMultiSelectOptions } from './types';
 
@@ -22,11 +23,14 @@ const defaultSelectionState: MapSelectionState = {
 function normalizeMapFeatureMultiSelectOptions(
   rawOptions: MapFeatureMultiSelectOptions | null | undefined
 ): ResolvedMapFeatureMultiSelectOptions {
+  const globalDefaults = getMapGlobalMultiSelectDefaults();
+
   return {
-    enabled: rawOptions?.enabled !== false,
-    position: rawOptions?.position || 'top-right',
-    deactivateBehavior: rawOptions?.deactivateBehavior || 'clear',
-    closeOnEscape: rawOptions?.closeOnEscape !== false,
+    enabled: rawOptions?.enabled ?? globalDefaults?.enabled ?? true,
+    position: rawOptions?.position ?? globalDefaults?.position ?? 'top-right',
+    deactivateBehavior:
+      rawOptions?.deactivateBehavior ?? globalDefaults?.deactivateBehavior ?? 'clear',
+    closeOnEscape: rawOptions?.closeOnEscape ?? globalDefaults?.closeOnEscape ?? true,
     targetLayerIds: rawOptions?.targetLayerIds || null,
     excludeLayerIds: [...(rawOptions?.excludeLayerIds || [])],
     canSelect: rawOptions?.canSelect,
@@ -55,6 +59,7 @@ export function useMapFeatureMultiSelectService(
   toggle: () => void;
   clear: () => void;
   isActive: () => boolean;
+  destroy: () => void;
 } {
   const { getOptions } = options;
   const bindingRef = shallowRef<MapSelectionBindingController | null>(null);
@@ -164,7 +169,7 @@ export function useMapFeatureMultiSelectService(
     };
   };
 
-  watch(
+  const stopOptionsWatch = watch(
     () => ({
       enabled: resolvedOptions.value.enabled,
       deactivateBehavior: resolvedOptions.value.deactivateBehavior,
@@ -181,8 +186,20 @@ export function useMapFeatureMultiSelectService(
     { immediate: true }
   );
 
-  onBeforeUnmount(() => {
+  /**
+   * 销毁多选服务。
+   * 插件动态移除时需要停止配置监听，并释放交互核心绑定。
+   */
+  const destroy = (): void => {
+    stopOptionsWatch();
     bindingRef.value = null;
+    state.value = {
+      ...defaultSelectionState,
+    };
+  };
+
+  onBeforeUnmount(() => {
+    destroy();
   });
 
   const service: MapSelectionService = {
@@ -206,5 +223,6 @@ export function useMapFeatureMultiSelectService(
     toggle,
     clear,
     isActive,
+    destroy,
   };
 }

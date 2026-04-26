@@ -42,6 +42,9 @@
     <!-- 数据源与图层插槽 -->
     <slot name="dataSource"></slot>
 
+    <!-- 默认地图子组件插槽，例如 MglPopup 或业务自定义覆盖组件。 -->
+    <slot></slot>
+
     <!-- 动态地图插件渲染项 -->
     <component
       :is="pluginRenderItem.component"
@@ -121,6 +124,7 @@ import {
   syncTerradrawLineAndPolygonSnapping,
 } from '../terradraw/terradraw-snap-sync';
 import { useMapInteractive } from '../composables/useMapInteractive';
+import { usePluginLayerInteractive } from '../composables/usePluginLayerInteractive';
 import { useMapPluginHost } from './useMapPluginHost';
 import { useTerradrawControlLifecycle } from './useTerradrawControlLifecycle';
 import { type MapCommonFeature } from '../shared/map-common-tools';
@@ -130,7 +134,14 @@ import type {
   ResolvedTerradrawSnapOptions,
   MapPluginStateChangePayload,
 } from '../plugins/types';
-import type { MapFeatureStatePatch, MapFeatureStateTarget } from './mapLibre-init.types';
+import {
+  createMapLibreRawHandles,
+  type MapFeatureStatePatch,
+  type MapFeatureStateTarget,
+  type MapLibreInitExpose,
+  type MapLibreRawHandles,
+} from './mapLibre-init.types';
+import { resolveMapControls, resolveMapInitOptions } from './mapLibre-init.config';
 
 type MapLibreComponentOptions = Partial<MapOptions & { mapStyle: string | object }>;
 type DrawControlConstructorOptions = ConstructorParameters<typeof MaplibreTerradrawControl>[0];
@@ -209,10 +220,10 @@ function getTerradrawPropertyPolicy(
   controlType: TerradrawControlType
 ): MapFeaturePropertyPolicy | null {
   if (controlType === 'measure') {
-    return props.controls.MaplibreMeasureControl?.propertyPolicy || null;
+    return controls.value.MaplibreMeasureControl?.propertyPolicy || null;
   }
 
-  return props.controls.MaplibreTerradrawControl?.propertyPolicy || null;
+  return controls.value.MaplibreTerradrawControl?.propertyPolicy || null;
 }
 
 /**
@@ -252,15 +263,12 @@ const defaultOptions = {
   center: [114.305556, 22.543056] as [number, number],
   zoom: 0,
   attributionControl: false,
-};
+} satisfies MapLibreComponentOptions;
 
 // 合并默认配置和业务层传入的配置。
 // Vue-maplibre-gl 底层认的是 mapStyle，但 Mapbox 原生叫 style，这里做一下兼容。
 const mergedOptions = computed(() => {
-  const options = {
-    ...defaultOptions,
-    ...props.mapOptions,
-  } as MapLibreComponentOptions;
+  const options = resolveMapInitOptions(defaultOptions, props.mapOptions) as MapLibreComponentOptions;
 
   // 兼容原生的 style 属性到 vue-maplibre-gl 的 mapStyle
   if (options.style && !options.mapStyle) {
@@ -269,6 +277,12 @@ const mergedOptions = computed(() => {
 
   return options;
 });
+
+/**
+ * 读取当前地图最终生效的控件配置。
+ * 合并顺序固定为：库内空对象 -> 全局控件默认值 -> 页面局部覆写。
+ */
+const controls = computed(() => resolveMapControls(props.controls));
 
 // 初始化地图实例引用。
 // 后续普通图层交互、吸附模块、绘图控件和测量控件都统一复用这一个 map 句柄。
@@ -279,6 +293,12 @@ const map = useMap(props.mapKey as string | symbol | undefined);
  * 宿主创建插件时会通过闭包访问这里的状态，因此需要先占位，后初始化。
  */
 let mapInteractiveBinding: ReturnType<typeof useMapInteractive> | null = null;
+
+/**
+ * 插件托管图层交互绑定实例。
+ * 交点、线草稿等插件图层会走这条独立通道，避免再与普通业务图层交互链耦合。
+ */
+let pluginLayerInteractiveBinding: ReturnType<typeof usePluginLayerInteractive> | null = null;
 
 /**
  * 创建地图插件宿主。
@@ -292,6 +312,8 @@ const pluginHost = useMapPluginHost({
   getSelectedFeatureContext: () => mapInteractiveBinding?.getSelectedFeatureContext() || null,
   clearHoverState: () => mapInteractiveBinding?.clearHoverState(),
   clearSelectedFeature: () => mapInteractiveBinding?.clearSelectionState(),
+  clearPluginHoverState: () => pluginLayerInteractiveBinding?.clearHoverState(),
+  clearPluginSelectedFeature: () => pluginLayerInteractiveBinding?.clearSelectionState(),
   toFeatureSnapshot: toMapFeatureSnapshot,
   onPluginStateChange: (payload) => {
     emit('pluginStateChange', payload);
@@ -303,6 +325,15 @@ const pluginRenderItems = pluginHost.renderItems;
 
 /** 业务层交互配置叠加插件补丁后的最终结果。 */
 const mergedMapInteractive = pluginHost.mergedMapInteractive;
+
+/** 插件托管图层的最终交互配置。 */
+const mergedPluginLayerInteractive = pluginHost.mergedPluginLayerInteractive;
+
+pluginLayerInteractiveBinding = usePluginLayerInteractive({
+  mapInstance: map,
+  getInteractive: () => mergedPluginLayerInteractive.value,
+  toFeatureSnapshot: toMapFeatureSnapshot,
+});
 
 mapInteractiveBinding = useMapInteractive({
   mapInstance: map,
@@ -316,6 +347,10 @@ mapInteractiveBinding = useMapInteractive({
  * @returns 当前选中的 MapLibre 要素；未选中时返回 null
  */
 function getSelectedMapFeature() {
+  if (pluginHost.resolveSelectedFeatureSnapshot()) {
+    return pluginLayerInteractiveBinding?.getSelectedFeature() || null;
+  }
+
   return mapInteractiveBinding?.getSelectedFeature() || null;
 }
 
@@ -324,6 +359,10 @@ function getSelectedMapFeature() {
  * @returns 当前选中的普通图层交互上下文；未选中时返回 null
  */
 function getSelectedMapFeatureContext() {
+  if (pluginHost.resolveSelectedFeatureSnapshot()) {
+    return pluginLayerInteractiveBinding?.getSelectedFeatureContext() || null;
+  }
+
   return mapInteractiveBinding?.getSelectedFeatureContext() || null;
 }
 
@@ -331,6 +370,7 @@ function getSelectedMapFeatureContext() {
  * 清空当前普通图层交互封装记录的整个选中集。
  */
 function clearSelectedMapFeature() {
+  pluginLayerInteractiveBinding?.clearSelectionState();
   mapInteractiveBinding?.clearSelectionState();
 }
 
@@ -492,7 +532,7 @@ function syncDrawSnapping(localSnapConfig: TerradrawSnapSharedOptions | boolean 
     drawInstance: drawControlRef.value?.getTerraDrawInstance?.(),
     taskKey: 'draw-snapping',
     retryTask: () => {
-      syncDrawSnapping(props.controls.MaplibreTerradrawControl?.snapping);
+      syncDrawSnapping(controls.value.MaplibreTerradrawControl?.snapping);
     },
     localSnapConfig,
     resolveSnapOptions: (nextLocalSnapConfig) => {
@@ -514,7 +554,7 @@ function syncMeasureSnapping(
     drawInstance: measureControlRef.value?.getTerraDrawInstance?.(),
     taskKey: 'measure-snapping',
     retryTask: () => {
-      syncMeasureSnapping(props.controls.MaplibreMeasureControl?.snapping);
+      syncMeasureSnapping(controls.value.MaplibreMeasureControl?.snapping);
     },
     localSnapConfig,
     resolveSnapOptions: (nextLocalSnapConfig) => {
@@ -532,14 +572,14 @@ const drawControlLifecycle = useTerradrawControlLifecycle({
   getMapInstance: () => map,
   getSnapBinding: () => pluginHost.getMapSnapService()?.getBinding() || null,
   controlType: 'draw',
-  getConfig: () => props.controls.MaplibreTerradrawControl,
+  getConfig: () => controls.value.MaplibreTerradrawControl,
   Control: MaplibreTerradrawControl,
   defaultPosition: 'top-left',
   prepareOptions: prepareDrawControlOptions,
   getSnappingWatchSource: () => {
     const resolvedSnapOptions = resolveTerradrawSnapOptions(
       'draw',
-      props.controls.MaplibreTerradrawControl?.snapping
+      controls.value.MaplibreTerradrawControl?.snapping
     );
     return {
       enabled: resolvedSnapOptions.enabled,
@@ -549,7 +589,7 @@ const drawControlLifecycle = useTerradrawControlLifecycle({
     };
   },
   syncSnapping: () => {
-    syncDrawSnapping(props.controls.MaplibreTerradrawControl?.snapping);
+    syncDrawSnapping(controls.value.MaplibreTerradrawControl?.snapping);
   },
   clearReadySync: terradrawReadySyncManager.clear,
 });
@@ -563,14 +603,14 @@ const measureControlLifecycle = useTerradrawControlLifecycle({
   getMapInstance: () => map,
   getSnapBinding: () => pluginHost.getMapSnapService()?.getBinding() || null,
   controlType: 'measure',
-  getConfig: () => props.controls.MaplibreMeasureControl,
+  getConfig: () => controls.value.MaplibreMeasureControl,
   Control: MaplibreMeasureControl,
   defaultPosition: 'top-right',
   prepareOptions: prepareMeasureControlOptions,
   getSnappingWatchSource: () => {
     const resolvedSnapOptions = resolveTerradrawSnapOptions(
       'measure',
-      props.controls.MaplibreMeasureControl?.snapping
+      controls.value.MaplibreMeasureControl?.snapping
     );
     return {
       enabled: resolvedSnapOptions.enabled,
@@ -580,15 +620,31 @@ const measureControlLifecycle = useTerradrawControlLifecycle({
     };
   },
   syncSnapping: () => {
-    syncMeasureSnapping(props.controls.MaplibreMeasureControl?.snapping);
+    syncMeasureSnapping(controls.value.MaplibreMeasureControl?.snapping);
   },
   clearReadySync: terradrawReadySyncManager.clear,
 });
 const measureControlRef = measureControlLifecycle.controlRef;
 const measureLineDecorationLayerProps = measureControlLifecycle.lineDecorationLayerProps;
 
+/**
+ * 底层逃生句柄集合。
+ * 这里不再额外平铺 TerraDraw 一级字段；业务层需要时继续从 control.getTerraDrawInstance() 取引擎即可，
+ * 这样能把逃生面控制在最小范围内。
+ */
+const rawHandles: MapLibreRawHandles = createMapLibreRawHandles({
+  mapInstance: map,
+  getDrawControl,
+  getMeasureControl,
+});
+
 // 将底层控件实例和更业务化的快照获取方法同时暴露给父组件（外界）。
-defineExpose({
+// 这里显式使用公开接口收口 expose 类型，避免编辑器按 getter 的运行时展开结果
+// 推导模板 ref，进而把 mapRef 误判成与 MapLibreInitExpose 不兼容的结构。
+defineExpose<MapLibreInitExpose>({
+  /** 底层逃生句柄集合 */
+  rawHandles,
+  // 兼容期继续保留旧的 getXxx expose，避免业务页和示例一次性全部切换。
   /** 获取底层绘图控件实例 */
   getDrawControl,
   /** 获取底层测量控件实例 */

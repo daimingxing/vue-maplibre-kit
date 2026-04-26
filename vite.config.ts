@@ -1,16 +1,16 @@
-import { defineConfig, type Plugin } from 'vite';
-import vue from '@vitejs/plugin-vue';
-import { fileURLToPath, URL } from 'node:url';
-import fs from 'node:fs';
+import { defineConfig, type Plugin } from "vite";
+import vue from "@vitejs/plugin-vue";
+import { fileURLToPath, URL } from "node:url";
+import fs from "node:fs";
 
 // 自定义插件：让 Vite 原生支持 .geojson 文件作为 JSON 导入
 function geojsonPlugin() {
   return {
-    name: 'vite-plugin-geojson',
+    name: "vite-plugin-geojson",
     transform(_code: string, id: string) {
-      if (id.endsWith('.geojson')) {
+      if (id.endsWith(".geojson")) {
         // 读取文件内容并将其作为默认导出的 JavaScript 对象返回
-        const fileContent = fs.readFileSync(id, 'utf-8');
+        const fileContent = fs.readFileSync(id, "utf-8");
         return {
           code: `export default ${fileContent};`,
           map: null,
@@ -21,25 +21,45 @@ function geojsonPlugin() {
 }
 
 /**
+ * 解析库构建阶段的静态资源文件名。
+ * @param assetInfo Rollup 当前输出资源信息
+ * @returns 对外稳定的资源文件名
+ */
+function resolveAssetFileName(assetInfo: { names?: string[]; name?: string }) {
+  const sourceName = assetInfo.names?.[0] || assetInfo.name || "";
+
+  if (sourceName.endsWith(".css")) {
+    return "style.css";
+  }
+
+  return "assets/[name]-[hash][extname]";
+}
+
+/**
  * 读取当前库构建的多入口配置。
  * @returns 供 Vite library mode 使用的入口对象
  */
 function resolveLibraryEntries() {
   return {
-    index: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
-    business: fileURLToPath(new URL('./src/business.ts', import.meta.url)),
-    geometry: fileURLToPath(new URL('./src/geometry.ts', import.meta.url)),
-    'plugins/map-feature-snap': fileURLToPath(
-      new URL('./src/plugins/map-feature-snap.ts', import.meta.url)
+    index: fileURLToPath(new URL("./src/index.ts", import.meta.url)),
+    business: fileURLToPath(new URL("./src/business.ts", import.meta.url)),
+    geometry: fileURLToPath(new URL("./src/geometry.ts", import.meta.url)),
+    config: fileURLToPath(new URL("./src/config.ts", import.meta.url)),
+    plugins: fileURLToPath(new URL("./src/plugins.ts", import.meta.url)),
+    "plugins/map-feature-snap": fileURLToPath(
+      new URL("./src/plugins/map-feature-snap.ts", import.meta.url)
     ),
-    'plugins/line-draft-preview': fileURLToPath(
-      new URL('./src/plugins/line-draft-preview.ts', import.meta.url)
+    "plugins/line-draft-preview": fileURLToPath(
+      new URL("./src/plugins/line-draft-preview.ts", import.meta.url)
     ),
-    'plugins/map-feature-multi-select': fileURLToPath(
-      new URL('./src/plugins/map-feature-multi-select.ts', import.meta.url)
+    "plugins/intersection-preview": fileURLToPath(
+      new URL("./src/plugins/intersection-preview.ts", import.meta.url)
     ),
-    'plugins/map-dxf-export': fileURLToPath(
-      new URL('./src/plugins/map-dxf-export.ts', import.meta.url)
+    "plugins/map-feature-multi-select": fileURLToPath(
+      new URL("./src/plugins/map-feature-multi-select.ts", import.meta.url)
+    ),
+    "plugins/map-dxf-export": fileURLToPath(
+      new URL("./src/plugins/map-dxf-export.ts", import.meta.url)
     ),
   };
 }
@@ -54,46 +74,68 @@ function resolveDevAliases() {
   return [
     {
       find: /^vue-maplibre-kit$/,
-      replacement: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
+      replacement: fileURLToPath(new URL("./src/index.ts", import.meta.url)),
     },
     {
       find: /^vue-maplibre-kit\/business$/,
-      replacement: fileURLToPath(new URL('./src/business.ts', import.meta.url)),
+      replacement: fileURLToPath(new URL("./src/business.ts", import.meta.url)),
+    },
+    {
+      find: /^vue-maplibre-kit\/config$/,
+      replacement: fileURLToPath(new URL("./src/config.ts", import.meta.url)),
     },
     {
       find: /^vue-maplibre-kit\/geometry$/,
-      replacement: fileURLToPath(new URL('./src/geometry.ts', import.meta.url)),
+      replacement: fileURLToPath(new URL("./src/geometry.ts", import.meta.url)),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins$/,
+      replacement: fileURLToPath(new URL("./src/plugins.ts", import.meta.url)),
     },
     {
       find: /^vue-maplibre-kit\/plugins\/map-feature-snap$/,
-      replacement: fileURLToPath(new URL('./src/plugins/map-feature-snap.ts', import.meta.url)),
+      replacement: fileURLToPath(
+        new URL("./src/plugins/map-feature-snap.ts", import.meta.url)
+      ),
     },
     {
       find: /^vue-maplibre-kit\/plugins\/line-draft-preview$/,
       replacement: fileURLToPath(
-        new URL('./src/plugins/line-draft-preview.ts', import.meta.url)
+        new URL("./src/plugins/line-draft-preview.ts", import.meta.url)
+      ),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins\/intersection-preview$/,
+      replacement: fileURLToPath(
+        new URL("./src/plugins/intersection-preview.ts", import.meta.url)
       ),
     },
     {
       find: /^vue-maplibre-kit\/plugins\/map-feature-multi-select$/,
       replacement: fileURLToPath(
-        new URL('./src/plugins/map-feature-multi-select.ts', import.meta.url)
+        new URL("./src/plugins/map-feature-multi-select.ts", import.meta.url)
       ),
     },
     {
       find: /^vue-maplibre-kit\/plugins\/map-dxf-export$/,
-      replacement: fileURLToPath(new URL('./src/plugins/map-dxf-export.ts', import.meta.url)),
+      replacement: fileURLToPath(
+        new URL("./src/plugins/map-dxf-export.ts", import.meta.url)
+      ),
     },
     {
-      find: '@',
-      replacement: fileURLToPath(new URL('./src', import.meta.url)),
+      find: "@",
+      replacement: fileURLToPath(new URL("./src", import.meta.url)),
+    },
+    {
+      find: "@examples",
+      replacement: fileURLToPath(new URL("./examples", import.meta.url)),
     },
   ];
 }
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => {
-  const isBuildCommand = command === 'build';
+  const isBuildCommand = command === "build";
 
   return {
     plugins: [vue(), geojsonPlugin()],
@@ -102,33 +144,33 @@ export default defineConfig(({ command }) => {
     },
     // 解决 localhost 解析错误
     server: {
-      host: '127.0.0.1',
-      port: 5173
+      host: "127.0.0.1",
+      port: 5173,
     },
     build: isBuildCommand
       ? {
           lib: {
             entry: resolveLibraryEntries(),
-            formats: ['es'],
+            formats: ["es"],
           },
           rollupOptions: {
             external: [
-              'vue',
-              'maplibre-gl',
-              'vue-maplibre-gl',
-              '@watergis/maplibre-gl-terradraw',
-              'terra-draw',
-              'geojson',
-              'mitt',
-              'lodash-es',
-              '@turf/helpers',
-              '@turf/distance',
-              '@turf/destination',
+              "vue",
+              "maplibre-gl",
+              "vue-maplibre-gl",
+              "@watergis/maplibre-gl-terradraw",
+              "terra-draw",
+              "geojson",
+              "mitt",
+              "lodash-es",
+              "@turf/helpers",
+              "@turf/distance",
+              "@turf/destination",
             ],
             output: {
-              entryFileNames: '[name].js',
-              chunkFileNames: 'chunks/[name]-[hash].js',
-              assetFileNames: 'assets/[name]-[hash][extname]',
+              entryFileNames: "[name].js",
+              chunkFileNames: "chunks/[name]-[hash].js",
+              assetFileNames: resolveAssetFileName,
             },
           },
         }

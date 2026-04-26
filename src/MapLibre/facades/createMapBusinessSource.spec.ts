@@ -1,9 +1,13 @@
-import { ref, toRaw } from 'vue';
+import { nextTick, ref, toRaw } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import type { FeatureProperties } from '../composables/useMapDataUpdate';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
 import * as mapFeatureData from '../shared/map-feature-data';
 import { createMapBusinessSource, createMapBusinessSourceRegistry } from './createMapBusinessSource';
+import {
+  createCircleBusinessLayer,
+  type MapBusinessLayerDescriptor,
+} from './mapBusinessLayer';
 
 /**
  * 创建测试用点要素。
@@ -46,6 +50,38 @@ function createFeatureCollection(features: MapCommonFeature[]): MapCommonFeature
 }
 
 describe('createMapBusinessSource', () => {
+  it('异步业务源在 null 或 undefined 首屏时会自动兜底为空 FeatureCollection，并允许后续回填', async () => {
+    const data = ref<MapCommonFeatureCollection | null | undefined>(undefined);
+    const source = createMapBusinessSource({
+      sourceId: 'business-async',
+      data,
+      promoteId: 'id',
+    });
+
+    expect(toRaw(source.sourceProps.data as MapCommonFeatureCollection)).toEqual({
+      type: 'FeatureCollection',
+      features: [],
+    });
+    expect(data.value).toEqual({
+      type: 'FeatureCollection',
+      features: [],
+    });
+
+    data.value = null;
+    await nextTick();
+
+    expect(toRaw(source.sourceProps.data as MapCommonFeatureCollection)).toEqual({
+      type: 'FeatureCollection',
+      features: [],
+    });
+
+    data.value = createFeatureCollection([createPointFeature('feature-async')]);
+    await nextTick();
+
+    expect((source.sourceProps.data as MapCommonFeatureCollection).features).toHaveLength(1);
+    expect(source.resolveFeature('feature-async')?.properties?.id).toBe('feature-async');
+  });
+
   it('promoteId 路径初始化时只复制 features 数组，不深拷贝整条 feature', () => {
     const originalFeature = createPointFeature('feature-1', {
       properties: { status: 'normal' },
@@ -121,6 +157,7 @@ describe('createMapBusinessSource', () => {
   });
 
   it('无效策略路径会克隆原始集合，避免外部修改污染内部快照', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const collection = createFeatureCollection([
       createPointFeature('feature-1', {
         properties: { status: 'normal' },
@@ -145,6 +182,11 @@ describe('createMapBusinessSource', () => {
         toRaw(source.sourceProps.data as MapCommonFeatureCollection) as MapCommonFeatureCollection
       ).features[0].properties?.status
     ).toBe('normal');
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[createMapBusinessSource] source 'business-invalid-strategy' 必须且只能配置一种 ID 策略：promoteId、featureIdKey、getFeatureId"
+    );
+
+    errorSpy.mockRestore();
   });
 
   it('promoteId 路径本地属性写回后会直接复用增量结果，不再重新标准化', () => {
@@ -245,5 +287,157 @@ describe('createMapBusinessSource', () => {
     expect(() => {
       createMapBusinessSourceRegistry([primarySource, secondarySource]);
     }).toThrowError("[createMapBusinessSourceRegistry] 检测到重复 sourceId：business-duplicate");
+  });
+
+  it('layers 支持 ref 与 getter 输入，并在非法值时回退为空数组', () => {
+    const layerList: MapBusinessLayerDescriptor[] = [
+      createCircleBusinessLayer({
+        layerId: 'circle-ref',
+      }),
+    ];
+    const layerRef = ref(layerList) as unknown as { value: MapBusinessLayerDescriptor[] };
+    const getterLayers = (): MapBusinessLayerDescriptor[] => layerRef.value;
+    const getterSource = createMapBusinessSource({
+      sourceId: 'business-layer-getter',
+      data: ref(createFeatureCollection([createPointFeature('feature-1')])),
+      promoteId: 'id',
+      layers: getterLayers,
+    });
+    const refSource = createMapBusinessSource({
+      sourceId: 'business-layer-ref',
+      data: ref(createFeatureCollection([createPointFeature('feature-2')])),
+      promoteId: 'id',
+      layers: layerRef as any,
+    });
+
+    expect(getterSource.getLayers()).toEqual(layerRef.value);
+    expect(refSource.getLayers()).toEqual(layerRef.value);
+
+    layerRef.value = [
+      createCircleBusinessLayer({
+        layerId: 'circle-next',
+      }),
+    ];
+
+    expect(getterSource.getLayers()).toEqual(layerRef.value);
+    expect(refSource.getLayers()).toEqual(layerRef.value);
+
+    const invalidSource = createMapBusinessSource({
+      sourceId: 'business-layer-invalid',
+      data: ref(createFeatureCollection([createPointFeature('feature-3')])),
+      promoteId: 'id',
+      layers: ref('invalid-layer-input') as any,
+    });
+
+    expect(invalidSource.getLayers()).toEqual([]);
+  });
+
+  it('source 默认 propertyPolicy 会被 layer 继承，并允许按字段局部覆写', () => {
+    const source = createMapBusinessSource({
+      sourceId: 'business-policy',
+      data: ref(
+        createFeatureCollection([
+          createPointFeature('feature-1', {
+            properties: {
+              name: '原始名称',
+              mark: '锁定值',
+              tag: '默认字段',
+              status: 'draft',
+            },
+          }),
+        ])
+      ),
+      promoteId: 'id',
+      propertyPolicy: {
+        readonlyKeys: ['name'],
+        fixedKeys: ['tag'],
+        rules: {
+          status: {
+            editable: false,
+          },
+        },
+      },
+      layers: [
+        createCircleBusinessLayer({
+          layerId: 'circle-layer',
+          propertyPolicy: {
+            fixedKeys: ['name'],
+            hiddenKeys: ['tag'],
+            rules: {
+              status: {
+                removable: false,
+              },
+            },
+          },
+        }),
+      ],
+    });
+
+    expect(source.resolvePropertyPolicy(undefined)).toEqual({
+      readonlyKeys: ['name'],
+      fixedKeys: ['tag'],
+      rules: {
+        status: {
+          editable: false,
+        },
+      },
+    });
+    expect(source.resolvePropertyPolicy('circle-layer')).toEqual({
+      fixedKeys: ['name'],
+      hiddenKeys: ['tag'],
+      rules: {
+        status: {
+          editable: false,
+          removable: false,
+        },
+      },
+    });
+
+    const sourcePanel = source.resolvePropertyPanelState('feature-1');
+    const layerPanel = source.resolvePropertyPanelState('feature-1', 'circle-layer');
+
+    expect(sourcePanel?.items.find((item) => item.key === 'name')).toMatchObject({
+      editable: false,
+      removable: false,
+      temporary: false,
+    });
+    expect(sourcePanel?.items.find((item) => item.key === 'tag')).toMatchObject({
+      editable: true,
+      removable: false,
+      temporary: false,
+    });
+    expect(layerPanel?.items.find((item) => item.key === 'name')).toMatchObject({
+      editable: true,
+      removable: false,
+      temporary: false,
+    });
+    expect(layerPanel?.properties).not.toHaveProperty('tag');
+
+    const sourceSaveResult = source.saveProperties('feature-1', {
+      name: 'source-should-block',
+    });
+
+    expect(sourceSaveResult.success).toBe(false);
+    expect(sourceSaveResult.blockedKeys).toEqual(['name']);
+    expect(source.resolveFeature('feature-1')?.properties?.name).toBe('原始名称');
+
+    const layerSaveResult = source.saveProperties(
+      'feature-1',
+      {
+        name: 'layer-allowed',
+      },
+      'circle-layer'
+    );
+
+    expect(layerSaveResult.success).toBe(true);
+    expect(layerSaveResult.blockedKeys).toEqual([]);
+    expect(layerSaveResult.properties?.name).toBe('layer-allowed');
+
+    const removeResult = source.removeProperties('feature-1', ['status'], 'circle-layer');
+
+    expect(removeResult.success).toBe(false);
+    expect(removeResult.blockedKeys).toEqual(['status']);
+    expect(removeResult.removedKeys).toEqual([]);
+    expect(source.resolveFeature('feature-1')?.properties?.status).toBe('draft');
   });
 });

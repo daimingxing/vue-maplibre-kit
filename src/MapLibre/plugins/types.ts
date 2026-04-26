@@ -6,6 +6,7 @@ import type { MapInstance } from 'vue-maplibre-gl';
 import type {
   MapFeatureSnapResult,
   MapLayerInteractiveContext,
+  MapLayerInteractiveLayerOptions,
   MapLayerInteractiveOptions,
   MapSelectionState,
   ResolvedMapSelectionToolOptions,
@@ -110,6 +111,20 @@ export interface MapPluginServices {
   mapSelection?: MapSelectionService;
 }
 
+/** 插件图层交互上下文。 */
+export type MapPluginLayerInteractiveContext = MapLayerInteractiveContext;
+
+/** 插件图层交互配置。 */
+export type MapPluginLayerInteractiveLayerOptions = MapLayerInteractiveLayerOptions;
+
+/** 插件专用图层交互配置。 */
+export interface MapPluginLayerInteractiveOptions {
+  /** 是否启用当前插件图层交互；默认 true。 */
+  enabled?: boolean;
+  /** 参与插件交互托管的图层集合。 */
+  layers?: Record<string, MapPluginLayerInteractiveLayerOptions>;
+}
+
 /** 宿主消费用的已擦除插件描述对象。 */
 export interface AnyMapPluginDescriptor {
   /** 插件唯一标识。 */
@@ -161,6 +176,10 @@ export interface MapPluginContext<TType extends string = string, TOptions = unkn
   clearHoverState: () => void;
   /** 清理普通图层选中状态。 */
   clearSelectedFeature: () => void;
+  /** 清理插件托管图层 hover 状态。 */
+  clearPluginHoverState: () => void;
+  /** 清理插件托管图层选中状态。 */
+  clearPluginSelectedFeature: () => void;
   /** 将渲染态要素转换为标准 GeoJSON 快照。 */
   toFeatureSnapshot: (feature: any) => MapCommonFeature | null;
 }
@@ -177,6 +196,8 @@ export interface MapPluginInstance<TApi = unknown, TState = unknown> {
    * 3. 图层按 layerId 深合并，新图层只追加不重排
    */
   getMapInteractivePatch?: () => MapLayerInteractiveOptions | null;
+  /** 读取当前插件对插件托管图层交互的补丁。 */
+  getPluginLayerInteractivePatch?: () => MapPluginLayerInteractiveOptions | null;
   /** 解析当前选中要素快照。 */
   resolveSelectedFeatureSnapshot?: () => MapCommonFeature | null;
   /** 读取当前插件对外暴露的 API。 */

@@ -1,0 +1,329 @@
+import { effectScope, nextTick, ref, type EffectScope } from 'vue';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useMapPluginHost } from './useMapPluginHost';
+import type {
+  AnyMapPluginDescriptor,
+  MapPluginRenderItem,
+} from '../plugins/types';
+
+vi.mock('vue-maplibre-gl', () => ({}));
+
+const DemoComponent = {} as any;
+let warnSpy: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+  warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+});
+
+afterEach(() => {
+  warnSpy.mockRestore();
+});
+
+/**
+ * 创建插件宿主测试环境。
+ * @param descriptors 当前测试需要注册的插件描述对象
+ * @returns 插件宿主和作用域清理函数
+ */
+function createHostHarness(descriptors: AnyMapPluginDescriptor[] | (() => AnyMapPluginDescriptor[])): {
+  host: ReturnType<typeof useMapPluginHost>;
+  scope: EffectScope;
+} {
+  const scope = effectScope();
+  let host: ReturnType<typeof useMapPluginHost> | null = null;
+
+  scope.run(() => {
+    host = useMapPluginHost({
+      getDescriptors: () => (typeof descriptors === 'function' ? descriptors() : descriptors),
+      getMap: () => null,
+      getMapInstance: () => ({}) as any,
+      getBaseMapInteractive: () => null,
+      getSelectedFeatureContext: () => null,
+      clearHoverState: () => undefined,
+      clearSelectedFeature: () => undefined,
+      clearPluginHoverState: () => undefined,
+      clearPluginSelectedFeature: () => undefined,
+      toFeatureSnapshot: () => null,
+    });
+  });
+
+  return {
+    host: host as ReturnType<typeof useMapPluginHost>,
+    scope,
+  };
+}
+
+/**
+ * 创建测试用插件描述对象。
+ * @param descriptor 插件描述对象补丁
+ * @returns 完整插件描述对象
+ */
+function createDescriptor(
+  descriptor: Partial<AnyMapPluginDescriptor> & Pick<AnyMapPluginDescriptor, 'id' | 'plugin'>
+): AnyMapPluginDescriptor {
+  return {
+    type: descriptor.plugin.type,
+    options: {},
+    ...descriptor,
+  };
+}
+
+describe('useMapPluginHost', () => {
+  it('插件初始化失败时应跳过失败插件并保留其他插件', () => {
+    const error = new Error('init failed');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const aliveItems: MapPluginRenderItem[] = [
+      {
+        id: 'alive-render',
+        component: DemoComponent,
+        props: {},
+      },
+    ];
+
+    const { host, scope } = createHostHarness([
+      createDescriptor({
+        id: 'broken',
+        plugin: {
+          type: 'broken',
+          createInstance: () => {
+            throw error;
+          },
+        },
+      }),
+      createDescriptor({
+        id: 'alive',
+        plugin: {
+          type: 'alive',
+          createInstance: () => ({
+            getRenderItems: () => aliveItems,
+          }),
+        },
+      }),
+    ]);
+
+    expect(host.hostExpose.has('broken')).toBe(false);
+    expect(host.hostExpose.has('alive')).toBe(true);
+    expect(host.renderItems.value).toEqual(aliveItems);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[MapPluginHost] 插件 'broken' 初始化失败，已跳过",
+      error
+    );
+
+    scope.stop();
+    errorSpy.mockRestore();
+  });
+
+  it('插件运行时方法抛错时应返回安全空值', () => {
+    const error = new Error('runtime failed');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const { host, scope } = createHostHarness([
+      createDescriptor({
+        id: 'runtime-broken',
+        plugin: {
+          type: 'runtime-broken',
+          createInstance: () => ({
+            getRenderItems: () => {
+              throw error;
+            },
+            getMapInteractivePatch: () => {
+              throw error;
+            },
+            getPluginLayerInteractivePatch: () => {
+              throw error;
+            },
+            resolveSelectedFeatureSnapshot: () => {
+              throw error;
+            },
+            getApi: () => {
+              throw error;
+            },
+            state: ref({ status: 'ready' }),
+          }),
+        },
+      }),
+    ]);
+
+    expect(host.renderItems.value).toEqual([]);
+    expect(host.mergedMapInteractive.value).toBeNull();
+    expect(host.mergedPluginLayerInteractive.value).toBeNull();
+    expect(host.resolveSelectedFeatureSnapshot()).toBeNull();
+    expect(host.hostExpose.getApi('runtime-broken')).toBeNull();
+    expect(host.hostExpose.getState('runtime-broken')).toEqual({ status: 'ready' });
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[MapPluginHost] 插件 'runtime-broken' getRenderItems 运行失败",
+      error
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[MapPluginHost] 插件 'runtime-broken' getApi 运行失败",
+      error
+    );
+
+    scope.stop();
+    errorSpy.mockRestore();
+  });
+
+  it('插件 services 读取抛错时应跳过该服务并保留插件实例', () => {
+    const error = new Error('services failed');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const pluginInstance = {
+      getRenderItems: () => [],
+    };
+    Object.defineProperty(pluginInstance, 'services', {
+      get: () => {
+        throw error;
+      },
+    });
+
+    const { host, scope } = createHostHarness([
+      createDescriptor({
+        id: 'service-broken',
+        plugin: {
+          type: 'service-broken',
+          createInstance: () => pluginInstance,
+        },
+      }),
+    ]);
+
+    expect(host.hostExpose.has('service-broken')).toBe(true);
+    expect(host.getMapSnapService()).toBeNull();
+    expect(host.getMapSelectionService()).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[MapPluginHost] 插件 'service-broken' 读取 mapSnap 服务失败",
+      error
+    );
+
+    scope.stop();
+    errorSpy.mockRestore();
+  });
+
+  it('插件 state 读取抛错时应保留插件实例并返回空状态', () => {
+    const error = new Error('state failed');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const pluginInstance = {
+      getRenderItems: () => [],
+    };
+    Object.defineProperty(pluginInstance, 'state', {
+      get: () => {
+        throw error;
+      },
+    });
+
+    const { host, scope } = createHostHarness([
+      createDescriptor({
+        id: 'state-broken',
+        plugin: {
+          type: 'state-broken',
+          createInstance: () => pluginInstance,
+        },
+      }),
+    ]);
+
+    expect(host.hostExpose.has('state-broken')).toBe(true);
+    expect(host.hostExpose.getState('state-broken')).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[MapPluginHost] 插件 'state-broken' 读取 state 失败",
+      error
+    );
+
+    scope.stop();
+    errorSpy.mockRestore();
+  });
+
+  it('插件 state.value 读取抛错时应保留插件实例并返回空状态', () => {
+    const error = new Error('state value failed');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const { host, scope } = createHostHarness([
+      createDescriptor({
+        id: 'state-value-broken',
+        plugin: {
+          type: 'state-value-broken',
+          createInstance: () => ({
+            getRenderItems: () => [],
+            state: {
+              get value() {
+                throw error;
+              },
+            },
+          }),
+        },
+      }),
+    ]);
+
+    expect(host.hostExpose.has('state-value-broken')).toBe(true);
+    expect(host.hostExpose.getState('state-value-broken')).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[MapPluginHost] 插件 'state-value-broken' 读取 state.value 失败",
+      error
+    );
+
+    scope.stop();
+    errorSpy.mockRestore();
+  });
+
+  it('插件从描述符列表移除时应销毁旧实例', async () => {
+    const destroy = vi.fn();
+    const descriptorsRef = ref<AnyMapPluginDescriptor[]>([
+      createDescriptor({
+        id: 'removable',
+        plugin: {
+          type: 'removable',
+          createInstance: () => ({
+            destroy,
+          }),
+        },
+      }),
+    ]);
+    const { host, scope } = createHostHarness(() => descriptorsRef.value);
+
+    expect(host.hostExpose.has('removable')).toBe(true);
+
+    descriptorsRef.value = [];
+    await nextTick();
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(host.hostExpose.has('removable')).toBe(false);
+
+    scope.stop();
+  });
+
+  it('插件移除后已解析的 API 引用应失效', async () => {
+    const downloadDxf = vi.fn(() => 'ok');
+    const descriptorsRef = ref<AnyMapPluginDescriptor[]>([
+      createDescriptor({
+        id: 'api-plugin',
+        plugin: {
+          type: 'api-plugin',
+          createInstance: () => ({
+            getApi: () => ({
+              downloadDxf,
+              status: 'ready',
+            }),
+          }),
+        },
+      }),
+    ]);
+    const { host, scope } = createHostHarness(() => descriptorsRef.value);
+    const pluginApi = host.hostExpose.getApi<{
+      downloadDxf: () => string;
+      status?: string;
+    }>('api-plugin');
+
+    expect(pluginApi?.status).toBe('ready');
+    expect(pluginApi?.downloadDxf()).toBe('ok');
+
+    const detachedDownload = pluginApi?.downloadDxf;
+    descriptorsRef.value = [];
+    await nextTick();
+
+    expect(pluginApi?.status).toBeUndefined();
+    expect(() => pluginApi?.downloadDxf()).toThrow(
+      "[MapPluginHost] 插件 'api-plugin' 已卸载，无法继续调用 API 'downloadDxf'"
+    );
+    expect(() => detachedDownload?.()).toThrow(
+      "[MapPluginHost] 插件 'api-plugin' 已卸载，无法继续调用 API 'downloadDxf'"
+    );
+
+    scope.stop();
+  });
+});

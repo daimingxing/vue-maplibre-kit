@@ -5,6 +5,10 @@ import { useMapSelection, type UseMapSelectionResult } from '../composables/useM
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
 import type { MapSourceFeatureRef } from '../shared/map-common-tools';
 import type { MapBusinessSource, MapBusinessSourceRegistry } from './createMapBusinessSource';
+import {
+  useIntersectionPreview,
+  type UseIntersectionPreviewResult,
+} from './useIntersectionPreview';
 import { useLineDraftPreview, type UseLineDraftPreviewResult } from './useLineDraftPreview';
 import {
   useMapFeatureActions,
@@ -15,6 +19,13 @@ import {
   type UseMapFeaturePropertyEditorResult,
 } from './useMapFeaturePropertyEditor';
 import { useMapFeatureQuery, type UseMapFeatureQueryResult } from './useMapFeatureQuery';
+import {
+  useMapFeatureMultiSelect,
+  type UseMapFeatureMultiSelectResult,
+} from './useMapFeatureMultiSelect';
+import { useMapFeatureSnap, type UseMapFeatureSnapResult } from './useMapFeatureSnap';
+import { useMapDxfExport, type UseMapDxfExportResult } from './useMapDxfExport';
+import { useMapLayerActions, type UseMapLayerActionsResult } from './useMapLayerActions';
 
 /** useBusinessMap 初始化配置。 */
 export interface UseBusinessMapOptions {
@@ -57,9 +68,14 @@ export interface UseBusinessMapSources {
    *
    * @param sourceId 目标业务 source ID
    * @param featureId 目标要素 ID
+   * @param layerId 当前命中的业务图层 ID
    * @returns 标准来源引用；参数不足时返回 null
    */
-  createFeatureRef: (sourceId: string, featureId: MapFeatureId | null) => MapSourceFeatureRef | null;
+  createFeatureRef: (
+    sourceId: string,
+    featureId: MapFeatureId | null,
+    layerId?: string | null
+  ) => MapSourceFeatureRef | null;
 }
 
 /**
@@ -78,6 +94,20 @@ export interface UseBusinessMapFeatureGroup
   extends UseMapFeatureQueryResult,
     UseMapFeatureActionsResult {}
 
+/** useBusinessMap 的插件短路径分组。 */
+export interface UseBusinessMapPlugins {
+  /** 要素吸附插件分组。 */
+  snap: UseMapFeatureSnapResult;
+  /** 线草稿插件分组。 */
+  lineDraft: UseLineDraftPreviewResult;
+  /** 交点插件分组。 */
+  intersection: UseIntersectionPreviewResult;
+  /** 要素多选插件分组。 */
+  multiSelect: UseMapFeatureMultiSelectResult;
+  /** DXF 导出插件分组。 */
+  dxfExport: UseMapDxfExportResult;
+}
+
 /**
  * useBusinessMap 返回结果。
  * 设计目标不是隐藏全部 GIS 概念，
@@ -93,10 +123,12 @@ export interface UseBusinessMapResult {
   selection: UseMapSelectionResult;
   /** 要素分组。读取要素、生成线草稿、替换线廊、保存当前选中要素等高频操作都从这里取。 */
   feature: UseBusinessMapFeatureGroup;
+  /** 图层运行时动作分组。临时显隐、样式和 feature-state 调整从这里取。 */
+  layers: UseMapLayerActionsResult;
   /** 属性编辑分组。打开属性面板、保存单个字段、删除单个字段时使用。 */
   editor: UseMapFeaturePropertyEditorResult;
-  /** 线草稿分组。读取草稿数量、判断是否有草稿、清空草稿时使用。 */
-  draft: UseLineDraftPreviewResult;
+  /** 插件短路径分组。需要直接调用插件能力时推荐优先使用这里。 */
+  plugins: UseBusinessMapPlugins;
   /** feature-state 特效分组。闪烁、高亮等页面级效果从这里取。 */
   effect: UseMapEffectResult;
 }
@@ -149,7 +181,7 @@ function createBusinessMapFeatureGroup(
  * 1. 选中态相关 -> `businessMap.selection`
  * 2. 要素查询/动作 -> `businessMap.feature`
  * 3. 属性编辑 -> `businessMap.editor`
- * 4. 线草稿状态 -> `businessMap.draft`
+ * 4. 插件能力 -> `businessMap.plugins`
  * 5. 动效 -> `businessMap.effect`
  *
  * @param options 聚合入口初始化配置
@@ -164,8 +196,20 @@ export function useBusinessMap(options: UseBusinessMapOptions): UseBusinessMapRe
   // 下面这些能力都继续复用现有门面，避免重复实现底层逻辑。
   const selection = useMapSelection(mapRef);
   const feature = createBusinessMapFeatureGroup(options);
+  const layers = useMapLayerActions(mapRef);
   const editor = useMapFeaturePropertyEditor(options);
   const draft = useLineDraftPreview(mapRef);
+  const intersection = useIntersectionPreview(mapRef);
+  const multiSelect = useMapFeatureMultiSelect(mapRef);
+  const snap = useMapFeatureSnap(mapRef);
+  const dxfExport = useMapDxfExport(mapRef);
+  const plugins: UseBusinessMapPlugins = {
+    snap,
+    lineDraft: draft,
+    intersection,
+    multiSelect,
+    dxfExport,
+  };
   const effect = useMapEffect(mapRef);
 
   return {
@@ -173,8 +217,9 @@ export function useBusinessMap(options: UseBusinessMapOptions): UseBusinessMapRe
     sources,
     selection,
     feature,
+    layers,
     editor,
-    draft,
+    plugins,
     effect,
   };
 }

@@ -6,6 +6,7 @@ import {
   extractManagedPreviewOriginFromProperties,
   MANAGED_PREVIEW_ORIGIN_FEATURE_ID_PROPERTY,
   MANAGED_PREVIEW_ORIGIN_KEY_PROPERTY,
+  MANAGED_PREVIEW_ORIGIN_LAYER_ID_PROPERTY,
   MANAGED_PREVIEW_ORIGIN_SOURCE_ID_PROPERTY,
   type MapCommonFeature,
   type MapCommonFeatureCollection,
@@ -39,6 +40,7 @@ export const LINE_DRAFT_PREVIEW_CORRIDOR_KIND = 'line-corridor-draft';
 export const LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS = [
   MANAGED_PREVIEW_ORIGIN_SOURCE_ID_PROPERTY,
   MANAGED_PREVIEW_ORIGIN_FEATURE_ID_PROPERTY,
+  MANAGED_PREVIEW_ORIGIN_LAYER_ID_PROPERTY,
   MANAGED_PREVIEW_ORIGIN_KEY_PROPERTY,
 ] as const;
 
@@ -499,7 +501,7 @@ export function useLineDraftPreviewStore(options: UseLineDraftPreviewStoreOption
   const hasFeatures = computed(() => getCurrentFeatures().length > 0);
   const featureCount = computed(() => getCurrentFeatures().length);
 
-  watch(
+  const stopEnabledWatch = watch(
     () => isEnabled(),
     (enabled) => {
       if (!enabled && getCurrentFeatures().length) {
@@ -508,6 +510,15 @@ export function useLineDraftPreviewStore(options: UseLineDraftPreviewStoreOption
     },
     { immediate: true }
   );
+
+  /**
+   * 销毁线草稿存储器。
+   * 插件被动态移除时需要主动停止启用状态监听，并清空内部临时数据。
+   */
+  const destroy = (): void => {
+    stopEnabledWatch();
+    clearLineDraftFeatures();
+  };
 
   return {
     featureCollection,
@@ -521,5 +532,6 @@ export function useLineDraftPreviewStore(options: UseLineDraftPreviewStoreOption
     getFeatureById,
     isLineDraftFeatureById,
     isLineDraftFeatureSource,
+    destroy,
   };
 }

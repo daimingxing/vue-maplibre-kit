@@ -4,9 +4,12 @@
  * 一旦安装真实依赖，该声明会自动被真实类型覆盖。
  */
 declare module 'vitest' {
+  // 覆盖常用测试 API，保证离线/最小依赖场景下类型可解析。
   export const describe: any;
   export const it: any;
   export const expect: any;
+  export const expectTypeOf: any;
+  export const afterEach: any;
   export const vi: any;
 }
 

@@ -1,0 +1,223 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "fill_1",
+        "color":"red"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            [
+              121.98954572508697,
+              31.190747845897988
+            ],
+            [
+              121.98954572508697,
+              31.173272265144305
+            ],
+            [
+              122.02130969144903,
+              31.173272265144305
+            ],
+            [
+              122.02130969144903,
+              31.190747845897988
+            ],
+            [
+              121.98954572508697,
+              31.190747845897988
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "id": 0
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "fill_2"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            [
+              122.00358961176286,
+              31.18436551468966
+            ],
+            [
+              122.00240958621691,
+              31.1824789562545
+            ],
+            [
+              122.00362830112525,
+              31.180658592954757
+            ],
+            [
+              122.00854185012537,
+              31.180939905963697
+            ],
+            [
+              122.0086579182109,
+              31.184597192477923
+            ],
+            [
+              122.00653000329018,
+              31.185093642970443
+            ],
+            [
+              122.00358961176286,
+              31.18436551468966
+            ]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "id": 1
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "point_4",
+        "mark": "hole"
+      },
+      "geometry": {
+        "coordinates": [
+          121.99283432087256,
+          31.1882326201911
+        ],
+        "type": "Point"
+      },
+      "id": 2
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "point_1",
+        "mark": "hole"
+      },
+      "geometry": {
+        "coordinates": [
+          122.01132783600232,
+          31.1884973839407
+        ],
+        "type": "Point"
+      },
+      "id": 3
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "point_3",
+        "mark": "dec"
+      },
+      "geometry": {
+        "coordinates": [
+          122.01221769133357,
+          31.176648481048346
+        ],
+        "type": "Point"
+      },
+      "id": 4
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "point_6",
+        "mark": "dec",
+        "marker-color": "#8f5656",
+        "marker-size": "medium",
+        "marker-symbol": "circle-stroked"
+      },
+      "geometry": {
+        "coordinates": [
+          121.99473009962063,
+          31.175754788554755
+        ],
+        "type": "Point"
+      },
+      "id": 5
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "point_5",
+        "mark": "dec"
+      },
+      "geometry": {
+        "coordinates": [
+          122.0060660827439,
+          31.182540020411395
+        ],
+        "type": "Point"
+      },
+      "id": 6
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "point_2",
+        "mark": "dec"
+      },
+      "geometry": {
+        "coordinates": [
+          122.01604793819067,
+          31.18257311791149
+        ],
+        "type": "Point"
+      },
+      "id": 7
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "line_1"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            121.99500057229508,
+            31.185518160623374
+          ],
+          [
+            122.0115983086782,
+            31.185716739200814
+          ]
+        ],
+        "type": "LineString"
+      },
+      "id": 8
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "line_2"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            121.99554222336658,
+            31.178600746812393
+          ],
+          [
+            122.00204203621595,
+            31.17525770058758
+          ],
+          [
+            122.01465476829108,
+            31.174959799651106
+          ],
+          [
+            122.0182915683379,
+            31.18095073834668
+          ]
+        ],
+        "type": "LineString"
+      },
+      "id": 9
+    }
+  ]
+}

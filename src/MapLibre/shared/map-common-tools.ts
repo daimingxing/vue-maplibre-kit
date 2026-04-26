@@ -39,6 +39,8 @@ export interface MapSourceFeatureRef {
   sourceId: string | null;
   /** 正式业务 source 内的要素 ID */
   featureId: MapFeatureId | null;
+  /** 当前命中的业务图层 ID。 */
+  layerId?: string | null;
 }
 
 /** 托管临时预览来源 sourceId 属性名 */
@@ -46,6 +48,9 @@ export const MANAGED_PREVIEW_ORIGIN_SOURCE_ID_PROPERTY = 'managedPreviewOriginSo
 
 /** 托管临时预览来源 featureId 属性名 */
 export const MANAGED_PREVIEW_ORIGIN_FEATURE_ID_PROPERTY = 'managedPreviewOriginFeatureId';
+
+/** 托管临时预览来源 layerId 属性名 */
+export const MANAGED_PREVIEW_ORIGIN_LAYER_ID_PROPERTY = 'managedPreviewOriginLayerId';
 
 /** 托管临时预览来源唯一键属性名 */
 export const MANAGED_PREVIEW_ORIGIN_KEY_PROPERTY = 'managedPreviewOriginKey';
@@ -293,11 +298,13 @@ export class MapLineMeasureTool {
  * 创建标准化的正式业务要素来源引用。
  * @param sourceId 正式业务 source 标识
  * @param featureId 正式业务要素 ID
+ * @param layerId 当前命中的业务图层 ID
  * @returns 标准化后的来源引用；信息不完整时返回 null
  */
 export function createMapSourceFeatureRef(
   sourceId: string | null | undefined,
-  featureId: MapFeatureId | null | undefined
+  featureId: MapFeatureId | null | undefined,
+  layerId?: string | null | undefined
 ): MapSourceFeatureRef | null {
   if (!sourceId || featureId === null || featureId === undefined) {
     return null;
@@ -306,6 +313,7 @@ export function createMapSourceFeatureRef(
   return {
     sourceId,
     featureId,
+    layerId: layerId || null,
   };
 }
 
@@ -339,7 +347,8 @@ export function extractManagedPreviewOriginFromProperties(
   return createMapSourceFeatureRef(
     (properties?.[MANAGED_PREVIEW_ORIGIN_SOURCE_ID_PROPERTY] as string | null | undefined) || null,
     (properties?.[MANAGED_PREVIEW_ORIGIN_FEATURE_ID_PROPERTY] as MapFeatureId | null | undefined) ??
-      null
+      null,
+    (properties?.[MANAGED_PREVIEW_ORIGIN_LAYER_ID_PROPERTY] as string | null | undefined) || null
   );
 }
 
@@ -359,6 +368,12 @@ export function buildManagedPreviewOriginProperties(
   return {
     [MANAGED_PREVIEW_ORIGIN_SOURCE_ID_PROPERTY]: featureRef.sourceId,
     [MANAGED_PREVIEW_ORIGIN_FEATURE_ID_PROPERTY]: featureRef.featureId,
+    ...(featureRef.layerId
+      ? {
+          // 图层级治理规则需要依赖原始 layerId，这里一并落到草稿属性里。
+          [MANAGED_PREVIEW_ORIGIN_LAYER_ID_PROPERTY]: featureRef.layerId,
+        }
+      : {}),
     [MANAGED_PREVIEW_ORIGIN_KEY_PROPERTY]: originKey,
   };
 }
