@@ -1,3 +1,28 @@
+/**
+ * 文件导读：TerraDraw 默认配置收口点。
+ *
+ * 适合解决的问题：
+ * - 项目级默认模式、样式、行为开关定义在哪里
+ * - 业务传入配置会怎样与默认配置合并
+ * - 某个 mode 的默认样式和交互参数应该去哪改
+ * - Measure 与 TerraDraw 的默认视觉风格如何统一
+ *
+ * 建议阅读顺序：
+ * 1. `terradrawStyleConfig`：看 TerraDraw 默认模式与样式
+ * 2. `measureStyleConfig`：看测量控件默认样式
+ * 3. 各 mode 的注释模板：看这个仓库认可的可配项范围
+ *
+ * 检索关键词：
+ * - modeOptions
+ * - styles
+ * - pointerEvents
+ * - adapterOptions
+ * - measure
+ *
+ * 不必先来这里的问题：
+ * - TerraDraw 模式如何实例化，请先看 `terradraw-mode-factory.ts`
+ * - TerraDraw 交互主流程，请先看 `useTerradrawInteractive.ts`
+ */
 import type {
   CircleLayerSpecification,
   SymbolLayerSpecification,

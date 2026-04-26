@@ -1,3 +1,29 @@
+/**
+ * 文件导读：业务 source 工厂与注册表。
+ *
+ * 适合解决的问题：
+ * - 业务 GeoJSON source 如何声明与注册
+ * - 图层描述、属性策略、来源引用如何绑在一起
+ * - 某个业务要素怎样被读取、替换、保存属性
+ * - 为什么业务层可以通过统一 registry 管理多个 source
+ *
+ * 建议阅读顺序：
+ * 1. 类型定义：先确认 source、registry、feature ref 的核心结构
+ * 2. `createMapBusinessSource()`：看单个业务 source 如何组装
+ * 3. `createMapBusinessSourceRegistry()`：看多个 source 如何统一管理
+ * 4. 属性保存、删除、要素替换相关函数：看写回链路怎么落地
+ *
+ * 检索关键词：
+ * - business source
+ * - source registry
+ * - feature ref
+ * - property policy
+ * - save properties
+ *
+ * 不必先来这里的问题：
+ * - 地图实例初始化，请先看 `core/mapLibre-init.vue`
+ * - TerraDraw 线装饰，请先看 `terradraw/useTerradrawLineDecoration.ts`
+ */
 import { reactive, ref, toValue, watch } from 'vue';
 import type { MaybeRefOrGetter, Ref } from 'vue';
 import type { GeoJSONSourceSpecification } from 'maplibre-gl';

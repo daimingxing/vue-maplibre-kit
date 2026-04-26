@@ -1,3 +1,29 @@
+/**
+ * 文件导读：插件宿主。
+ *
+ * 适合解决的问题：
+ * - 插件实例如何创建、复用、销毁
+ * - 插件状态变化如何回流到宿主
+ * - 插件渲染项、交互配置如何汇总到地图侧
+ * - 插件 API 为什么能在门面层被稳定读取
+ *
+ * 建议阅读顺序：
+ * 1. `useMapPluginHost()`：看宿主暴露了哪些核心能力
+ * 2. `syncPluginRecords()`：看描述对象如何驱动实例增删改
+ * 3. `createPluginContext()` 与状态监听逻辑：看实例运行时上下文如何建立
+ * 4. 渲染聚合与交互合并相关函数：看宿主如何把插件能力拼回地图
+ *
+ * 检索关键词：
+ * - plugin record
+ * - api proxy
+ * - render items
+ * - interactive layers
+ * - state change
+ *
+ * 不必先来这里的问题：
+ * - 业务页面该先调用什么 API，请先看 `facades/useBusinessMap.ts`
+ * - 某个插件内部状态如何组织，请进入对应 `plugins/*`
+ */
 import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
 import type { Map as MaplibreMap } from 'maplibre-gl';
 import { type MapInstance } from 'vue-maplibre-gl';

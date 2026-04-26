@@ -1,3 +1,29 @@
+/**
+ * 文件导读：业务要素动作门面。
+ *
+ * 适合解决的问题：
+ * - 属性保存、属性删除为何会分流到不同目标
+ * - 线草稿如何从正式业务要素生成或回写
+ * - TerraDraw、line draft、business source 三类目标如何统一返回结果
+ * - 业务动作为何能复用统一查询上下文
+ *
+ * 建议阅读顺序：
+ * 1. 动作结果类型：先确认 `business / lineDraft / terradraw` 三类目标
+ * 2. `useMapFeatureActions()`：看对外暴露了哪些动作
+ * 3. 各类 `save / remove / create / replace` 动作函数：看分流规则和回写逻辑
+ * 4. 目标解析与上下文辅助函数：看动作为什么能落到正确数据源
+ *
+ * 检索关键词：
+ * - action target
+ * - line draft
+ * - terradraw
+ * - save properties
+ * - remove properties
+ *
+ * 不必先来这里的问题：
+ * - 只想知道当前选中了什么，请先看 `useMapFeatureQuery.ts`
+ * - 只想看属性面板状态拼装，请先看 `useMapFeaturePropertyEditor.ts`
+ */
 import { toValue, type MaybeRefOrGetter } from 'vue';
 import {
   saveTerradrawFeatureProperties,

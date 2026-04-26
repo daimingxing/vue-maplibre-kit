@@ -1,71 +1,37 @@
-# terradraw 导读
+# `terradraw` 导读
 
-`terradraw` 目录负责 TerraDraw 集成实现。  
-这里承载的是绘制模式、吸附同步、线装饰以及若干 TerraDraw 相关渲染组件。
+`terradraw` 负责 **TerraDraw 集成实现**，包括模式配置、交互桥接、吸附同步和线装饰渲染。
 
-## 这个目录负责什么
-
-- TerraDraw 模式和配置组织
-- TerraDraw 与宿主交互的桥接
-- TerraDraw 与吸附系统的同步
-- 线装饰、拉伸贴图、图案贴图等渲染实现
-
-## 首读顺序
+## 先看哪几个文件
 
 1. `terradraw-config.ts`
 2. `terradraw-mode-factory.ts`
 3. `useTerradrawInteractive.ts`
 4. `terradraw-snap-sync.ts`
 5. `useTerradrawLineDecoration.ts`
-6. 相关渲染组件
 
-## 文件说明
+## 什么时候进入这里
 
-### terradraw-config.ts
+- 想看 TerraDraw 默认模式和配置如何组织
+- 想看绘制交互如何接入地图宿主
+- 想看 TerraDraw 如何和吸附系统联动
+- 想看线装饰、贴图和样式计算
 
-TerraDraw 配置收口点。  
-如果你要判断默认模式、能力开关和配置整理方式，先看这里。
+## 文件速览
 
-### terradraw-mode-factory.ts
+- `terradraw-config.ts`：默认配置与模式选项收口点
+- `terradraw-mode-factory.ts`：模式工厂
+- `useTerradrawInteractive.ts`：TerraDraw 交互主流程
+- `terradraw-snap-sync.ts`：吸附同步逻辑
+- `useTerradrawLineDecoration.ts`：线装饰主逻辑
+- `TerradrawLineDecorationLayers.vue`：线装饰图层渲染
 
-模式工厂。  
-适合定位某种 TerraDraw 模式是如何被创建和拼装的。
+## 联动阅读
 
-### useTerradrawInteractive.ts
+- 看控件生命周期：`src/MapLibre/core/useTerradrawControlLifecycle.ts`
+- 看业务动作如何操作绘制结果：`src/MapLibre/facades/useMapFeatureActions.ts`
 
-TerraDraw 交互主入口。  
-适合定位绘制态交互是如何与地图宿主对接的。
+## 不建议先从这里找的问题
 
-### terradraw-snap-sync.ts
-
-吸附同步逻辑。  
-适合定位 TerraDraw 与普通图层吸附服务之间如何桥接。
-
-### useTerradrawLineDecoration.ts
-
-线装饰主逻辑。  
-适合定位线装饰、贴图和样式计算。
-
-### TerradrawLineDecorationLayers.vue
-
-线装饰图层渲染组件。
-
-### TerradrawPatternRasterItem.vue
-
-图案贴图渲染组件。
-
-### TerradrawStretchRasterItem.vue
-
-拉伸贴图渲染组件。
-
-## 阅读时的判断标准
-
-- 问题与 TerraDraw 模式、吸附、线装饰有关，优先看这里
-- 问题与 TerraDraw 控件生命周期有关，同时联动看 `core/useTerradrawControlLifecycle.ts`
-- 问题与业务属性编辑有关，不要先看这里，先看 `facades`
-
-## 不建议在这里做什么
-
-- 不要把业务层临时规则直接硬编码进 TerraDraw 集成层
-- 不要把宿主生命周期逻辑和 TerraDraw 细节完全揉在一起
-- 不要让外部页面直接依赖这里的私有文件路径
+- 业务属性面板逻辑：去 `facades`
+- 插件宿主编排：去 `core`

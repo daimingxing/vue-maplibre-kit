@@ -1,3 +1,30 @@
+/**
+ * 文件导读：TerraDraw 线装饰主逻辑。
+ *
+ * 适合解决的问题：
+ * - 线装饰样式如何归一化
+ * - symbol / pattern / stretch 三类装饰如何生成
+ * - 贴图资源如何缓存、更新、清理
+ * - TerraDraw 线要素变化后，装饰图层如何同步
+ *
+ * 建议阅读顺序：
+ * 1. 类型定义：先确认装饰样式、图层项、资源记录这些核心结构
+ * 2. `useTerradrawLineDecoration()`：看对外主入口
+ * 3. 样式归一化与装饰解析函数：看“输入样式 -> 可渲染结构”的转换
+ * 4. 图层数据生成与资源管理函数：看 pattern、symbol、stretch 如何落图层
+ * 5. 同步与清理逻辑：看 feature 变化、图片资源释放、图层更新
+ *
+ * 检索关键词：
+ * - decoration style
+ * - pattern image
+ * - stretch layer
+ * - symbol spacing
+ * - sync features
+ *
+ * 不必先来这里的问题：
+ * - TerraDraw 默认模式与配置，请先看 `terradraw-config.ts`
+ * - 业务属性编辑与动作，请先看 `facades/*`
+ */
 import { ref, type Ref } from 'vue';
 import type { Feature, LineString, Position } from 'geojson';
 import type {
