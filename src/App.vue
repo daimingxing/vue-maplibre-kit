@@ -55,7 +55,7 @@ const demoList: DemoItem[] = [
   { key: "NGGI10", label: "NGGI10 multi-select", component: NGGI10 },
 ];
 
-const activeKey = shallowRef("NGGI01");
+const activeKey = shallowRef("NGGI00");
 const activeDemo = computed(() => {
   return demoList.find((item) => item.key === activeKey.value) || demoList[0];
 });
