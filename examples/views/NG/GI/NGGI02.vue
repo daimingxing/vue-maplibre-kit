@@ -38,19 +38,25 @@ import {
 } from "vue-maplibre-kit/business";
 import { createExampleKit, createPointFeature } from "./nggi-example.shared";
 
+// createExampleKit 会一次性创建 mapOptions、controls、source、layers、registry。
+// 业务页通常可以把这些内容拆到自己的 composable 中，这里放一起便于阅读。
 const kit = createExampleKit("basic");
 const mapRef = shallowRef<MapLibreInitExpose | null>(null);
+// useBusinessMap 是业务层推荐入口，运行时图层动作、要素查询、属性编辑都从这里取。
 const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry: kit.registry });
 const runtimeMessage = ref("尚未添加");
 
+// 运行时 source/layer 用固定 ID，方便重复点击时门面能判断“已存在”并返回提示。
 const RUNTIME_SOURCE_ID = "nggi02-runtime-source";
 const RUNTIME_LAYER_ID = "nggi02-runtime-point-layer";
 
+// 这是命令式添加 source 的数据；它不进入正式业务 source 的响应式数据流。
 const runtimeData: MapCommonFeatureCollection = {
   type: "FeatureCollection",
   features: [createPointFeature("runtime-point-a", "命令式点 A", 1.6, -1.35)],
 };
 
+// 右侧属性列表直接读取响应式 sourceData，改名后能马上看见真实数据变化。
 const featureItems = computed(() =>
   kit.sourceData.value.features.map((feature) => ({
     id: String(feature.properties?.id || feature.id || "未知"),
@@ -66,6 +72,7 @@ const featureItems = computed(() =>
 function addPoint(): void {
   const count = kit.sourceData.value.features.length;
   const nextFeature = createPointFeature(`point-new-${count}`, `新增点 ${count}`, 0.6, -1.4);
+  // 正式业务数据推荐由业务层维护响应式数组，而不是让地图组件偷偷接管数据。
   kit.sourceData.value = {
     ...kit.sourceData.value,
     features: [...kit.sourceData.value.features, nextFeature],
@@ -81,6 +88,7 @@ function renameFirst(): void {
     return;
   }
 
+  // registry.saveProperties 会按业务 source 的 propertyPolicy 写回目标要素属性。
   kit.registry.saveProperties(kit.source.sourceId, firstFeature.properties.id, {
     name: `已响应式改名 ${new Date().toLocaleTimeString()}`,
   });
@@ -90,6 +98,7 @@ function renameFirst(): void {
  * 删除最后一个要素。
  */
 function removeLast(): void {
+  // replaceFeatures 会替换整个 features 数组，适合删除、排序、批量刷新这类操作。
   kit.source.replaceFeatures(kit.sourceData.value.features.slice(0, -1));
 }
 
@@ -108,6 +117,7 @@ function addRuntimeLayer(): void {
     type: "circle",
     source: RUNTIME_SOURCE_ID,
     paint: {
+      // 运行时图层直接使用 MapLibre paint 写法，适合临时高亮、定位点等轻量需求。
       "circle-color": "#0ea5e9",
       "circle-radius": 10,
       "circle-stroke-color": "#0f172a",

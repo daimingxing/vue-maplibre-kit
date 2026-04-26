@@ -4,6 +4,7 @@
       ref="mapRef"
       :map-options="kit.mapOptions"
       :controls="kit.controls"
+      :map-interactive="interactive"
       :plugins="plugins"
     >
       <template #dataSource>
@@ -12,6 +13,8 @@
     </MapLibreInit>
     <aside class="nggi-panel">
       <h3>NGGI08 line-draft</h3>
+      <p>当前线段：{{ selectedLineText }}</p>
+      <button type="button" @click="readSelectedLine">读取选中线段</button>
       <button type="button" @click="previewLine">生成延长线</button>
       <button type="button" @click="previewRegion">生成线廊</button>
       <button type="button" @click="saveDraft">修改草稿属性</button>
@@ -38,17 +41,27 @@ import { computed, ref, shallowRef } from "vue";
 import {
   MapBusinessSourceLayers,
   MapLibreInit,
+  useBusinessMap,
   useLineDraftPreview,
   type MapCommonLineFeature,
+  type MapLayerInteractiveOptions,
   type MapLibreInitExpose,
+  type MapSourceFeatureRef,
 } from "vue-maplibre-kit/business";
 import { createLineDraftPreviewPlugin } from "vue-maplibre-kit/plugins/line-draft-preview";
-import { createExampleKit } from "./nggi-example.shared";
+import { EXAMPLE_LINE_LAYER_ID, createExampleKit } from "./nggi-example.shared";
 
+// 本页只演示 line-draft 插件：选中线段、生成延长线、生成线廊、读写草稿属性。
 const kit = createExampleKit("basic");
 const mapRef = shallowRef<MapLibreInitExpose | null>(null);
+// businessMap 用来把点击事件转换成业务要素，并读取当前选中的线要素。
+const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry: kit.registry });
+// draft 是 line-draft 的专用门面，业务层不需要直接碰插件内部 API。
 const draft = useLineDraftPreview(() => mapRef.value);
 const message = ref("等待生成草稿");
+// selectedLine 保存用户点击到的线；如果没点线，按钮会回退使用 line-a 作为静态示例。
+const selectedLine = shallowRef<MapCommonLineFeature | null>(null);
+const selectedLineRef = shallowRef<MapSourceFeatureRef | null>(null);
 const plugins = [
   createLineDraftPreviewPlugin({
     enabled: true,
@@ -57,6 +70,7 @@ const plugins = [
       fill: { paint: { "fill-color": "#facc15", "fill-opacity": 0.28 } },
     },
     onHoverEnter: (context) => {
+      // 插件图层也会派发交互上下文，可以像普通图层一样更新面板。
       message.value = `草稿移入：${String(context.featureId ?? "无 ID")}`;
     },
     onClick: (context) => {
@@ -64,6 +78,11 @@ const plugins = [
     },
   }),
 ];
+
+const selectedLineText = computed(() => {
+  const id = selectedLine.value?.properties?.id || selectedLine.value?.id;
+  return id === undefined || id === null ? "尚未点击线要素，默认使用 line-a" : String(id);
+});
 
 const draftItems = computed(() =>
   (draft.getData()?.features || []).map((feature) => ({
@@ -73,6 +92,28 @@ const draftItems = computed(() =>
     editable: String(feature.properties?.editable || "未设置"),
   }))
 );
+
+const interactive: MapLayerInteractiveOptions = {
+  enabled: true,
+  layers: {
+    [EXAMPLE_LINE_LAYER_ID]: {
+      // 只关心线图层命中，避免点/面点击干扰“选中线段”示例。
+      hitPriority: 20,
+    },
+  },
+  onClick: (context) => {
+    // toBusinessContext 会把原始 MapLibre 命中结果转成 sourceId、featureId、feature。
+    const businessContext = businessMap.feature.toBusinessContext(context);
+    if (!isLineFeature(businessContext.feature)) {
+      message.value = "请点击一条线要素，再演示选中线段生成草稿";
+      return;
+    }
+
+    selectedLine.value = businessContext.feature;
+    selectedLineRef.value = businessContext.featureRef;
+    message.value = `已选中线要素：${String(businessContext.featureId)}`;
+  },
+};
 
 /**
  * 判断要素是否为线要素。
@@ -89,20 +130,37 @@ function isLineFeature(feature: unknown): feature is MapCommonLineFeature {
 }
 
 /**
+ * 读取当前选中的线要素。
+ * 真实业务里通常先点击线，再通过 `resolveSelectedLine` 或点击上下文拿到线要素。
+ */
+function readSelectedLine(): void {
+  // resolveSelectedLine 会从地图当前选中态里读取最新线要素；selectedLine 是本页保存的回退值。
+  const currentLine = businessMap.feature.resolveSelectedLine() || selectedLine.value;
+  if (!currentLine) {
+    message.value = "还没有选中线要素；本例生成按钮会回退使用 line-a";
+    return;
+  }
+
+  selectedLine.value = currentLine;
+  message.value = `当前选中线段 GeoJSON：\n${JSON.stringify(currentLine, null, 2)}`;
+}
+
+/**
  * 生成延长线草稿。
  */
 function previewLine(): void {
-  const lineFeature = kit.source.resolveFeature("line-a");
+  const lineFeature = selectedLine.value || kit.source.resolveFeature("line-a");
   if (!isLineFeature(lineFeature)) {
     return;
   }
 
   draft.previewLine({
     lineFeature,
+    // segmentIndex 表示使用第几段线段生成延长线；这里保留 0 作为静态入门示例。
     segmentIndex: 0,
     // 延长距离单位是米，示例取 800 米方便肉眼观察。
     extendLengthMeters: 800,
-    origin: kit.source.toFeatureRef("line-a"),
+    origin: selectedLineRef.value || kit.source.toFeatureRef("line-a", EXAMPLE_LINE_LAYER_ID),
   });
   message.value = "已生成延长线草稿";
 }
@@ -111,7 +169,7 @@ function previewLine(): void {
  * 生成线廊草稿。
  */
 function previewRegion(): void {
-  const lineFeature = kit.source.resolveFeature("line-a");
+  const lineFeature = selectedLine.value || kit.source.resolveFeature("line-a");
   if (!isLineFeature(lineFeature)) {
     return;
   }
@@ -136,6 +194,7 @@ function saveDraft(): void {
   }
 
   const result = draft.saveProperties(featureId, {
+    // 这两个字段会直接写回草稿 GeoJSON 的 properties。
     status: "pending-submit",
     editable: "已修改草稿属性",
   });
@@ -153,6 +212,7 @@ function removeDraftProp(): void {
     return;
   }
 
+  // 删除后右侧“草稿属性”列表会立刻少掉 editable，方便确认动作生效。
   const result = draft.removeProperties(featureId, ["editable"]);
   showDraftData(result.message);
 }

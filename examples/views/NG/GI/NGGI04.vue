@@ -30,11 +30,13 @@ import {
 } from "vue-maplibre-kit/business";
 import { createExampleInteractive, createExampleKit } from "./nggi-example.shared";
 
+// 本页演示最常见的业务交互：点击地图要素 -> 打开弹窗 -> 展示该要素 properties。
 const kit = createExampleKit("basic");
 const message = ref("点击任意示例要素打开弹窗");
 const popupTitle = ref("要素详情");
 const popupProperties = ref("暂无属性");
 const popupVisible = ref(false);
+// MglPopup 需要经纬度数组；没有命中要素时用 null 表示不显示定位。
 const popupLngLat = ref<[number, number] | null>(null);
 
 /**
@@ -56,6 +58,7 @@ function formatProperties(properties: MapLayerInteractiveContext["properties"]):
  */
 function showPopup(context: MapLayerInteractiveContext): void {
   if (!context.lngLat || !context.feature) {
+    // 没有 feature 表示当前不是有效业务要素点击，直接收起弹窗。
     popupProperties.value = "暂无属性";
     popupVisible.value = false;
     return;
@@ -63,6 +66,7 @@ function showPopup(context: MapLayerInteractiveContext): void {
 
   popupTitle.value = String(context.properties?.name || "未命名要素");
   popupProperties.value = formatProperties(context.properties);
+  // MapLibre 事件里 lngLat 是对象；MglPopup 入参统一使用 [lng, lat]。
   popupLngLat.value = [context.lngLat.lng, context.lngLat.lat];
   popupVisible.value = true;
 }
@@ -71,12 +75,14 @@ const interactive = {
   ...createExampleInteractive((text) => {
     message.value = text;
   }),
+  // 覆盖共享示例的 onClick，把“点击要素”扩展成“点击并打开弹窗”。
   onClick: (context: MapLayerInteractiveContext) => {
     message.value = `点击：${String(context.properties?.name || "空白区域")}`;
     showPopup(context);
   },
   onBlankClick: () => {
     message.value = "点击：空白区域";
+    // 空白点击时主动关闭弹窗，是业务弹窗最常见的交互习惯。
     popupVisible.value = false;
     popupLngLat.value = null;
     popupProperties.value = "暂无属性";

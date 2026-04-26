@@ -34,8 +34,11 @@ import {
   createExampleKit,
 } from "./nggi-example.shared";
 
+// draw 控件预设会开启 TerraDraw 和测量控件；snap 插件会给这些绘制动作提供吸附能力。
 const kit = createExampleKit("draw");
+// 吸附本身不依赖普通点击回调，这里保留 interactive 是为了示例结构和其他页面一致。
 const interactive = createExampleInteractive(() => {});
+// snapRules 是业务层最重要的声明：告诉插件“哪些图层、哪些几何、用什么方式吸附”。
 const snapRules = [
   {
     id: "nggi-point-snap",
@@ -92,6 +95,8 @@ const plugins = [
     },
     ordinaryLayers: {
       enabled: true,
+      // ordinaryLayers.rules 表示从普通业务图层中提取可吸附目标。
+      // 如果项目还有自定义绘图图层，也可以继续扩展插件配置。
       rules: snapRules,
     },
   }),
