@@ -13,7 +13,7 @@
 3. `src/index.ts`
 4. `src/MapLibre/facades/useBusinessMap.ts`
 5. `src/MapLibre/core/mapLibre-init.vue`
-6. `src/MapLibre/core/useMapPluginHost.ts`
+6. `docs/file-index.md`
 
 如果还要继续下钻：
 
@@ -35,11 +35,10 @@
 按这个顺序读最省时间：
 
 1. `README.md`
-2. `src/business.ts`
-3. `src/plugins.ts`
-4. `src/index.ts`
-5. `src/geometry.ts`
-6. `docs/file-index.md`
+2. `docs/vue-maplibre-kit-knowledge/index.md`
+3. `docs/vue-maplibre-kit-knowledge/00-开始使用/index.md`
+4. `docs/vue-maplibre-kit-knowledge/02-公开入口/index.md`
+5. `docs/vue-maplibre-kit-knowledge/09-插件/index.md`
 
 ### 维护者
 
@@ -51,6 +50,7 @@
 4. `src/MapLibre/core/mapLibre-init.vue`
 5. `src/MapLibre/core/useMapPluginHost.ts`
 6. `src/MapLibre/terradraw/useTerradrawInteractive.ts`
+7. `docs/file-index.md`
 
 ## 公开入口与使用场景
 
@@ -73,6 +73,19 @@ import { createBusinessPlugins } from 'vue-maplibre-kit/plugins';
 
 业务插件建议只记两步：注册插件用 `createBusinessPlugins()`，读取插件状态和动作统一用 `useBusinessMap().plugins.*`。
 例如 `businessMap.plugins.lineDraft`、`businessMap.plugins.intersection`、`businessMap.plugins.multiSelect`、`businessMap.plugins.snap`、`businessMap.plugins.dxfExport`。
+
+## 知识库
+
+系统化使用说明请从 [vue-maplibre-kit 知识库](docs/vue-maplibre-kit-knowledge/index.md) 开始。
+
+知识库按渐进式披露组织：
+
+- [开始使用](docs/vue-maplibre-kit-knowledge/00-开始使用/index.md)：安装、样式、最小地图、推荐引入方式
+- [公开入口](docs/vue-maplibre-kit-knowledge/02-公开入口/index.md)：`business`、`plugins`、`config`、`geometry` 和根入口
+- [插件](docs/vue-maplibre-kit-knowledge/09-插件/index.md)：snap、line-draft、intersection、multi-select、dxf-export
+- [全局配置](docs/vue-maplibre-kit-knowledge/11-全局配置/index.md)：地图、控件、插件、样式默认值
+- [示例索引](docs/vue-maplibre-kit-knowledge/14-示例索引/index.md)：`NGGI00` 到 `NGGI11` 的能力索引
+- [API 参考](docs/vue-maplibre-kit-knowledge/15-API参考/index.md)：按公开入口查导出
 
 ## 项目术语
 
