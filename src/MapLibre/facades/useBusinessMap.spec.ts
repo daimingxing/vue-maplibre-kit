@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -14,6 +14,10 @@ import type {
 } from '../shared/mapLibre-controls-types';
 import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/useLineDraftPreviewController';
 import type { IntersectionPreviewPluginApi, IntersectionPreviewState } from '../plugins/intersection-preview';
+import type {
+  MapFeatureMultiSelectPluginApi,
+  MapFeatureMultiSelectState,
+} from '../plugins/map-feature-multi-select';
 import type { MapPluginHostExpose, MapSelectionService } from '../plugins/types';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
 import type { MapInstance } from 'vue-maplibre-gl';
@@ -45,6 +49,8 @@ type BusinessTypeExportCheck = {
 const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
 /** 交点插件类型常量。 */
 const INTERSECTION_PREVIEW_PLUGIN_TYPE = 'intersectionPreview';
+/** 多选插件类型常量。 */
+const MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE = 'mapFeatureMultiSelect';
 
 /** 缺省选择态。 */
 const defaultSelectionState: MapSelectionState = {
@@ -204,6 +210,8 @@ function createIntersectionPluginHarness(): {
       state.materializedCount += 1;
       return true;
     },
+    removeMaterialized: () => true,
+    updateMaterializedProperties: () => true,
     clearMaterialized: () => {
       state.materializedCount = 0;
     },
@@ -304,6 +312,43 @@ function createSelectionServiceHarness(): {
 }
 
 /**
+ * 创建测试用多选插件 API。
+ * @returns 多选插件 API 与状态引用
+ */
+function createMultiSelectPluginHarness(): {
+  api: MapFeatureMultiSelectPluginApi;
+  state: MapFeatureMultiSelectState;
+} {
+  const state: MapFeatureMultiSelectState = {
+    ...defaultSelectionState,
+    isActive: false,
+    selectionMode: 'multiple',
+  };
+  const api: MapFeatureMultiSelectPluginApi = {
+    activate: () => {
+      state.isActive = true;
+    },
+    deactivate: () => {
+      state.isActive = false;
+    },
+    toggle: () => {
+      state.isActive = !state.isActive;
+    },
+    clear: () => {
+      state.selectedFeatures = [];
+      state.selectedCount = 0;
+    },
+    isActive: () => state.isActive,
+    getSelectedFeatures: () => [...state.selectedFeatures],
+  };
+
+  return {
+    api,
+    state,
+  };
+}
+
+/**
  * 创建测试用地图公开实例。
  * @param options 需要挂到公开实例上的测试能力
  * @returns 可供聚合门面直接消费的地图公开实例
@@ -313,18 +358,24 @@ function createMapExpose(options: {
   lineDraftState?: unknown;
   intersectionApi?: IntersectionPreviewPluginApi | null;
   intersectionState?: IntersectionPreviewState | null;
+  multiSelectApi?: MapFeatureMultiSelectPluginApi | null;
+  multiSelectState?: MapFeatureMultiSelectState | null;
   selectionService?: MapSelectionService | null;
+  rawMap?: unknown;
 } = {}): MapLibreInitExpose {
   const {
     lineDraftApi = null,
     lineDraftState = null,
     intersectionApi = null,
     intersectionState = null,
+    multiSelectApi = null,
+    multiSelectState = null,
     selectionService = null,
+    rawMap = undefined,
   } = options;
   const mapInstance = {
     component: undefined,
-    map: undefined,
+    map: rawMap,
     isMounted: false,
     isLoaded: false,
     language: undefined,
@@ -339,6 +390,10 @@ function createMapExpose(options: {
         return Boolean(intersectionApi);
       }
 
+      if (pluginId === 'mapFeatureMultiSelect') {
+        return Boolean(multiSelectApi);
+      }
+
       return false;
     },
     getApi: <TApi = unknown>(pluginId?: string) => {
@@ -350,6 +405,10 @@ function createMapExpose(options: {
         return (intersectionApi as TApi | null) || null;
       }
 
+      if (pluginId === 'mapFeatureMultiSelect') {
+        return (multiSelectApi as TApi | null) || null;
+      }
+
       return null;
     },
     getState: <TState = unknown>(pluginId?: string) => {
@@ -359,6 +418,10 @@ function createMapExpose(options: {
 
       if (pluginId === 'intersectionPreview') {
         return (intersectionState as TState | null) || null;
+      }
+
+      if (pluginId === 'mapFeatureMultiSelect') {
+        return (multiSelectState as TState | null) || null;
       }
 
       return null;
@@ -376,6 +439,13 @@ function createMapExpose(options: {
         result.push({
           id: 'intersectionPreview',
           type: INTERSECTION_PREVIEW_PLUGIN_TYPE,
+        });
+      }
+
+      if (multiSelectApi) {
+        result.push({
+          id: 'mapFeatureMultiSelect',
+          type: MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE,
         });
       }
 
@@ -429,7 +499,7 @@ describe('useBusinessMap', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { source, sourceRegistry } = createBusinessSourceHarness();
     const businessMap = useBusinessMap({
-      mapRef: ref(createMapExpose()),
+      mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
 
@@ -463,6 +533,7 @@ describe('useBusinessMap', () => {
     expect(businessMap.selection.isActive.value).toBe(false);
     expect(businessMap.draft.clear()).toBe(false);
     expect(businessMap.intersection.visible.value).toBe(false);
+    expect(businessMap.plugins.multiSelect.selectedCount.value).toBe(0);
     expect(businessMap.intersection.materialize()).toBe(false);
     const flashStartResult = businessMap.effect.startFlash({
       source: 'business-source',
@@ -489,14 +560,17 @@ describe('useBusinessMap', () => {
     const selectionHarness = createSelectionServiceHarness();
     const lineDraftHarness = createLineDraftPluginHarness();
     const intersectionHarness = createIntersectionPluginHarness();
+    const multiSelectHarness = createMultiSelectPluginHarness();
     const businessMap = useBusinessMap({
-      mapRef: ref(
+      mapRef: shallowRef(
         createMapExpose({
           selectionService: selectionHarness.service,
           lineDraftApi: lineDraftHarness.api,
           lineDraftState: lineDraftHarness.state,
           intersectionApi: intersectionHarness.api,
           intersectionState: intersectionHarness.state,
+          multiSelectApi: multiSelectHarness.api,
+          multiSelectState: multiSelectHarness.state,
         })
       ),
       sourceRegistry,
@@ -513,13 +587,17 @@ describe('useBusinessMap', () => {
     expect(businessMap.selection.selectedFeatureIds.value).toEqual(['feature-1']);
     expect(businessMap.draft.hasFeatures.value).toBe(true);
     expect(businessMap.draft.featureCount.value).toBe(1);
+    expect(businessMap.plugins.lineDraft.getData()?.features).toHaveLength(1);
     const lineDraftClearResult = businessMap.draft.clear();
     expect(lineDraftClearResult).toBe(true);
     expect(lineDraftHarness.state.hasFeatures).toBe(false);
     expect(lineDraftHarness.state.featureCount).toBe(0);
     expect(businessMap.intersection.count.value).toBe(2);
+    expect(businessMap.plugins.intersection.count.value).toBe(2);
     expect(businessMap.intersection.visible.value).toBe(true);
     expect(typeof businessMap.intersection.refresh).toBe('function');
+    businessMap.plugins.multiSelect.activate();
+    expect(businessMap.plugins.multiSelect.isActive.value).toBe(true);
     expect(flashStartResult).toBe(true);
     expect(
       businessMap.effect.isFeatureFlashing({
@@ -535,5 +613,34 @@ describe('useBusinessMap', () => {
       globalWithWindow.window = previousWindow;
     }
     warnSpy.mockRestore();
+  });
+
+  it('会暴露运行时图层快捷动作', () => {
+    const { sourceRegistry } = createBusinessSourceHarness();
+    const rawMap = {
+      getLayer: vi.fn((layerId: string) => (layerId === 'line-layer' ? { id: layerId } : null)),
+      setLayoutProperty: vi.fn(),
+      setPaintProperty: vi.fn(),
+    };
+    const businessMap = useBusinessMap({
+      mapRef: shallowRef(createMapExpose({ rawMap })),
+      sourceRegistry,
+    });
+
+    const showResult = businessMap.layers.show('line-layer');
+    const paintResult = businessMap.layers.setPaint('line-layer', {
+      'line-color': '#f97316',
+      'line-width': 4,
+    });
+    const featureStateResult = businessMap.layers.setFeatureState('business-source', 'feature-1', {
+      demoStyled: true,
+    });
+
+    expect(showResult.success).toBe(true);
+    expect(paintResult.success).toBe(true);
+    expect(featureStateResult.success).toBe(true);
+    expect(rawMap.setLayoutProperty).toHaveBeenCalledWith('line-layer', 'visibility', 'visible');
+    expect(rawMap.setPaintProperty).toHaveBeenCalledWith('line-layer', 'line-color', '#f97316');
+    expect(rawMap.setPaintProperty).toHaveBeenCalledWith('line-layer', 'line-width', 4);
   });
 });

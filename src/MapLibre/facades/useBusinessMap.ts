@@ -19,6 +19,11 @@ import {
   type UseMapFeaturePropertyEditorResult,
 } from './useMapFeaturePropertyEditor';
 import { useMapFeatureQuery, type UseMapFeatureQueryResult } from './useMapFeatureQuery';
+import {
+  useMapFeatureMultiSelect,
+  type UseMapFeatureMultiSelectResult,
+} from './useMapFeatureMultiSelect';
+import { useMapLayerActions, type UseMapLayerActionsResult } from './useMapLayerActions';
 
 /** useBusinessMap 初始化配置。 */
 export interface UseBusinessMapOptions {
@@ -87,6 +92,16 @@ export interface UseBusinessMapFeatureGroup
   extends UseMapFeatureQueryResult,
     UseMapFeatureActionsResult {}
 
+/** useBusinessMap 的插件短路径分组。 */
+export interface UseBusinessMapPlugins {
+  /** 线草稿插件分组。 */
+  lineDraft: UseLineDraftPreviewResult;
+  /** 交点插件分组。 */
+  intersection: UseIntersectionPreviewResult;
+  /** 要素多选插件分组。 */
+  multiSelect: UseMapFeatureMultiSelectResult;
+}
+
 /**
  * useBusinessMap 返回结果。
  * 设计目标不是隐藏全部 GIS 概念，
@@ -102,8 +117,12 @@ export interface UseBusinessMapResult {
   selection: UseMapSelectionResult;
   /** 要素分组。读取要素、生成线草稿、替换线廊、保存当前选中要素等高频操作都从这里取。 */
   feature: UseBusinessMapFeatureGroup;
+  /** 图层运行时动作分组。临时显隐、样式和 feature-state 调整从这里取。 */
+  layers: UseMapLayerActionsResult;
   /** 属性编辑分组。打开属性面板、保存单个字段、删除单个字段时使用。 */
   editor: UseMapFeaturePropertyEditorResult;
+  /** 插件短路径分组。需要直接调用插件能力时优先使用这里。 */
+  plugins: UseBusinessMapPlugins;
   /** 线草稿分组。读取草稿数量、判断是否有草稿、清空草稿时使用。 */
   draft: UseLineDraftPreviewResult;
   /** 交点分组。读取交点数量、切换求交范围和按 ID 读取交点时使用。 */
@@ -176,9 +195,16 @@ export function useBusinessMap(options: UseBusinessMapOptions): UseBusinessMapRe
   // 下面这些能力都继续复用现有门面，避免重复实现底层逻辑。
   const selection = useMapSelection(mapRef);
   const feature = createBusinessMapFeatureGroup(options);
+  const layers = useMapLayerActions(mapRef);
   const editor = useMapFeaturePropertyEditor(options);
   const draft = useLineDraftPreview(mapRef);
   const intersection = useIntersectionPreview(mapRef);
+  const multiSelect = useMapFeatureMultiSelect(mapRef);
+  const plugins: UseBusinessMapPlugins = {
+    lineDraft: draft,
+    intersection,
+    multiSelect,
+  };
   const effect = useMapEffect(mapRef);
 
   return {
@@ -186,7 +212,9 @@ export function useBusinessMap(options: UseBusinessMapOptions): UseBusinessMapRe
     sources,
     selection,
     feature,
+    layers,
     editor,
+    plugins,
     draft,
     intersection,
     effect,

@@ -11,10 +11,15 @@ import type {
   IntersectionPreviewPluginApi,
   IntersectionPreviewState,
 } from '../plugins/intersection-preview';
+import type {
+  MapFeatureMultiSelectPluginApi,
+  MapFeatureMultiSelectState,
+} from '../plugins/map-feature-multi-select';
 
 const MAP_DXF_EXPORT_PLUGIN_TYPE = 'mapDxfExport';
 const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
 const INTERSECTION_PREVIEW_PLUGIN_TYPE = 'intersectionPreview';
+const MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE = 'mapFeatureMultiSelect';
 
 /** 按类型解析出的插件目标。 */
 export interface ResolvedMapPluginTarget {
@@ -152,6 +157,52 @@ export function resolveIntersectionPreviewState(
   }
 
   return mapExpose?.plugins.getState<IntersectionPreviewState>(pluginTarget.id) || null;
+}
+
+/**
+ * 读取要素多选插件 API。
+ * @param mapExpose 地图公开实例
+ * @param pluginId 历史兼容参数；传入时会额外校验唯一插件 ID
+ * @returns 命中的要素多选插件 API；找不到时返回 null
+ */
+export function resolveMapFeatureMultiSelectApi(
+  mapExpose: MapLibreInitExpose | null | undefined,
+  pluginId?: string
+): MapFeatureMultiSelectPluginApi | null {
+  const pluginTarget = resolveMapPluginTargetByType(
+    mapExpose,
+    MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE,
+    pluginId
+  );
+
+  if (!pluginTarget) {
+    return null;
+  }
+
+  return mapExpose?.plugins.getApi<MapFeatureMultiSelectPluginApi>(pluginTarget.id) || null;
+}
+
+/**
+ * 读取要素多选插件状态。
+ * @param mapExpose 地图公开实例
+ * @param pluginId 历史兼容参数；传入时会额外校验唯一插件 ID
+ * @returns 命中的要素多选插件状态；找不到时返回 null
+ */
+export function resolveMapFeatureMultiSelectState(
+  mapExpose: MapLibreInitExpose | null | undefined,
+  pluginId?: string
+): MapFeatureMultiSelectState | null {
+  const pluginTarget = resolveMapPluginTargetByType(
+    mapExpose,
+    MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE,
+    pluginId
+  );
+
+  if (!pluginTarget) {
+    return null;
+  }
+
+  return mapExpose?.plugins.getState<MapFeatureMultiSelectState>(pluginTarget.id) || null;
 }
 
 /**

@@ -14,6 +14,11 @@ import {
   createSymbolLayerStyle,
 } from './MapLibre/shared/map-layer-style-config';
 import {
+  createSimpleCircleStyle,
+  createSimpleFillStyle,
+  createSimpleLineStyle,
+} from './MapLibre/facades/businessPreset';
+import {
   matchFeatureProperty,
   whenFeaturePropertyEquals,
   whenFeaturePropertyIn,
@@ -45,11 +50,27 @@ export { useLineDraftPreview } from './MapLibre/facades/useLineDraftPreview';
 /** 交点门面。业务页面直接读取交点状态和交点动作时使用。 */
 export { useIntersectionPreview } from './MapLibre/facades/useIntersectionPreview';
 
+/** 多选插件门面。业务页面直接读取多选状态和动作时使用。 */
+export { useMapFeatureMultiSelect } from './MapLibre/facades/useMapFeatureMultiSelect';
+
+/** 图层运行时动作门面。业务页面需要临时修改图层显隐、样式或 feature-state 时使用。 */
+export { useMapLayerActions } from './MapLibre/facades/useMapLayerActions';
+
 /** 通用 Popup 状态门面。业务页面管理弹窗显隐与载荷时优先使用。 */
 export { useMapPopupState } from './MapLibre/facades/useMapPopupState';
 
 /** DXF 导出插件 API 解析工具。业务页面主动读取 DXF 导出能力时使用。 */
 export { resolveMapDxfExportApi } from './MapLibre/facades/mapPluginResolver';
+
+/** 线草稿、交点、多选等插件 API 解析工具。高级业务页面主动读取插件能力时使用。 */
+export {
+  resolveIntersectionPreviewApi,
+  resolveIntersectionPreviewState,
+  resolveLineDraftPreviewApi,
+  resolveLineDraftPreviewState,
+  resolveMapFeatureMultiSelectApi,
+  resolveMapFeatureMultiSelectState,
+} from './MapLibre/facades/mapPluginResolver';
 
 /** 单个业务数据源工厂。 */
 export { createMapBusinessSource } from './MapLibre/facades/createMapBusinessSource';
@@ -96,6 +117,24 @@ export { whenFeaturePropertyIn } from './MapLibre/shared/map-feature-property-ex
 /** 属性映射表达式工厂。 */
 export { matchFeatureProperty } from './MapLibre/shared/map-feature-property-expression';
 
+/** 简单线样式工厂。 */
+export { createSimpleLineStyle } from './MapLibre/facades/businessPreset';
+
+/** 简单点样式工厂。 */
+export { createSimpleCircleStyle } from './MapLibre/facades/businessPreset';
+
+/** 简单面样式工厂。 */
+export { createSimpleFillStyle } from './MapLibre/facades/businessPreset';
+
+/** 业务图层组工厂。 */
+export { createLayerGroup } from './MapLibre/facades/businessPreset';
+
+/** 地图控件预设工厂。 */
+export { createMapControlsPreset } from './MapLibre/facades/businessPreset';
+
+/** 常用业务插件预设工厂。 */
+export { createBusinessPlugins } from './MapLibre/facades/businessPreset';
+
 /** 交点转正式点要素工具。 */
 export { buildIntersectionPointFeature } from './MapLibre/shared/map-intersection-tools';
 
@@ -129,6 +168,9 @@ export const layerStyles = {
   createLineLayerStyle,
   createRasterLayerStyle,
   createSymbolLayerStyle,
+  createSimpleLineStyle,
+  createSimpleCircleStyle,
+  createSimpleFillStyle,
 } as const;
 
 /** 业务表达式工具分组。 */
@@ -216,6 +258,27 @@ export type { UseLineDraftPreviewResult } from './MapLibre/facades/useLineDraftP
 
 /** 交点门面返回类型。 */
 export type { UseIntersectionPreviewResult } from './MapLibre/facades/useIntersectionPreview';
+
+/** 多选插件门面返回类型。 */
+export type { UseMapFeatureMultiSelectResult } from './MapLibre/facades/useMapFeatureMultiSelect';
+
+/** 图层运行时动作门面返回类型。 */
+export type {
+  MapLayerActionResult,
+  UseMapLayerActionsResult,
+} from './MapLibre/facades/useMapLayerActions';
+
+/** 业务预设工厂相关类型。 */
+export type {
+  BusinessPluginsOptions,
+  BusinessSnapPresetOptions,
+  LayerGroupItem,
+  LayerGroupOptions,
+  MapControlsPresetName,
+  SimpleCircleStyleOptions,
+  SimpleFillStyleOptions,
+  SimpleLineStyleOptions,
+} from './MapLibre/facades/businessPreset';
 
 /** 业务层友好的单条要素上下文类型。 */
 export type { MapBusinessFeatureContext } from './MapLibre/facades/useMapFeatureQuery';
