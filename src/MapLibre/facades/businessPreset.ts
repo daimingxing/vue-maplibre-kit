@@ -265,13 +265,11 @@ function resolveSnapOptions(options: true | BusinessSnapPresetOptions): MapFeatu
 
   const { layerIds, ...restOptions } = options;
   const businessLayers = options.businessLayers ||
-    options.ordinaryLayers ||
     (layerIds
       ? {
           enabled: true,
           rules: [
             {
-              id: 'business-layer-snap',
               layerIds,
             },
           ],
@@ -282,7 +280,6 @@ function resolveSnapOptions(options: true | BusinessSnapPresetOptions): MapFeatu
     enabled: true,
     ...restOptions,
     businessLayers,
-    ordinaryLayers: options.ordinaryLayers,
   };
 }
 

@@ -12,12 +12,13 @@
     </MapLibreInit>
     <aside class="nggi-panel">
       <h3>NGGI07 snap</h3>
-      <p>绘图控件已开启点、线、面普通业务图层吸附。</p>
+      <p>绘图与测量控件已开启业务图层吸附，并允许已绘制点、线、面跨模式互相吸附。</p>
       <ul>
-        <li v-for="rule in snapRules" :key="rule.id">
+        <li v-for="rule in snapRules" :key="rule.name">
           {{ rule.name }}：{{ rule.summary }}
         </li>
       </ul>
+      <p>先画点、线或面，再切换绘制模式，可吸附到刚刚绘制出的要素。</p>
     </aside>
   </section>
 </template>
@@ -40,7 +41,6 @@ const interactive = createExampleInteractive(() => {});
 // snapRules 是业务层最重要的声明：告诉插件“哪些图层、哪些几何、用什么方式吸附”。
 const snapRules = [
   {
-    id: "nggi-point-snap",
     name: "巡检点",
     summary: "命中点图层顶点，适合从既有节点开始绘制。",
     layerIds: [EXAMPLE_POINT_LAYER_ID],
@@ -52,7 +52,6 @@ const snapRules = [
     tolerancePx: 14,
   },
   {
-    id: "nggi-line-snap",
     name: "管线",
     summary: "命中线图层顶点与线段，适合沿管线补绘。",
     layerIds: [EXAMPLE_LINE_LAYER_ID],
@@ -64,7 +63,6 @@ const snapRules = [
     tolerancePx: 12,
   },
   {
-    id: "nggi-fill-snap",
     name: "作业面",
     summary: "命中面边界顶点与边线，适合贴合作业范围绘制。",
     layerIds: [EXAMPLE_FILL_LAYER_ID],
@@ -98,6 +96,24 @@ const plugins = createBusinessPlugins({
       // businessLayers.rules 表示从业务图层中提取可吸附目标。
       // 如果项目还有自定义绘图图层，也可以继续扩展插件配置。
       rules: snapRules,
+    },
+    terradraw: {
+      defaults: {
+        drawnTargets: {
+          geometryTypes: ["Point", "LineString", "Polygon"],
+          snapTo: ["vertex", "segment"],
+          // 已绘制图形比业务面优先级高，便于连续编辑时先命中刚画出的图形。
+          priority: 40,
+          // 已绘制图形示例使用 12px，与业务图层默认吸附范围保持一致。
+          tolerancePx: 12,
+        },
+      },
+      draw: {
+        drawnTargets: true,
+      },
+      measure: {
+        drawnTargets: true,
+      },
     },
   },
 });

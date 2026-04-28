@@ -1,6 +1,5 @@
-import type {
-  ResolvedTerradrawSnapOptions,
-} from '../plugins/types';
+import type { ResolvedTerradrawSnapOptions } from '../plugins/types';
+import type { MapFeatureSnapResult } from '../plugins/map-feature-snap';
 import type { TerradrawSnapSharedOptions } from '../shared/mapLibre-controls-types';
 import {
   TerraDraw,
@@ -25,6 +24,9 @@ type EnsureTerradrawReadyForModeSync = (
   retryTask: () => void
 ) => drawInstance is TerraDraw;
 
+/** TerraDraw 需要同步吸附配置的绘制模式。 */
+const TERRADRAW_SNAP_MODE_NAMES = ['point', 'linestring', 'polygon'] as const;
+
 /**
  * TerraDraw 模式吸附补丁。
  * 统一描述 linestring / polygon 模式需要写回的吸附配置。
@@ -38,6 +40,16 @@ interface TerradrawSnappingPatch extends TerradrawModePatch {
     toCoordinate?: boolean;
     toCustom?: (event: TerraDrawMouseEvent) => [number, number] | undefined;
   };
+}
+
+/**
+ * 判断错误是否来自 TerraDraw 未注册指定模式。
+ * @param error 捕获到的异常
+ * @returns 是否为缺失模式异常
+ */
+function isMissingTerradrawModeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return message.includes('No mode with this name present');
 }
 
 /**
@@ -59,8 +71,45 @@ function safeUpdateTerradrawModeOptions(
   try {
     drawInstance.updateModeOptions(modeName, modeOptions);
   } catch (error) {
+    if (isMissingTerradrawModeError(error)) {
+      return;
+    }
+
     console.warn(`[MapFeatureSnap] 同步模式 '${modeName}' 吸附配置失败`, error);
   }
+}
+
+/**
+ * 构建 TerraDraw 自定义吸附解析器。
+ * 同时读取业务图层吸附和已绘制要素吸附，并按屏幕距离选择最近结果。
+ * @param options 自定义吸附解析来源
+ * @returns TerraDraw mode 可使用的 toCustom 回调
+ */
+export function buildTerradrawCustomSnapResolver(options: {
+  /** 解析普通地图业务图层吸附结果。 */
+  resolveMapResult?: (event: TerraDrawMouseEvent) => MapFeatureSnapResult | null | undefined;
+  /** 解析 TerraDraw 已绘制要素吸附结果。 */
+  resolveDrawnResult?: (event: TerraDrawMouseEvent) => MapFeatureSnapResult | null | undefined;
+}): (event: TerraDrawMouseEvent) => [number, number] | undefined {
+  return (event) => {
+    const mapResult = options.resolveMapResult?.(event) || null;
+    const drawnResult = options.resolveDrawnResult?.(event) || null;
+    const matchedResults = [mapResult, drawnResult].filter(
+      (result): result is MapFeatureSnapResult => Boolean(result?.matched && result.targetCoordinate)
+    );
+
+    if (!matchedResults.length) {
+      return undefined;
+    }
+
+    const bestResult = matchedResults.sort((left, right) => {
+      const leftDistance = left.distancePx ?? Number.POSITIVE_INFINITY;
+      const rightDistance = right.distancePx ?? Number.POSITIVE_INFINITY;
+      return leftDistance - rightDistance;
+    })[0];
+
+    return bestResult.targetCoordinate || undefined;
+  };
 }
 
 /**
@@ -80,7 +129,10 @@ function buildTerradrawModeSnappingPatch(
     snappingConfig.toCoordinate = true;
   }
 
-  if (resolvedSnapOptions.enabled && resolvedSnapOptions.useMapTargets && resolveCustomCoordinate) {
+  const shouldUseCustomTarget =
+    resolvedSnapOptions.useMapTargets || resolvedSnapOptions.drawnTargets.enabled;
+
+  if (resolvedSnapOptions.enabled && shouldUseCustomTarget && resolveCustomCoordinate) {
     snappingConfig.toCustom = resolveCustomCoordinate;
   }
 
@@ -222,7 +274,8 @@ export function syncTerradrawLineAndPolygonSnapping(options: {
     localSnapConfig: TerradrawSnapSharedOptions | boolean | null | undefined
   ) => ResolvedTerradrawSnapOptions;
   ensureReadyForModeSync: EnsureTerradrawReadyForModeSync;
-  resolveCustomCoordinate?: (event: TerraDrawMouseEvent) => [number, number] | undefined;
+  resolveMapResult?: (event: TerraDrawMouseEvent) => MapFeatureSnapResult | null | undefined;
+  resolveDrawnResult?: (event: TerraDrawMouseEvent) => MapFeatureSnapResult | null | undefined;
 }): void {
   const {
     drawInstance,
@@ -231,7 +284,8 @@ export function syncTerradrawLineAndPolygonSnapping(options: {
     localSnapConfig,
     resolveSnapOptions,
     ensureReadyForModeSync,
-    resolveCustomCoordinate,
+    resolveMapResult,
+    resolveDrawnResult,
   } = options;
 
   if (!ensureReadyForModeSync(drawInstance, taskKey, retryTask)) {
@@ -239,11 +293,16 @@ export function syncTerradrawLineAndPolygonSnapping(options: {
   }
 
   const resolvedSnapOptions = resolveSnapOptions(localSnapConfig);
-  const lineAndPolygonPatch = buildTerradrawModeSnappingPatch(
+  const customSnapResolver = buildTerradrawCustomSnapResolver({
+    resolveMapResult: resolvedSnapOptions.useMapTargets ? resolveMapResult : undefined,
+    resolveDrawnResult: resolvedSnapOptions.drawnTargets.enabled ? resolveDrawnResult : undefined,
+  });
+  const snappingPatch = buildTerradrawModeSnappingPatch(
     resolvedSnapOptions,
-    resolveCustomCoordinate
+    customSnapResolver
   );
 
-  safeUpdateTerradrawModeOptions(drawInstance, 'linestring', lineAndPolygonPatch);
-  safeUpdateTerradrawModeOptions(drawInstance, 'polygon', lineAndPolygonPatch);
+  TERRADRAW_SNAP_MODE_NAMES.forEach((modeName) => {
+    safeUpdateTerradrawModeOptions(drawInstance, modeName, snappingPatch);
+  });
 }

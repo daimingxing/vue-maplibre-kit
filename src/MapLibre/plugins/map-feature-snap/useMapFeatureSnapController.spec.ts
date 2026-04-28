@@ -72,7 +72,48 @@ describe('useMapFeatureSnapController', () => {
       tolerancePx: 40,
       useNative: false,
       useMapTargets: false,
+      drawnTargets: {
+        enabled: false,
+        geometryTypes: ['Point', 'LineString', 'Polygon'],
+        snapTo: ['vertex', 'segment'],
+      },
     });
+  });
+
+  it('应按 defaults、控件级配置归一化 TerraDraw 已绘制要素吸附目标', () => {
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        terradraw: {
+          defaults: {
+            enabled: true,
+            drawnTargets: {
+              geometryTypes: ['Point', 'LineString'],
+              snapTo: ['vertex'],
+            },
+          },
+          draw: {
+            drawnTargets: true,
+          },
+          measure: {
+            drawnTargets: false,
+          },
+        },
+      }),
+      getMap: () => null,
+    });
+
+    expect(controller.resolveTerradrawSnapOptions('draw', undefined).drawnTargets).toEqual({
+      enabled: true,
+      geometryTypes: ['Point', 'LineString'],
+      snapTo: ['vertex'],
+    });
+    expect(controller.resolveTerradrawSnapOptions('measure', undefined).drawnTargets).toEqual({
+      enabled: false,
+      geometryTypes: ['Point', 'LineString', 'Polygon'],
+      snapTo: ['vertex', 'segment'],
+    });
+
+    controller.destroy();
   });
 
   it('destroy 后应停止配置监听并销毁当前吸附绑定', async () => {

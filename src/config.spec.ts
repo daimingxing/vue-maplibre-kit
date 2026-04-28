@@ -145,6 +145,14 @@ describe('config', () => {
             enabled: true,
             snapTo: ['vertex', 'segment'],
           },
+          terradraw: {
+            defaults: {
+              drawnTargets: {
+                geometryTypes: ['Point', 'LineString', 'Polygon'],
+                snapTo: ['vertex', 'segment'],
+              },
+            },
+          },
         },
       },
     });
@@ -171,6 +179,14 @@ describe('config', () => {
           polygonEdge: {
             enabled: true,
             snapTo: ['vertex', 'segment'],
+          },
+          terradraw: {
+            defaults: {
+              drawnTargets: {
+                geometryTypes: ['Point', 'LineString', 'Polygon'],
+                snapTo: ['vertex', 'segment'],
+              },
+            },
           },
         },
       },

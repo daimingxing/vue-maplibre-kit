@@ -9,7 +9,6 @@ import { createBusinessPlugins, type MapFeatureSnapRule } from "vue-maplibre-kit
 
 const snapRules = [
   {
-    id: "point-snap",
     layerIds: [pointLayerId],
     geometryTypes: ["Point"],
     snapTo: ["vertex"],
@@ -17,7 +16,6 @@ const snapRules = [
     tolerancePx: 14,
   },
   {
-    id: "line-snap",
     layerIds: [lineLayerId],
     geometryTypes: ["LineString"],
     snapTo: ["vertex", "segment"],
@@ -51,6 +49,19 @@ const plugins = createBusinessPlugins({
       priority: 90,
       snapTo: ["vertex", "segment"],
     },
+    terradraw: {
+      defaults: {
+        drawnTargets: {
+          geometryTypes: ["Point", "LineString", "Polygon"],
+          snapTo: ["vertex", "segment"],
+          priority: 40,
+          tolerancePx: 12,
+        },
+      },
+      measure: {
+        drawnTargets: false,
+      },
+    },
   },
 });
 ```
@@ -61,15 +72,17 @@ const plugins = createBusinessPlugins({
 - `defaultTolerancePx` 是全局默认吸附范围，规则级 `tolerancePx` 可以覆盖它。
 - `preview` 控制吸附点、命中线段的预览样式。
 - `businessLayers.rules` 声明业务图层候选来源，每条规则可指定 `layerIds`、`geometryTypes`、`snapTo`、`priority`、`where` 和 `filter`。
+- `businessLayers.rules[].id` 可省略，系统会根据图层生成稳定规则 ID；只有调试或埋点需要稳定人工标识时才手动传。
 - `intersection` 控制交点插件内置点位是否参与吸附；传 `false` 或 `{ enabled: false }` 可以关闭。
 - `polygonEdge` 控制面边线临时预览线是否参与吸附；传 `false` 或 `{ enabled: false }` 可以关闭。
 - `terradraw.defaults`、`terradraw.draw`、`terradraw.measure` 用于绘图控件和测量控件的吸附公共配置。
-
-`ordinaryLayers` 是旧命名，目前仍可用作迁移期兼容字段。新代码和文档统一推荐 `businessLayers`。
+- `terradraw.*.drawnTargets` 控制 TerraDraw / Measure 已绘制要素是否参与吸附。`false` 表示关闭，`true` 表示使用默认点线面规则，对象表示开启并覆写 `geometryTypes`、`snapTo`、`priority`、`tolerancePx`。
 
 ## 交互行为
 
 snap 主要是注册型插件：业务页把规则传入 `plugins` 后，绘图和测量交互会在地图事件中即时使用吸附结果。业务图层吸附是否生效，取决于目标图层是否可查询、几何类型是否匹配、规则是否启用，以及指针位置是否在吸附容差内。
+
+绘图或测量处于 drawing 状态时，普通业务图层点击会被绘制语义接管，避免“吸附到业务要素后落点绘制”同时触发业务图层点击、选中或弹窗。
 
 ## 命令式动作
 
@@ -85,7 +98,7 @@ snap.resolveTerradrawSnapOptions("draw", true);
 
 ## 示例引用
 
-- `examples/views/NG/GI/NGGI07.vue`：点、线、面三类普通业务图层吸附规则。
+- `examples/views/NG/GI/NGGI07.vue`：点、线、面三类业务图层吸附规则，以及 TerraDraw 已绘制要素跨模式吸附。
 - `examples/views/NG/GI/NGGI06.vue`：通过 `businessMap.plugins.snap.clearPreview()` 证明 snap 已接入统一插件分组。
 
 ## 风险提示

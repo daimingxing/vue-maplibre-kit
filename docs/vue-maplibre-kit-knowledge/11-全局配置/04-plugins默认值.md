@@ -37,19 +37,28 @@ plugins: {
     //     enabled: true, // Draw / Measure 共用默认吸附开关
     //     tolerancePx: 12, // Draw / Measure 共用默认吸附容差
     //     useNative: true, // 是否默认启用 TerraDraw 原生吸附
-    //     useMapTargets: true, // 是否默认启用普通图层吸附候选
+    //     useMapTargets: true, // 是否默认启用业务图层吸附候选
+    //     drawnTargets: {
+    //       enabled: true, // 是否默认启用已绘制点线面吸附
+    //       geometryTypes: ['Point', 'LineString', 'Polygon'], // 已绘制要素类型
+    //       snapTo: ['vertex', 'segment'], // 已绘制要素吸附方式
+    //       priority: 40, // 已绘制要素吸附优先级
+    //       tolerancePx: 12, // 已绘制要素吸附局部容差
+    //     },
     //   },
     //   draw: {
     //     enabled: true,
     //     tolerancePx: 12,
     //     useNative: true,
     //     useMapTargets: true,
+    //     drawnTargets: true,
     //   }, // 绘图控件专属吸附默认值；也可以直接传 true / false
     //   measure: {
     //     enabled: true,
     //     tolerancePx: 12,
     //     useNative: true,
     //     useMapTargets: true,
+    //     drawnTargets: false,
     //   }, // 测量控件专属吸附默认值；也可以直接传 true / false
     // },
   },
@@ -59,7 +68,8 @@ plugins: {
 补充说明：
 
 - 全局 `plugins.snap` 不配置业务图层规则。`businessLayers.rules` 依赖页面里的具体 layerId，应在页面局部通过 `createBusinessPlugins({ snap: { businessLayers } })` 配置。
-- 旧 `ordinaryLayers` 仍可在迁移期被局部页面识别，但不推荐写入新文档和新代码。
+- 全局 `drawnTargets` 只定义 TerraDraw / Measure 已绘制目标的默认行为，不替代页面局部的 `businessLayers.rules`。
+- `drawnTargets: false` 表示关闭，`true` 表示使用默认点线面规则，对象表示开启并覆写局部规则。
 
 ---
 

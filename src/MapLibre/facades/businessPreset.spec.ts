@@ -96,6 +96,7 @@ describe('businessPreset', () => {
       'mapDxfExport',
     ]);
     expect((plugins[0].options as any).businessLayers.rules[0].layerIds).toEqual(['pipe-line']);
+    expect((plugins[0].options as any).businessLayers.rules[0].id).toBeUndefined();
     expect((plugins[3].options as any).enabled).toBe(true);
   });
 
@@ -122,24 +123,17 @@ describe('businessPreset', () => {
     expect((plugins[0].options as any).businessLayers.rules[0].id).toBe('custom-snap');
   });
 
-  it('应临时兼容 snap 直接传完整 ordinaryLayers 配置', async () => {
+  it('snap layerIds 简写应生成无手写 id 的业务图层规则', async () => {
     const businessPreset = await loadBusinessPreset();
     const { createBusinessPlugins } = businessPreset;
     const plugins = createBusinessPlugins({
       snap: {
-        ordinaryLayers: {
-          enabled: true,
-          rules: [
-            {
-              id: 'old-snap',
-              layerIds: ['old-line'],
-            },
-          ],
-        },
+        layerIds: ['pipe-line'],
       },
     });
 
-    expect((plugins[0].options as any).businessLayers.rules[0].id).toBe('old-snap');
-    expect((plugins[0].options as any).ordinaryLayers.rules[0].id).toBe('old-snap');
+    const rule = (plugins[0].options as any).businessLayers.rules[0];
+    expect(rule.id).toBeUndefined();
+    expect(rule.layerIds).toEqual(['pipe-line']);
   });
 });

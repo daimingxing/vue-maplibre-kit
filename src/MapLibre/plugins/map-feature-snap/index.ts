@@ -1,6 +1,7 @@
 import {
   createEmptyMapFeatureSnapResult,
   createMapFeatureSnapBinding,
+  resolveFeatureSnapResult,
   type MapFeatureSnapBinding,
   MAP_FEATURE_SNAP_PREVIEW_LINE_LAYER_ID,
   MAP_FEATURE_SNAP_PREVIEW_POINT_LAYER_ID,
@@ -37,6 +38,7 @@ export function createMapFeatureSnapPlugin(
 export {
   createEmptyMapFeatureSnapResult,
   createMapFeatureSnapBinding,
+  resolveFeatureSnapResult,
   mapFeatureSnapPlugin,
   MapFeatureSnapPreviewLayers,
   MAP_FEATURE_SNAP_PLUGIN_TYPE,
@@ -55,7 +57,7 @@ export type {
   MapFeatureSnapMode,
   MapFeatureSnapOptions,
   MapFeatureSnapBusinessLayerOptions,
-  MapFeatureSnapOrdinaryLayerOptions,
+  MapFeatureSnapDrawnTargetOptions,
   MapFeatureSnapPluginApi,
   MapFeatureSnapPreviewOptions,
   MapFeatureSnapResult,

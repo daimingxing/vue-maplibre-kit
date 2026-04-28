@@ -1,4 +1,4 @@
-import { onBeforeUnmount, watch } from 'vue';
+import { getCurrentInstance, onBeforeUnmount, watch } from 'vue';
 import type { Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
 import type { MapInstance } from 'vue-maplibre-gl';
 import type {
@@ -30,6 +30,11 @@ export interface UseMapInteractiveOptions {
   getSnapBinding?: () => MapSnapBinding | null | undefined;
   /** 获取当前普通图层选择服务 */
   getSelectionService?: () => MapSelectionService | null | undefined;
+  /** 判断当前指针事件是否应被外部绘制/测量语义接管。 */
+  shouldIgnorePointerEvent?: (
+    event: MapMouseEvent,
+    eventType: MapLayerInteractiveEventType
+  ) => boolean;
 }
 
 interface HoveredLayerTarget {
@@ -223,7 +228,13 @@ function hasInteractiveHandlers(interactive: MapLayerInteractiveOptions): boolea
  * @returns 普通图层交互管理能力集合
  */
 export function useMapInteractive(options: UseMapInteractiveOptions) {
-  const { mapInstance, getInteractive, getSnapBinding, getSelectionService } = options;
+  const {
+    mapInstance,
+    getInteractive,
+    getSnapBinding,
+    getSelectionService,
+    shouldIgnorePointerEvent,
+  } = options;
 
   let binding: MapInteractiveBinding | null = null;
 
@@ -259,7 +270,13 @@ export function useMapInteractive(options: UseMapInteractiveOptions) {
       return;
     }
 
-    binding = createMapInteractiveBinding(mapInstance.map, getInteractive, getSnapBinding, getSelectionService);
+    binding = createMapInteractiveBinding(
+      mapInstance.map,
+      getInteractive,
+      getSnapBinding,
+      getSelectionService,
+      shouldIgnorePointerEvent
+    );
   };
 
   const stopInteractiveWatch = watch(
@@ -280,18 +297,25 @@ export function useMapInteractive(options: UseMapInteractiveOptions) {
     }
   );
 
-  onBeforeUnmount(() => {
+  /**
+   * 销毁交互绑定和内部监听。
+   */
+  const destroy = () => {
     stopInteractiveWatch();
     stopSelectionServiceWatch();
     destroyBinding();
-  });
+  };
+
+  if (getCurrentInstance()) {
+    onBeforeUnmount(destroy);
+  }
 
   return {
     clearHoverState: () => binding?.clearHoverState(),
     clearSelectionState: () => binding?.clearSelectionState(),
     getSelectedFeature: () => binding?.getSelectedFeature() || null,
     getSelectedFeatureContext: () => binding?.getSelectedFeatureContext() || null,
-    destroy: destroyBinding,
+    destroy,
   };
 }
 
@@ -305,7 +329,10 @@ function createMapInteractiveBinding(
   map: MaplibreMap,
   getInteractive: () => MapLayerInteractiveOptions | null | undefined,
   getSnapBinding?: (() => MapSnapBinding | null | undefined) | undefined,
-  getSelectionService?: (() => MapSelectionService | null | undefined) | undefined
+  getSelectionService?: (() => MapSelectionService | null | undefined) | undefined,
+  shouldIgnorePointerEvent?:
+    | ((event: MapMouseEvent, eventType: MapLayerInteractiveEventType) => boolean)
+    | undefined
 ): MapInteractiveBinding {
   const selectionService = getSelectionService?.() || null;
   let hoveredTarget: HoveredLayerTarget | null = null;
@@ -1735,6 +1762,11 @@ const applyHoverTarget = (
     getLayerCallback: LayerInteractiveCallbackResolver
   ): void => {
     if (isMapInteractiveEventHandled(event)) {
+      return;
+    }
+
+    if (shouldIgnorePointerEvent?.(event, eventType)) {
+      markMapInteractiveEventHandled(event);
       return;
     }
 

@@ -4,6 +4,7 @@ import type { TerraDrawMouseEvent } from 'terra-draw';
 import type { Component, Ref } from 'vue';
 import type { MapInstance } from 'vue-maplibre-gl';
 import type {
+  MapFeatureSnapDrawnTargetOptions,
   MapFeatureSnapResult,
   MapLayerInteractiveContext,
   MapLayerInteractiveLayerOptions,
@@ -44,6 +45,11 @@ export interface ResolvedTerradrawSnapOptions {
   useNative: boolean;
   /** 是否启用普通图层候选吸附。 */
   useMapTargets: boolean;
+  /** TerraDraw 已绘制要素吸附目标配置。 */
+  drawnTargets: Required<
+    Pick<MapFeatureSnapDrawnTargetOptions, 'enabled' | 'geometryTypes' | 'snapTo'>
+  > &
+    Pick<MapFeatureSnapDrawnTargetOptions, 'priority' | 'tolerancePx'>;
 }
 
 /** 地图吸附服务统一接口。 */

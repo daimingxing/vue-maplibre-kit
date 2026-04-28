@@ -123,6 +123,10 @@ import {
   createTerradrawReadySyncManager,
   syncTerradrawLineAndPolygonSnapping,
 } from '../terradraw/terradraw-snap-sync';
+import {
+  resolveFeatureSnapResult,
+  type MapFeatureSnapResult,
+} from '../plugins/map-feature-snap';
 import { useMapInteractive } from '../composables/useMapInteractive';
 import { usePluginLayerInteractive } from '../composables/usePluginLayerInteractive';
 import { useMapPluginHost } from './useMapPluginHost';
@@ -341,6 +345,7 @@ mapInteractiveBinding = useMapInteractive({
   getInteractive: () => mergedMapInteractive.value,
   getSnapBinding: () => pluginHost.getMapSnapService()?.getBinding() || null,
   getSelectionService: () => pluginHost.getMapSelectionService() || null,
+  shouldIgnorePointerEvent: () => shouldIgnoreMapInteractivePointerEvent(),
 });
 
 /**
@@ -429,9 +434,15 @@ function resolveTerradrawSnapOptions(
   if (!mapSnapService) {
     return {
       enabled: false,
+      // 与 snap 插件默认吸附范围保持一致，避免未注册插件时控件侧出现空值。
       tolerancePx: 16,
       useNative: true,
       useMapTargets: false,
+      drawnTargets: {
+        enabled: false,
+        geometryTypes: ['Point', 'LineString', 'Polygon'],
+        snapTo: ['vertex', 'segment'],
+      },
     };
   }
 
@@ -439,16 +450,94 @@ function resolveTerradrawSnapOptions(
 }
 
 /**
- * 解析普通图层吸附服务产出的自定义吸附坐标。
- * 只有在启用了普通图层吸附时，才会被传给 TerraDraw 的 `snapping.toCustom`。
+ * 解析普通图层吸附服务产出的自定义吸附结果。
  * @param event TerraDraw 当前鼠标事件
- * @returns 当前命中的吸附坐标；未命中时返回 undefined
+ * @returns 当前命中的吸附结果；未命中时返回 null
  */
-function resolveTerradrawCustomSnapCoordinate(
+function resolveTerradrawMapSnapResult(
   event: TerraDrawMouseEvent
-): [number, number] | undefined {
-  const snapResult = pluginHost.getMapSnapService()?.getBinding()?.resolveTerradrawEvent(event);
-  return snapResult?.matched ? snapResult.targetCoordinate || undefined : undefined;
+): MapFeatureSnapResult | null {
+  return pluginHost.getMapSnapService()?.getBinding()?.resolveTerradrawEvent(event) || null;
+}
+
+/**
+ * 读取 TerraDraw 实例当前快照。
+ * 优先使用 TerraDraw 原生快照；当实例不可用时回退到控件公开的 FeatureCollection。
+ * @param control 当前绘图或测量控件
+ * @returns 当前控件已绘制要素集合
+ */
+function getTerradrawSnapshotFeatures(
+  control: MaplibreTerradrawControl | MaplibreMeasureControl | null
+): TerradrawFeature[] {
+  const drawInstance = control?.getTerraDrawInstance?.();
+  return (drawInstance?.getSnapshot?.() || control?.getFeatures?.()?.features || []) as TerradrawFeature[];
+}
+
+/**
+ * 解析 TerraDraw / Measure 已绘制要素吸附结果。
+ * @param controlType 当前控件类型
+ * @param event TerraDraw 当前鼠标事件
+ * @param snapOptions 当前控件最终吸附配置
+ * @returns 当前命中的已绘制要素吸附结果；未命中时返回 null
+ */
+function resolveTerradrawDrawnSnapResult(
+  controlType: 'draw' | 'measure',
+  event: TerraDrawMouseEvent,
+  snapOptions: ResolvedTerradrawSnapOptions
+): MapFeatureSnapResult | null {
+  if (!map.map || !snapOptions.enabled || !snapOptions.drawnTargets.enabled) {
+    return null;
+  }
+
+  const control = controlType === 'draw' ? drawControlRef.value : measureControlRef.value;
+  const features = getTerradrawSnapshotFeatures(control);
+
+  if (!features.length) {
+    return null;
+  }
+
+  return resolveFeatureSnapResult({
+    map: map.map,
+    pointer: {
+      point: {
+        x: event.containerX,
+        y: event.containerY,
+      },
+      lngLat: {
+        lng: event.lng,
+        lat: event.lat,
+      },
+    },
+    rule: {
+      id: `terradraw-${controlType}-drawn-targets`,
+      layerIds: [`__terradraw_${controlType}_drawn__`],
+      priority: snapOptions.drawnTargets.priority,
+      tolerancePx: snapOptions.drawnTargets.tolerancePx ?? snapOptions.tolerancePx,
+      geometryTypes: snapOptions.drawnTargets.geometryTypes,
+      snapTo: snapOptions.drawnTargets.snapTo,
+    },
+    features,
+  });
+}
+
+/**
+ * 判断 TerraDraw 控件是否正在接管绘制点击语义。
+ * @param control 当前绘图或测量控件
+ * @returns 当前控件是否处于 drawing 状态
+ */
+function isTerradrawDrawing(
+  control: MaplibreTerradrawControl | MaplibreMeasureControl | null
+): boolean {
+  const drawInstance = control?.getTerraDrawInstance?.();
+  return drawInstance?.getModeState?.() === 'drawing';
+}
+
+/**
+ * 判断普通业务图层指针事件是否应被绘图/测量流程屏蔽。
+ * @returns 是否屏蔽本次普通图层事件
+ */
+function shouldIgnoreMapInteractivePointerEvent(): boolean {
+  return isTerradrawDrawing(drawControlRef.value) || isTerradrawDrawing(measureControlRef.value);
 }
 
 /** TerraDraw ready 前同步任务管理器。 */
@@ -540,7 +629,11 @@ function syncDrawSnapping(localSnapConfig: TerradrawSnapSharedOptions | boolean 
       return resolveTerradrawSnapOptions('draw', nextLocalSnapConfig);
     },
     ensureReadyForModeSync: terradrawReadySyncManager.ensureReadyForModeSync,
-    resolveCustomCoordinate: resolveTerradrawCustomSnapCoordinate,
+    resolveMapResult: resolveTerradrawMapSnapResult,
+    resolveDrawnResult: (event) => {
+      const resolvedSnapOptions = resolveTerradrawSnapOptions('draw', localSnapConfig);
+      return resolveTerradrawDrawnSnapResult('draw', event, resolvedSnapOptions);
+    },
   });
 }
 
@@ -562,7 +655,11 @@ function syncMeasureSnapping(
       return resolveTerradrawSnapOptions('measure', nextLocalSnapConfig);
     },
     ensureReadyForModeSync: terradrawReadySyncManager.ensureReadyForModeSync,
-    resolveCustomCoordinate: resolveTerradrawCustomSnapCoordinate,
+    resolveMapResult: resolveTerradrawMapSnapResult,
+    resolveDrawnResult: (event) => {
+      const resolvedSnapOptions = resolveTerradrawSnapOptions('measure', localSnapConfig);
+      return resolveTerradrawDrawnSnapResult('measure', event, resolvedSnapOptions);
+    },
   });
 }
 
@@ -587,6 +684,11 @@ const drawControlLifecycle = useTerradrawControlLifecycle({
       tolerancePx: resolvedSnapOptions.tolerancePx,
       useNative: resolvedSnapOptions.useNative,
       useMapTargets: resolvedSnapOptions.useMapTargets,
+      drawnTargetsEnabled: resolvedSnapOptions.drawnTargets.enabled,
+      drawnTargetsGeometryTypes: resolvedSnapOptions.drawnTargets.geometryTypes.join(','),
+      drawnTargetsSnapTo: resolvedSnapOptions.drawnTargets.snapTo.join(','),
+      drawnTargetsPriority: resolvedSnapOptions.drawnTargets.priority,
+      drawnTargetsTolerancePx: resolvedSnapOptions.drawnTargets.tolerancePx,
     };
   },
   syncSnapping: () => {
@@ -618,6 +720,11 @@ const measureControlLifecycle = useTerradrawControlLifecycle({
       tolerancePx: resolvedSnapOptions.tolerancePx,
       useNative: resolvedSnapOptions.useNative,
       useMapTargets: resolvedSnapOptions.useMapTargets,
+      drawnTargetsEnabled: resolvedSnapOptions.drawnTargets.enabled,
+      drawnTargetsGeometryTypes: resolvedSnapOptions.drawnTargets.geometryTypes.join(','),
+      drawnTargetsSnapTo: resolvedSnapOptions.drawnTargets.snapTo.join(','),
+      drawnTargetsPriority: resolvedSnapOptions.drawnTargets.priority,
+      drawnTargetsTolerancePx: resolvedSnapOptions.drawnTargets.tolerancePx,
     };
   },
   syncSnapping: () => {

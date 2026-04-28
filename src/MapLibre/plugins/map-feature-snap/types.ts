@@ -3,19 +3,20 @@ import type {
   TerradrawControlType,
   TerradrawSnapSharedOptions,
 } from '../../shared/mapLibre-controls-types';
-import type { MapFeatureSnapResult } from '../../shared/map-feature-snap-types';
+import type {
+  MapFeatureSnapGeometryType,
+  MapFeatureSnapMode,
+  MapFeatureSnapResult,
+} from '../../shared/map-feature-snap-types';
 
 export type {
+  MapFeatureSnapDrawnTargetOptions,
+  MapFeatureSnapGeometryType,
   MapFeatureSnapKind,
+  MapFeatureSnapMode,
   MapFeatureSnapResult,
   MapFeatureSnapSegmentInfo,
 } from '../../shared/map-feature-snap-types';
-
-/** 单条吸附规则可命中的几何类型。 */
-export type MapFeatureSnapGeometryType = 'Point' | 'LineString' | 'Polygon';
-
-/** 单条吸附规则支持的吸附方式。 */
-export type MapFeatureSnapMode = 'vertex' | 'segment';
 
 /** 单条吸附规则高级过滤上下文。 */
 export interface MapFeatureSnapRuleFilterContext {
@@ -37,8 +38,8 @@ export interface MapFeatureSnapRuleFilterContext {
 
 /** 单条普通图层吸附规则。 */
 export interface MapFeatureSnapRule {
-  /** 规则唯一标识。 */
-  id: string;
+  /** 规则唯一标识；不传时由系统根据来源和 layerIds 自动生成。 */
+  id?: string;
   /** 是否启用当前规则。 */
   enabled?: boolean;
   /** 参与当前规则候选查询的图层 ID 集合。 */
@@ -79,9 +80,6 @@ export interface MapFeatureSnapBusinessLayerOptions {
   rules: MapFeatureSnapRule[];
 }
 
-/** 旧普通图层吸附配置类型；仅为迁移期兼容，推荐改用 MapFeatureSnapBusinessLayerOptions。 */
-export type MapFeatureSnapOrdinaryLayerOptions = MapFeatureSnapBusinessLayerOptions;
-
 /** 内置吸附目标配置。 */
 export interface MapFeatureSnapTargetOptions {
   /** 是否启用当前内置吸附目标。 */
@@ -104,8 +102,6 @@ export interface MapFeatureSnapOptions {
   preview?: MapFeatureSnapPreviewOptions;
   /** 业务图层吸附配置。 */
   businessLayers?: MapFeatureSnapBusinessLayerOptions;
-  /** 旧普通图层吸附配置；仅为迁移期兼容，推荐改用 businessLayers。 */
-  ordinaryLayers?: MapFeatureSnapBusinessLayerOptions;
   /** 交点插件内置吸附目标配置。 */
   intersection?: boolean | MapFeatureSnapTargetOptions;
   /** 面边线插件内置吸附目标配置。 */

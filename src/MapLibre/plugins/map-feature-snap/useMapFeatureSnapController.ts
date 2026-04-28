@@ -5,9 +5,20 @@ import type { TerradrawControlType, TerradrawSnapSharedOptions } from '../../sha
 import { getMapGlobalSnapDefaults } from '../../shared/map-global-config';
 import type { ResolvedTerradrawSnapOptions } from '../types';
 import { createEmptyMapFeatureSnapResult, createMapFeatureSnapBinding, type MapFeatureSnapBinding } from './useMapFeatureSnapBinding';
-import type { MapFeatureSnapOptions, MapFeatureSnapPreviewOptions } from './types';
+import type {
+  MapFeatureSnapGeometryType,
+  MapFeatureSnapMode,
+  MapFeatureSnapOptions,
+  MapFeatureSnapPreviewOptions,
+} from './types';
 
 const DEFAULT_TOLERANCE_PX = 16;
+const DEFAULT_DRAWN_TARGET_GEOMETRY_TYPES: MapFeatureSnapGeometryType[] = [
+  'Point',
+  'LineString',
+  'Polygon',
+];
+const DEFAULT_DRAWN_TARGET_SNAP_MODES: MapFeatureSnapMode[] = ['vertex', 'segment'];
 
 interface UseMapFeatureSnapControllerOptions {
   /** 读取业务层注册的吸附插件配置。 */
@@ -72,6 +83,82 @@ function mergeSnapControlConfig(
 }
 
 /**
+ * 合并 TerraDraw 已绘制要素吸附目标配置。
+ * 布尔值代表整项开关，对象配置按浅合并处理。
+ *
+ * @param baseConfig 基础配置
+ * @param patchConfig 覆写配置
+ * @returns 合并后的配置
+ */
+function mergeDrawnTargetConfig(
+  baseConfig: TerradrawSnapSharedOptions['drawnTargets'],
+  patchConfig: TerradrawSnapSharedOptions['drawnTargets']
+): TerradrawSnapSharedOptions['drawnTargets'] {
+  if (patchConfig === false) {
+    return patchConfig;
+  }
+
+  if (patchConfig === true) {
+    if (baseConfig && typeof baseConfig === 'object') {
+      return {
+        ...baseConfig,
+        enabled: true,
+      };
+    }
+
+    return true;
+  }
+
+  if (baseConfig === false || baseConfig === true) {
+    return patchConfig === undefined ? baseConfig : patchConfig;
+  }
+
+  if (!baseConfig && !patchConfig) {
+    return undefined;
+  }
+
+  return {
+    ...(baseConfig || {}),
+    ...(patchConfig || {}),
+  };
+}
+
+/**
+ * 归一化 TerraDraw 已绘制要素吸附目标配置。
+ * @param config 原始配置
+ * @returns 完整配置
+ */
+function normalizeDrawnTargets(
+  config: TerradrawSnapSharedOptions['drawnTargets']
+): ResolvedTerradrawSnapOptions['drawnTargets'] {
+  if (config === false) {
+    return {
+      enabled: false,
+      geometryTypes: DEFAULT_DRAWN_TARGET_GEOMETRY_TYPES,
+      snapTo: DEFAULT_DRAWN_TARGET_SNAP_MODES,
+    };
+  }
+
+  if (config === true) {
+    return {
+      enabled: true,
+      geometryTypes: DEFAULT_DRAWN_TARGET_GEOMETRY_TYPES,
+      snapTo: DEFAULT_DRAWN_TARGET_SNAP_MODES,
+    };
+  }
+
+  return {
+    enabled: config?.enabled !== false && Boolean(config),
+    geometryTypes: config?.geometryTypes?.length
+      ? config.geometryTypes
+      : DEFAULT_DRAWN_TARGET_GEOMETRY_TYPES,
+    snapTo: config?.snapTo?.length ? config.snapTo : DEFAULT_DRAWN_TARGET_SNAP_MODES,
+    ...(config?.priority !== undefined ? { priority: config.priority } : {}),
+    ...(config?.tolerancePx !== undefined ? { tolerancePx: config.tolerancePx } : {}),
+  };
+}
+
+/**
  * 合并吸附预览配置。
  * @param globalPreview 全局预览默认值
  * @param localPreview 实例局部预览配置
@@ -119,8 +206,7 @@ function resolveMapFeatureSnapOptions(
       localOptions?.polygonEdge !== undefined
         ? localOptions.polygonEdge
         : globalDefaults?.polygonEdge,
-    businessLayers: localOptions?.businessLayers || localOptions?.ordinaryLayers,
-    ordinaryLayers: localOptions?.ordinaryLayers,
+    businessLayers: localOptions?.businessLayers,
     terradraw:
       globalDefaults?.terradraw || localOptions?.terradraw
         ? {
@@ -284,6 +370,10 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
       ...pluginDefaults,
       ...controlDefaults,
       ...localOverrides,
+      drawnTargets: mergeDrawnTargetConfig(
+        mergeDrawnTargetConfig(pluginDefaults.drawnTargets, controlDefaults.drawnTargets),
+        localOverrides.drawnTargets
+      ),
     };
 
     const defaultTolerancePx = snapOptions?.defaultTolerancePx ?? DEFAULT_TOLERANCE_PX;
@@ -292,6 +382,7 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
       tolerancePx: mergedConfig.tolerancePx ?? defaultTolerancePx,
       useNative: mergedConfig.useNative !== false,
       useMapTargets: mergedConfig.useMapTargets !== false,
+      drawnTargets: normalizeDrawnTargets(mergedConfig.drawnTargets),
     };
   }
 

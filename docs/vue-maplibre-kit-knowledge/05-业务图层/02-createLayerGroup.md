@@ -4,7 +4,7 @@
 
 先读哪篇：[01-图层工厂](./01-图层工厂.md)。
 
-对应示例：[NGGI02](../../../examples/views/NG/GI/NGGI02.vue) 的共享示例配置。
+对应示例：[NGGI01](../../../examples/views/NG/GI/NGGI01.vue) 在页面内显式声明 `createLayerGroup()`、业务 source 和点线面数据；[NGGI02](../../../examples/views/NG/GI/NGGI02.vue) 继续展示基于共享 kit 的 source 响应式增删改。
 
 ## 基本写法
 
@@ -54,3 +54,5 @@ const layers = createLayerGroup({
 - 一个 source 需要同时声明点、线、面图层。
 - 多个图层共享属性治理规则。
 - 示例、业务模块或 composable 想返回一组稳定图层描述。
+
+NGGI01 是最小页面写法；共享示例里的 `createExampleLayers()` 是复用型写法，位于 `examples/views/NG/GI/nggi-example.shared.ts`。
