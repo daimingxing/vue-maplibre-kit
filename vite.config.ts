@@ -59,6 +59,9 @@ function resolveLibraryEntries() {
     "plugins/intersection-preview": fileURLToPath(
       new URL("./src/plugins/intersection-preview.ts", import.meta.url)
     ),
+    "plugins/polygon-edge-preview": fileURLToPath(
+      new URL("./src/plugins/polygon-edge-preview.ts", import.meta.url)
+    ),
     "plugins/map-feature-multi-select": fileURLToPath(
       new URL("./src/plugins/map-feature-multi-select.ts", import.meta.url)
     ),
@@ -112,6 +115,12 @@ function resolveDevAliases() {
       find: /^vue-maplibre-kit\/plugins\/intersection-preview$/,
       replacement: fileURLToPath(
         new URL("./src/plugins/intersection-preview.ts", import.meta.url)
+      ),
+    },
+    {
+      find: /^vue-maplibre-kit\/plugins\/polygon-edge-preview$/,
+      replacement: fileURLToPath(
+        new URL("./src/plugins/polygon-edge-preview.ts", import.meta.url)
       ),
     },
     {

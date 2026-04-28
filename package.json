@@ -53,6 +53,10 @@
       "types": "./dist/plugins/intersection-preview.d.ts",
       "import": "./dist/plugins/intersection-preview.js"
     },
+    "./plugins/polygon-edge-preview": {
+      "types": "./dist/plugins/polygon-edge-preview.d.ts",
+      "import": "./dist/plugins/polygon-edge-preview.js"
+    },
     "./plugins/map-feature-multi-select": {
       "types": "./dist/plugins/map-feature-multi-select.d.ts",
       "import": "./dist/plugins/map-feature-multi-select.js"

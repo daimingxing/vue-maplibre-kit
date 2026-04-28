@@ -54,6 +54,7 @@ export type {
   MapFeatureSnapKind,
   MapFeatureSnapMode,
   MapFeatureSnapOptions,
+  MapFeatureSnapBusinessLayerOptions,
   MapFeatureSnapOrdinaryLayerOptions,
   MapFeatureSnapPluginApi,
   MapFeatureSnapPreviewOptions,
@@ -61,4 +62,5 @@ export type {
   MapFeatureSnapRule,
   MapFeatureSnapRuleFilterContext,
   MapFeatureSnapSegmentInfo,
+  MapFeatureSnapTargetOptions,
 } from './types';

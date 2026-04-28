@@ -4,6 +4,7 @@ import type { MapCommonLineFeature, MapSourceFeatureRef } from './map-common-too
 import {
   buildIntersectionCandidates,
   buildIntersectionPointFeature,
+  buildMaterializedIntersectionFeature,
   collectLineIntersections,
 } from './map-intersection-tools';
 
@@ -294,5 +295,36 @@ describe('collectLineIntersections', () => {
     expect(pointFeature.properties?.id).toBe(intersection.intersectionId);
     expect(pointFeature.properties?.intersectionId).toBe(intersection.intersectionId);
     expect(pointFeature.properties?.kind).toBe('materialized-node');
+  });
+
+  it('正式交点要素应写入统一插件生成字段', () => {
+    const left = createLineFeature('line-a', [
+      [0, 0],
+      [10, 0],
+    ]);
+    const right = createLineFeature('line-b', [
+      [10, 0],
+      [10, 10],
+    ]);
+    const [intersection] = collectLineIntersections({
+      scope: 'all',
+      candidates: [
+        {
+          feature: left,
+          ref: createFeatureRef('line-a'),
+        },
+        {
+          feature: right,
+          ref: createFeatureRef('line-b'),
+        },
+      ],
+    });
+
+    const feature = buildMaterializedIntersectionFeature(intersection);
+
+    expect(feature.properties).toMatchObject({
+      generatedKind: 'intersection-materialized',
+      generatedGroupId: `intersection-materialized::${intersection.intersectionId}`,
+    });
   });
 });

@@ -26,6 +26,10 @@ import {
 import { useMapFeatureSnap, type UseMapFeatureSnapResult } from './useMapFeatureSnap';
 import { useMapDxfExport, type UseMapDxfExportResult } from './useMapDxfExport';
 import { useMapLayerActions, type UseMapLayerActionsResult } from './useMapLayerActions';
+import {
+  usePolygonEdgePreview,
+  type UsePolygonEdgePreviewResult,
+} from './usePolygonEdgePreview';
 
 /** useBusinessMap 初始化配置。 */
 export interface UseBusinessMapOptions {
@@ -102,6 +106,8 @@ export interface UseBusinessMapPlugins {
   lineDraft: UseLineDraftPreviewResult;
   /** 交点插件分组。 */
   intersection: UseIntersectionPreviewResult;
+  /** 面边线预览插件分组。 */
+  polygonEdge: UsePolygonEdgePreviewResult;
   /** 要素多选插件分组。 */
   multiSelect: UseMapFeatureMultiSelectResult;
   /** DXF 导出插件分组。 */
@@ -200,6 +206,7 @@ export function useBusinessMap(options: UseBusinessMapOptions): UseBusinessMapRe
   const editor = useMapFeaturePropertyEditor(options);
   const draft = useLineDraftPreview(mapRef);
   const intersection = useIntersectionPreview(mapRef);
+  const polygonEdge = usePolygonEdgePreview(mapRef);
   const multiSelect = useMapFeatureMultiSelect(mapRef);
   const snap = useMapFeatureSnap(mapRef);
   const dxfExport = useMapDxfExport(mapRef);
@@ -207,6 +214,7 @@ export function useBusinessMap(options: UseBusinessMapOptions): UseBusinessMapRe
     snap,
     lineDraft: draft,
     intersection,
+    polygonEdge,
     multiSelect,
     dxfExport,
   };

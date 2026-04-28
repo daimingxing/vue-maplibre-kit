@@ -54,6 +54,8 @@ const INTERSECTION_PREVIEW_LAYER_ID = 'intersection-preview-layer';
 const INTERSECTION_MATERIALIZED_LAYER_ID = 'intersection-materialized-layer';
 const INTERSECTION_PREVIEW_SNAP_PRIORITY = 100;
 const INTERSECTION_MATERIALIZED_SNAP_PRIORITY = 110;
+const POLYGON_EDGE_PREVIEW_LAYER_ID = 'polygonEdgePreviewLineLayer';
+const POLYGON_EDGE_SNAP_PRIORITY = 90;
 
 const DEFAULT_TOLERANCE_PX = 16;
 const DEFAULT_SNAP_MODES: MapFeatureSnapMode[] = ['vertex', 'segment'];
@@ -640,26 +642,98 @@ function isSnapPluginEnabled(options: MapFeatureSnapOptions | null | undefined):
 }
 
 /**
+ * 判断内置吸附目标是否启用。
+ * @param targetOptions 内置吸附目标配置
+ * @returns 是否启用
+ */
+function isBuiltInTargetEnabled(
+  targetOptions: MapFeatureSnapOptions['intersection'] | MapFeatureSnapOptions['polygonEdge']
+): boolean {
+  if (targetOptions === false) {
+    return false;
+  }
+
+  if (targetOptions && typeof targetOptions === 'object') {
+    return targetOptions.enabled !== false;
+  }
+
+  return true;
+}
+
+/**
+ * 读取内置吸附目标的局部覆写配置。
+ * @param targetOptions 内置吸附目标配置
+ * @returns 局部覆写配置
+ */
+function getBuiltInTargetPatch(
+  targetOptions: MapFeatureSnapOptions['intersection'] | MapFeatureSnapOptions['polygonEdge']
+) {
+  return targetOptions && typeof targetOptions === 'object' ? targetOptions : {};
+}
+
+/**
  * 创建交点图层内置吸附规则。
- * 插件内部交点点位应始终可被吸附，因此这里不要求业务层额外声明规则。
+ * 插件内部交点点位默认可被吸附，业务层可通过 snap.intersection 显式关闭或调整规则。
  *
+ * @param options 地图吸附插件配置
  * @returns 交点预览层与正式点层的内置吸附规则
  */
-function createBuiltInIntersectionSnapRules(): MapFeatureSnapRule[] {
+function createBuiltInIntersectionSnapRules(
+  options: MapFeatureSnapOptions | null | undefined
+): MapFeatureSnapRule[] {
+  if (!isBuiltInTargetEnabled(options?.intersection)) {
+    return [];
+  }
+
+  const targetPatch = getBuiltInTargetPatch(options?.intersection);
+  const snapTo: MapFeatureSnapMode[] =
+    targetPatch.snapTo?.includes('vertex') === false ? [] : ['vertex'];
+  if (!snapTo.length) {
+    return [];
+  }
+
   return [
     {
       id: 'intersection-preview-snap',
       layerIds: [INTERSECTION_PREVIEW_LAYER_ID],
-      priority: INTERSECTION_PREVIEW_SNAP_PRIORITY,
+      priority: targetPatch.priority ?? INTERSECTION_PREVIEW_SNAP_PRIORITY,
+      tolerancePx: targetPatch.tolerancePx,
       geometryTypes: ['Point'],
-      snapTo: ['vertex'],
+      snapTo,
     },
     {
       id: 'intersection-materialized-snap',
       layerIds: [INTERSECTION_MATERIALIZED_LAYER_ID],
-      priority: INTERSECTION_MATERIALIZED_SNAP_PRIORITY,
+      priority: targetPatch.priority ?? INTERSECTION_MATERIALIZED_SNAP_PRIORITY,
+      tolerancePx: targetPatch.tolerancePx,
       geometryTypes: ['Point'],
-      snapTo: ['vertex'],
+      snapTo,
+    },
+  ];
+}
+
+/**
+ * 创建面边线图层内置吸附规则。
+ * @param options 地图吸附插件配置
+ * @returns 面边线插件临时线图层的内置吸附规则
+ */
+function createBuiltInPolygonEdgeSnapRules(
+  options: MapFeatureSnapOptions | null | undefined
+): MapFeatureSnapRule[] {
+  if (!isBuiltInTargetEnabled(options?.polygonEdge)) {
+    return [];
+  }
+
+  const targetPatch = getBuiltInTargetPatch(options?.polygonEdge);
+  const snapTo = targetPatch.snapTo?.length ? targetPatch.snapTo : DEFAULT_SNAP_MODES;
+  return [
+    {
+      id: 'polygon-edge-preview-snap',
+      layerIds: [POLYGON_EDGE_PREVIEW_LAYER_ID],
+      priority: targetPatch.priority ?? POLYGON_EDGE_SNAP_PRIORITY,
+      tolerancePx: targetPatch.tolerancePx,
+      geometryTypes: ['LineString'],
+      snapTo,
     },
   ];
 }
@@ -676,18 +750,21 @@ function getEnabledSnapRules(
     return [];
   }
 
-  const builtInRules = createBuiltInIntersectionSnapRules();
-  const ordinaryLayerOptions = options?.ordinaryLayers;
-  if (!ordinaryLayerOptions?.rules?.length) {
+  const builtInRules = [
+    ...createBuiltInIntersectionSnapRules(options),
+    ...createBuiltInPolygonEdgeSnapRules(options),
+  ];
+  const businessLayerOptions = options?.businessLayers || options?.ordinaryLayers;
+  if (!businessLayerOptions?.rules?.length) {
     return builtInRules;
   }
 
-  if (ordinaryLayerOptions.enabled === false) {
+  if (businessLayerOptions.enabled === false) {
     return builtInRules;
   }
 
   return [
-    ...ordinaryLayerOptions.rules.filter((rule) => rule.enabled !== false),
+    ...businessLayerOptions.rules.filter((rule) => rule.enabled !== false),
     ...builtInRules,
   ];
 }

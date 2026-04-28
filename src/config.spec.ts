@@ -132,6 +132,20 @@ describe('config', () => {
             label: '导出CAD',
           },
         },
+        polygonEdge: {
+          style: {
+            normal: {
+              color: '#409eff',
+              width: 3,
+            },
+          },
+        },
+        snap: {
+          polygonEdge: {
+            enabled: true,
+            snapTo: ['vertex', 'segment'],
+          },
+        },
       },
     });
 
@@ -143,6 +157,20 @@ describe('config', () => {
         dxfExport: {
           control: {
             label: '导出CAD',
+          },
+        },
+        polygonEdge: {
+          style: {
+            normal: {
+              color: '#409eff',
+              width: 3,
+            },
+          },
+        },
+        snap: {
+          polygonEdge: {
+            enabled: true,
+            snapTo: ['vertex', 'segment'],
           },
         },
       },

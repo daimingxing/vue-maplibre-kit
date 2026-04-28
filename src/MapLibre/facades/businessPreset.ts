@@ -7,6 +7,10 @@ import {
   createIntersectionPreviewPlugin,
   type IntersectionPreviewOptions,
 } from '../plugins/intersection-preview';
+import {
+  createPolygonEdgePreviewPlugin,
+  type PolygonEdgePreviewOptions,
+} from '../plugins/polygon-edge-preview';
 import type { MapPluginDescriptor } from '../plugins/types';
 import type { MapControlsConfig } from '../shared/mapLibre-controls-types';
 import {
@@ -95,18 +99,20 @@ export type MapControlsPresetName = 'minimal' | 'basic' | 'draw' | 'full';
 
 /** 吸附插件简写配置。 */
 export interface BusinessSnapPresetOptions extends Partial<MapFeatureSnapOptions> {
-  /** 参与普通图层吸附的图层 ID；未显式传 ordinaryLayers 时，会用它生成一条默认吸附规则。 */
+  /** 参与业务图层吸附的图层 ID；未显式传 businessLayers 时，会用它生成一条默认吸附规则。 */
   layerIds?: string[];
 }
 
 /** 业务插件预设配置。 */
 export interface BusinessPluginsOptions {
-  /** 吸附插件配置；传 true 时只启用基础能力和插件内部默认目标，普通业务图层吸附需传 layerIds 或 ordinaryLayers。 */
+  /** 吸附插件配置；传 true 时只启用基础能力和插件内部默认目标，业务图层吸附需传 layerIds 或 businessLayers。 */
   snap?: boolean | BusinessSnapPresetOptions;
   /** 线草稿插件配置；传 true 时启用默认配置。 */
   lineDraft?: boolean | Parameters<typeof createLineDraftPreviewPlugin>[0];
   /** 交点插件配置。 */
   intersection?: IntersectionPreviewOptions;
+  /** 面边线预览插件配置；传 true 时启用默认配置。 */
+  polygonEdge?: boolean | PolygonEdgePreviewOptions;
   /** 多选插件配置；传 true 时启用默认配置。 */
   multiSelect?: boolean | Parameters<typeof createMapFeatureMultiSelectPlugin>[0];
   /** DXF 导出插件配置。 */
@@ -258,13 +264,14 @@ function resolveSnapOptions(options: true | BusinessSnapPresetOptions): MapFeatu
   }
 
   const { layerIds, ...restOptions } = options;
-  const ordinaryLayers = options.ordinaryLayers ||
+  const businessLayers = options.businessLayers ||
+    options.ordinaryLayers ||
     (layerIds
       ? {
           enabled: true,
           rules: [
             {
-              id: 'ordinary-layer-snap',
+              id: 'business-layer-snap',
               layerIds,
             },
           ],
@@ -274,7 +281,8 @@ function resolveSnapOptions(options: true | BusinessSnapPresetOptions): MapFeatu
   return {
     enabled: true,
     ...restOptions,
-    ordinaryLayers,
+    businessLayers,
+    ordinaryLayers: options.ordinaryLayers,
   };
 }
 
@@ -298,6 +306,14 @@ export function createBusinessPlugins(options: BusinessPluginsOptions): MapPlugi
 
   if (options.intersection) {
     plugins.push(createIntersectionPreviewPlugin(options.intersection));
+  }
+
+  if (options.polygonEdge) {
+    plugins.push(
+      createPolygonEdgePreviewPlugin(
+        options.polygonEdge === true ? { enabled: true } : options.polygonEdge
+      )
+    );
   }
 
   if (options.multiSelect) {

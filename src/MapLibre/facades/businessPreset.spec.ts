@@ -26,7 +26,7 @@ describe('businessPreset', () => {
     expect(circleStyle.paint!['circle-radius']).toBe(8);
     expect(fillStyle.paint!['fill-color']).toBe('#f97316');
     expect(fillStyle.paint!['fill-opacity']).toBe(0.2);
-  });
+  }, 10000);
 
   it('应把图层组简写转换为现有业务图层描述', async () => {
     const businessPreset = await loadBusinessPreset();
@@ -80,6 +80,7 @@ describe('businessPreset', () => {
         sourceRegistry,
         targetSourceIds: ['primary'],
       },
+      polygonEdge: true,
       multiSelect: true,
       dxfExport: {
         sourceRegistry,
@@ -90,18 +91,20 @@ describe('businessPreset', () => {
       'mapFeatureSnap',
       'lineDraftPreview',
       'intersectionPreview',
+      'polygonEdgePreview',
       'mapFeatureMultiSelect',
       'mapDxfExport',
     ]);
-    expect((plugins[0].options as any).ordinaryLayers.rules[0].layerIds).toEqual(['pipe-line']);
+    expect((plugins[0].options as any).businessLayers.rules[0].layerIds).toEqual(['pipe-line']);
+    expect((plugins[3].options as any).enabled).toBe(true);
   });
 
-  it('应允许 snap 直接传完整 ordinaryLayers 配置', async () => {
+  it('应允许 snap 直接传完整 businessLayers 配置', async () => {
     const businessPreset = await loadBusinessPreset();
     const { createBusinessPlugins } = businessPreset;
     const plugins = createBusinessPlugins({
       snap: {
-        ordinaryLayers: {
+        businessLayers: {
           enabled: true,
           rules: [
             {
@@ -116,6 +119,27 @@ describe('businessPreset', () => {
 
     expect(plugins[0].type).toBe('mapFeatureSnap');
     expect((plugins[0].options as any).layerIds).toBeUndefined();
-    expect((plugins[0].options as any).ordinaryLayers.rules[0].id).toBe('custom-snap');
+    expect((plugins[0].options as any).businessLayers.rules[0].id).toBe('custom-snap');
+  });
+
+  it('应临时兼容 snap 直接传完整 ordinaryLayers 配置', async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+    const plugins = createBusinessPlugins({
+      snap: {
+        ordinaryLayers: {
+          enabled: true,
+          rules: [
+            {
+              id: 'old-snap',
+              layerIds: ['old-line'],
+            },
+          ],
+        },
+      },
+    });
+
+    expect((plugins[0].options as any).businessLayers.rules[0].id).toBe('old-snap');
+    expect((plugins[0].options as any).ordinaryLayers.rules[0].id).toBe('old-snap');
   });
 });

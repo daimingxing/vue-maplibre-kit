@@ -50,6 +50,12 @@ function resolveTestAliases() {
       ),
     },
     {
+      find: /^vue-maplibre-kit\/plugins\/polygon-edge-preview$/,
+      replacement: fileURLToPath(
+        new URL('./src/plugins/polygon-edge-preview.ts', import.meta.url)
+      ),
+    },
+    {
       find: /^vue-maplibre-kit\/plugins\/map-feature-multi-select$/,
       replacement: fileURLToPath(
         new URL('./src/plugins/map-feature-multi-select.ts', import.meta.url)

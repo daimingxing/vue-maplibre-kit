@@ -332,6 +332,7 @@ const mergedPluginLayerInteractive = pluginHost.mergedPluginLayerInteractive;
 pluginLayerInteractiveBinding = usePluginLayerInteractive({
   mapInstance: map,
   getInteractive: () => mergedPluginLayerInteractive.value,
+  getSnapBinding: () => pluginHost.getMapSnapService()?.getBinding() || null,
   toFeatureSnapshot: toMapFeatureSnapshot,
 });
 

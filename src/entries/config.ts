@@ -12,12 +12,19 @@ import type {
   MapSelectionDeactivateBehavior,
   TerradrawSnapSharedOptions,
 } from '../MapLibre/shared/mapLibre-controls-types';
-import type { MapFeatureSnapPreviewOptions } from '../MapLibre/plugins/map-feature-snap/types';
+import type {
+  MapFeatureSnapPreviewOptions,
+  MapFeatureSnapTargetOptions,
+} from '../MapLibre/plugins/map-feature-snap/types';
 import type { LineDraftPreviewStyleOverrides } from '../MapLibre/plugins/line-draft-preview/types';
 import type {
   IntersectionPreviewStateStyles,
   IntersectionPreviewStyleOverrides,
 } from '../MapLibre/plugins/intersection-preview/types';
+import type {
+  PolygonEdgePreviewStateStyles,
+  PolygonEdgePreviewStyleRule,
+} from '../MapLibre/plugins/polygon-edge-preview/types';
 import type { MapDxfExportTaskOptions } from '../MapLibre/plugins/map-dxf-export/types';
 import type { MapLayerStyleOverrides } from '../MapLibre/shared/map-layer-style-config';
 import { cloneDeep } from 'lodash-es';
@@ -65,6 +72,10 @@ export interface MapFeatureSnapGlobalDefaults {
   defaultTolerancePx?: number;
   /** 全局吸附预览样式。 */
   preview?: MapFeatureSnapPreviewOptions;
+  /** 交点插件内置吸附目标默认配置。 */
+  intersection?: boolean | MapFeatureSnapTargetOptions;
+  /** 面边线插件内置吸附目标默认配置。 */
+  polygonEdge?: boolean | MapFeatureSnapTargetOptions;
   /** TerraDraw / Measure 吸附默认值。 */
   terradraw?: {
     /** Draw / Measure 共用默认值。 */
@@ -92,6 +103,14 @@ export interface IntersectionPreviewGlobalDefaults {
   previewStyleOverrides?: IntersectionPreviewStyleOverrides;
   /** 全局正式交点样式覆写。 */
   materializedStyleOverrides?: IntersectionPreviewStyleOverrides;
+}
+
+/** 面边线预览插件全局默认配置。 */
+export interface PolygonEdgePreviewGlobalDefaults {
+  /** 全局面边线状态样式。 */
+  style?: PolygonEdgePreviewStateStyles;
+  /** 全局面边线来源面样式规则。 */
+  styleRules?: PolygonEdgePreviewStyleRule[];
 }
 
 /** 要素多选插件全局默认配置。 */
@@ -135,6 +154,8 @@ export interface MapKitGlobalConfig {
     lineDraft?: LineDraftPreviewGlobalDefaults;
     /** 交点预览插件全局默认配置。 */
     intersection?: IntersectionPreviewGlobalDefaults;
+    /** 面边线预览插件全局默认配置。 */
+    polygonEdge?: PolygonEdgePreviewGlobalDefaults;
     /** 多选插件全局默认配置。 */
     multiSelect?: MapFeatureMultiSelectGlobalDefaults;
     /** DXF 插件全局默认配置。 */

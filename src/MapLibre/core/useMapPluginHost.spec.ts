@@ -162,6 +162,66 @@ describe('useMapPluginHost', () => {
     errorSpy.mockRestore();
   });
 
+  it('插件渲染项应按 renderPriority 从低到高排序，并保留同级声明顺序', () => {
+    const { host, scope } = createHostHarness([
+      createDescriptor({
+        id: 'middle',
+        plugin: {
+          type: 'middle',
+          createInstance: () => ({
+            getRenderItems: () => [
+              {
+                id: 'middle-render',
+                renderPriority: 10,
+                component: DemoComponent,
+                props: {},
+              },
+            ],
+          }),
+        },
+      }),
+      createDescriptor({
+        id: 'default',
+        plugin: {
+          type: 'default',
+          createInstance: () => ({
+            getRenderItems: () => [
+              {
+                id: 'default-render',
+                component: DemoComponent,
+                props: {},
+              },
+            ],
+          }),
+        },
+      }),
+      createDescriptor({
+        id: 'top',
+        plugin: {
+          type: 'top',
+          createInstance: () => ({
+            getRenderItems: () => [
+              {
+                id: 'top-render',
+                renderPriority: 1000,
+                component: DemoComponent,
+                props: {},
+              },
+            ],
+          }),
+        },
+      }),
+    ]);
+
+    expect(host.renderItems.value.map((renderItem) => renderItem.id)).toEqual([
+      'default-render',
+      'middle-render',
+      'top-render',
+    ]);
+
+    scope.stop();
+  });
+
   it('插件 services 读取抛错时应跳过该服务并保留插件实例', () => {
     const error = new Error('services failed');
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);

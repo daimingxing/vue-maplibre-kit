@@ -15,6 +15,10 @@ import type {
 import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/useLineDraftPreviewController';
 import type { IntersectionPreviewPluginApi, IntersectionPreviewState } from '../plugins/intersection-preview';
 import type {
+  PolygonEdgePreviewPluginApi,
+  PolygonEdgePreviewState,
+} from '../plugins/polygon-edge-preview';
+import type {
   MapFeatureMultiSelectPluginApi,
   MapFeatureMultiSelectState,
 } from '../plugins/map-feature-multi-select';
@@ -51,6 +55,8 @@ type BusinessTypeExportCheck = {
 const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
 /** 交点插件类型常量。 */
 const INTERSECTION_PREVIEW_PLUGIN_TYPE = 'intersectionPreview';
+/** 面边线插件类型常量。 */
+const POLYGON_EDGE_PREVIEW_PLUGIN_TYPE = 'polygonEdgePreview';
 /** 多选插件类型常量。 */
 const MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE = 'mapFeatureMultiSelect';
 /** 吸附插件类型常量。 */
@@ -237,6 +243,77 @@ function createIntersectionPluginHarness(): {
     getMaterializedById: () => null,
     getSelected: () => null,
   } as IntersectionPreviewPluginApi;
+
+  return {
+    api,
+    state,
+  };
+}
+
+/**
+ * 创建测试用面边线插件 API。
+ * @returns 面边线插件 API 与状态引用
+ */
+function createPolygonEdgePluginHarness(): {
+  api: PolygonEdgePreviewPluginApi;
+  state: PolygonEdgePreviewState;
+} {
+  const state: PolygonEdgePreviewState = {
+    hasFeatures: true,
+    featureCount: 1,
+    selectedEdgeId: null,
+  };
+  const data = ref(
+    createFeatureCollection([
+      {
+        type: 'Feature',
+        id: 'edge-1',
+        properties: {
+          id: 'edge-1',
+          edgeId: 'edge-1',
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [120, 30],
+            [121, 31],
+          ],
+        },
+      },
+    ] as MapCommonFeature[])
+  );
+  const api = {
+    data,
+    lineStyle: ref({ layout: {}, paint: {} }),
+    generateFromFeature: () => ({
+      success: true,
+      message: '已生成面边线预览',
+      edgeCount: 1,
+      polygonId: 'polygon-1',
+    }),
+    generateFromSelected: () => ({
+      success: true,
+      message: '已生成面边线预览',
+      edgeCount: 1,
+      polygonId: 'polygon-1',
+    }),
+    getFeatureById: (edgeId: string | null) => {
+      return edgeId === 'edge-1' ? data.value.features[0] : null;
+    },
+    getData: () => data.value,
+    highlightPolygon: () => true,
+    highlightRing: () => true,
+    highlightEdge: () => true,
+    selectEdge: (edgeId: string | null) => {
+      state.selectedEdgeId = edgeId;
+      return true;
+    },
+    clearHighlight: () => undefined,
+    clear: () => {
+      state.hasFeatures = false;
+      state.featureCount = 0;
+    },
+  } as unknown as PolygonEdgePreviewPluginApi;
 
   return {
     api,
@@ -447,6 +524,8 @@ function createMapExpose(options: {
   lineDraftState?: unknown;
   intersectionApi?: IntersectionPreviewPluginApi | null;
   intersectionState?: IntersectionPreviewState | null;
+  polygonEdgeApi?: PolygonEdgePreviewPluginApi | null;
+  polygonEdgeState?: PolygonEdgePreviewState | null;
   multiSelectApi?: MapFeatureMultiSelectPluginApi | null;
   multiSelectState?: MapFeatureMultiSelectState | null;
   snapApi?: MapFeatureSnapPluginApi | null;
@@ -460,6 +539,8 @@ function createMapExpose(options: {
     lineDraftState = null,
     intersectionApi = null,
     intersectionState = null,
+    polygonEdgeApi = null,
+    polygonEdgeState = null,
     multiSelectApi = null,
     multiSelectState = null,
     snapApi = null,
@@ -485,6 +566,10 @@ function createMapExpose(options: {
         return Boolean(intersectionApi);
       }
 
+      if (pluginId === 'polygonEdgePreview') {
+        return Boolean(polygonEdgeApi);
+      }
+
       if (pluginId === 'mapFeatureMultiSelect') {
         return Boolean(multiSelectApi);
       }
@@ -506,6 +591,10 @@ function createMapExpose(options: {
 
       if (pluginId === 'intersectionPreview') {
         return (intersectionApi as TApi | null) || null;
+      }
+
+      if (pluginId === 'polygonEdgePreview') {
+        return (polygonEdgeApi as TApi | null) || null;
       }
 
       if (pluginId === 'mapFeatureMultiSelect') {
@@ -531,6 +620,10 @@ function createMapExpose(options: {
         return (intersectionState as TState | null) || null;
       }
 
+      if (pluginId === 'polygonEdgePreview') {
+        return (polygonEdgeState as TState | null) || null;
+      }
+
       if (pluginId === 'mapFeatureMultiSelect') {
         return (multiSelectState as TState | null) || null;
       }
@@ -554,6 +647,13 @@ function createMapExpose(options: {
         result.push({
           id: 'intersectionPreview',
           type: INTERSECTION_PREVIEW_PLUGIN_TYPE,
+        });
+      }
+
+      if (polygonEdgeApi) {
+        result.push({
+          id: 'polygonEdgePreview',
+          type: POLYGON_EDGE_PREVIEW_PLUGIN_TYPE,
         });
       }
 
@@ -710,6 +810,7 @@ describe('useBusinessMap', () => {
     expect(businessMap.selection.isActive.value).toBe(false);
     expect(businessMap.plugins.lineDraft.clear()).toBe(false);
     expect(businessMap.plugins.intersection.visible.value).toBe(false);
+    expect(businessMap.plugins.polygonEdge.clear()).toBe(false);
     expect(businessMap.plugins.multiSelect.selectedCount.value).toBe(0);
     expect(businessMap.plugins.snap.clearPreview()).toBe(false);
     expect(businessMap.plugins.dxfExport.isExporting.value).toBe(false);
@@ -739,6 +840,7 @@ describe('useBusinessMap', () => {
     const selectionHarness = createSelectionServiceHarness();
     const lineDraftHarness = createLineDraftPluginHarness();
     const intersectionHarness = createIntersectionPluginHarness();
+    const polygonEdgeHarness = createPolygonEdgePluginHarness();
     const multiSelectHarness = createMultiSelectPluginHarness();
     const snapHarness = createSnapPluginHarness();
     const dxfHarness = createDxfPluginHarness();
@@ -750,6 +852,8 @@ describe('useBusinessMap', () => {
           lineDraftState: lineDraftHarness.state,
           intersectionApi: intersectionHarness.api,
           intersectionState: intersectionHarness.state,
+          polygonEdgeApi: polygonEdgeHarness.api,
+          polygonEdgeState: polygonEdgeHarness.state,
           multiSelectApi: multiSelectHarness.api,
           multiSelectState: multiSelectHarness.state,
           snapApi: snapHarness.api,
@@ -779,6 +883,10 @@ describe('useBusinessMap', () => {
     expect(businessMap.plugins.intersection.count.value).toBe(2);
     expect(businessMap.plugins.intersection.visible.value).toBe(true);
     expect(typeof businessMap.plugins.intersection.refresh).toBe('function');
+    expect(businessMap.plugins.polygonEdge.featureCount.value).toBe(1);
+    expect(businessMap.plugins.polygonEdge.getData()?.features).toHaveLength(1);
+    expect(businessMap.plugins.polygonEdge.selectEdge('edge-1')).toBe(true);
+    expect(businessMap.plugins.polygonEdge.selectedEdgeId.value).toBe('edge-1');
     businessMap.plugins.multiSelect.activate();
     expect(businessMap.plugins.multiSelect.isActive.value).toBe(true);
     expect(businessMap.plugins.snap.clearPreview()).toBe(true);

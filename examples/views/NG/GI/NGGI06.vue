@@ -12,12 +12,15 @@
       </template>
     </MapLibreInit>
     <aside class="nggi-panel">
-      <h3>NGGI06 五插件总览</h3>
+      <h3>NGGI06 六插件总览</h3>
       <button type="button" @click="previewLine">生成草稿线</button>
       <button type="button" @click="previewRegion">生成线廊</button>
       <button type="button" @click="refreshIntersection">刷新交点</button>
       <button type="button" @click="materializeIntersection">生成正式交点</button>
       <button type="button" @click="removeIntersection">删除正式交点</button>
+      <button type="button" @click="generatePolygonEdge">生成面边线</button>
+      <button type="button" @click="highlightPolygonEdge">高亮面边线</button>
+      <button type="button" @click="clearPolygonEdge">清空面边线</button>
       <button type="button" @click="toggleMultiSelect">切换多选</button>
       <button type="button" @click="clearSnapPreview">清理吸附预览</button>
       <button type="button" @click="exportDxf">导出 DXF 文本</button>
@@ -26,6 +29,7 @@
       <p>正式交点：{{ businessMap.plugins.intersection.materializedCount.value }}</p>
       <p>多选数：{{ businessMap.plugins.multiSelect.selectedCount.value }}</p>
       <p>草稿数：{{ businessMap.plugins.lineDraft.featureCount.value }}</p>
+      <p>面边线：{{ businessMap.plugins.polygonEdge.featureCount.value }}</p>
       <p>DXF 最近文件：{{ businessMap.plugins.dxfExport.lastFileName.value || "未导出" }}</p>
       <p>{{ message }}</p>
       <pre>{{ overviewText }}</pre>
@@ -39,11 +43,13 @@ import {
   MapBusinessSourceLayers,
   MapLibreInit,
   useBusinessMap,
+  type MapCommonFeature,
   type MapCommonLineFeature,
   type MapLibreInitExpose,
 } from "vue-maplibre-kit/business";
 import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 import {
+  EXAMPLE_FILL_LAYER_ID,
   EXAMPLE_LINE_LAYER_ID,
   EXAMPLE_SOURCE_ID,
   createExampleInteractive,
@@ -67,6 +73,15 @@ const plugins = createBusinessPlugins({
     targetLayerIds: [EXAMPLE_LINE_LAYER_ID],
     sourceRegistry: kit.registry,
   },
+  polygonEdge: {
+    enabled: true,
+    style: {
+      normal: { color: "#2563eb", width: 3, opacity: 0.92 },
+      hover: { color: "#f97316", width: 5 },
+      selected: { color: "#dc2626", width: 6 },
+      highlighted: { color: "#16a34a", width: 5 },
+    },
+  },
   multiSelect: { enabled: true, targetLayerIds: [EXAMPLE_LINE_LAYER_ID] },
   dxfExport: {
     enabled: true,
@@ -88,6 +103,8 @@ const overviewText = computed(() =>
       draftFeatureCount: businessMap.plugins.lineDraft.featureCount.value,
       intersectionCount: businessMap.plugins.intersection.count.value,
       materializedCount: businessMap.plugins.intersection.materializedCount.value,
+      polygonEdgeCount: businessMap.plugins.polygonEdge.featureCount.value,
+      polygonEdgeSelected: businessMap.plugins.polygonEdge.selectedEdgeId.value,
       multiSelectActive: businessMap.plugins.multiSelect.isActive.value,
       selectedFeatureIds: businessMap.plugins.multiSelect
         .getSelectedFeatures()
@@ -117,6 +134,21 @@ function isLineFeature(feature: unknown): feature is MapCommonLineFeature {
 }
 
 /**
+ * 判断当前要素是否为面要素。
+ * @param feature 待判断要素
+ * @returns 是否为面要素
+ */
+function isPolygonFeature(feature: unknown): feature is MapCommonFeature {
+  return Boolean(
+    feature &&
+      typeof feature === "object" &&
+      "geometry" in feature &&
+      ((feature as MapCommonFeature).geometry.type === "Polygon" ||
+        (feature as MapCommonFeature).geometry.type === "MultiPolygon")
+  );
+}
+
+/**
  * 读取本例固定演示线。
  * 总览页只承担“看见插件能力连起来”的职责，所以用 line-a 降低操作步骤。
  * @returns 示例线要素
@@ -124,6 +156,15 @@ function isLineFeature(feature: unknown): feature is MapCommonLineFeature {
 function getDemoLine(): MapCommonLineFeature | null {
   const lineFeature = kit.source.resolveFeature("line-a");
   return isLineFeature(lineFeature) ? lineFeature : null;
+}
+
+/**
+ * 读取本例固定演示面。
+ * @returns 示例面要素
+ */
+function getDemoPolygon(): MapCommonFeature | null {
+  const polygonFeature = kit.source.resolveFeature("area-a");
+  return isPolygonFeature(polygonFeature) ? polygonFeature : null;
 }
 
 /**
@@ -205,6 +246,48 @@ function removeIntersection(): void {
 
   const success = businessMap.plugins.intersection.removeMaterialized(String(intersectionId));
   message.value = success ? `已删除正式交点：${String(intersectionId)}` : "删除正式交点失败";
+}
+
+/**
+ * 从固定示例面生成面边线。
+ */
+function generatePolygonEdge(): void {
+  const polygonFeature = getDemoPolygon();
+  if (!polygonFeature) {
+    message.value = "未找到 area-a，无法生成面边线";
+    return;
+  }
+
+  const result = businessMap.plugins.polygonEdge.generateFromFeature({
+    feature: polygonFeature,
+    origin: kit.source.toFeatureRef("area-a", EXAMPLE_FILL_LAYER_ID),
+  });
+  message.value = result.success
+    ? `已生成面边线：${result.edgeCount} 条`
+    : result.message;
+}
+
+/**
+ * 高亮当前面边线中的第一条边。
+ */
+function highlightPolygonEdge(): void {
+  const firstEdge = businessMap.plugins.polygonEdge.getData()?.features[0];
+  const edgeId = firstEdge?.properties?.edgeId;
+  if (edgeId === undefined || edgeId === null) {
+    message.value = "请先生成面边线";
+    return;
+  }
+
+  const success = businessMap.plugins.polygonEdge.highlightEdge(String(edgeId));
+  message.value = success ? `已高亮边线：${String(edgeId)}` : "高亮面边线失败";
+}
+
+/**
+ * 清空面边线。
+ */
+function clearPolygonEdge(): void {
+  const success = businessMap.plugins.polygonEdge.clear();
+  message.value = success ? "已清空面边线" : "清空面边线失败";
 }
 
 /**

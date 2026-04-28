@@ -1,12 +1,12 @@
 # plugins 默认值
 
-全局 plugins 用于给内置业务插件提供应用级默认参数。当前按 src/entries/config.ts 支持五个插件键。
+全局 plugins 用于给内置业务插件提供应用级默认参数。当前按 src/entries/config.ts 支持六个插件键。
 
 ## plugins.snap 全局配置项
 
 ```ts
 plugins: {
-  // 吸附插件：统一控制普通吸附和 TerraDraw 吸附默认值
+  // 吸附插件：统一控制吸附预览、插件内置目标和 TerraDraw 吸附默认值
   snap: {
     // defaultTolerancePx: 12, // 全局默认吸附容差像素
 
@@ -16,6 +16,20 @@ plugins: {
     //   pointRadius: 6, // 吸附点半径
     //   lineColor: '#1677ff', // 命中线段高亮颜色
     //   lineWidth: 5, // 命中线段高亮宽度
+    // },
+
+    // intersection: {
+    //   enabled: true, // 是否默认启用交点插件内置吸附目标
+    //   priority: 110, // 交点吸附默认优先级
+    //   tolerancePx: 12, // 交点吸附局部容差；不传时使用 defaultTolerancePx
+    //   snapTo: ['vertex'], // 交点只推荐顶点吸附
+    // },
+
+    // polygonEdge: {
+    //   enabled: true, // 是否默认启用面边线插件内置吸附目标
+    //   priority: 90, // 面边线吸附默认优先级
+    //   tolerancePx: 12, // 面边线吸附局部容差；不传时使用 defaultTolerancePx
+    //   snapTo: ['vertex', 'segment'], // 面边线默认允许吸附顶点和线段
     // },
 
     // terradraw: {
@@ -41,6 +55,11 @@ plugins: {
   },
 },
 ```
+
+补充说明：
+
+- 全局 `plugins.snap` 不配置业务图层规则。`businessLayers.rules` 依赖页面里的具体 layerId，应在页面局部通过 `createBusinessPlugins({ snap: { businessLayers } })` 配置。
+- 旧 `ordinaryLayers` 仍可在迁移期被局部页面识别，但不推荐写入新文档和新代码。
 
 ---
 
@@ -162,6 +181,53 @@ plugins: {
 
 ---
 
+## plugins.polygonEdge 全局配置项
+
+> 当前全局只负责面边线预览的默认视觉，不负责生成哪一个业务面，也不负责边线交互回调。
+
+```ts
+plugins: {
+  polygonEdge: {
+    style: {
+      normal: {
+        // color: '#409eff', // 默认边线颜色
+        // width: 3, // 默认边线宽度
+        // opacity: 0.9, // 默认边线透明度
+      },
+      hover: {
+        // color: '#f56c6c', // hover 态边线颜色
+        // width: 5, // hover 态边线宽度
+      },
+      selected: {
+        // color: '#e6a23c', // selected 态边线颜色
+        // width: 6, // selected 态边线宽度
+      },
+      highlighted: {
+        // color: '#67c23a', // highlighted 态边线颜色
+        // width: 5, // highlighted 态边线宽度
+      },
+    },
+    styleRules: [
+      // {
+      //   where: { type: 'boundary' }, // 按来源面属性浅层等值匹配
+      //   style: {
+      //     normal: { color: '#ff7a00', width: 4 },
+      //     hover: { color: '#f56c6c', width: 5 },
+      //   },
+      // },
+    ],
+  },
+},
+```
+
+补充说明：
+
+- 合并顺序是“插件内置默认值 -> 全局 `plugins.polygonEdge.style` -> 当前实例 `polygonEdge.style`”。
+- `styleRules` 会先合并全局规则，再合并实例规则；命中规则会把样式写入生成的临时边线属性。
+- 当前全局没有 `enabled`、`onHoverEnter`、`onHoverLeave`、`onClick`、`onDoubleClick`、`onContextMenu` 这些字段。
+
+---
+
 ## plugins.multiSelect 全局配置项
 
 ```ts
@@ -236,4 +302,3 @@ plugins: {
 - **不是去改库里的 `defaults.ts`**
 
 ---
-

@@ -884,7 +884,23 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
       );
     });
 
-    return nextRenderItems;
+    return nextRenderItems
+      .map((renderItem, index) => ({
+        renderItem,
+        index,
+      }))
+      .sort((left, right) => {
+        const priorityDiff =
+          (left.renderItem.renderPriority ?? 0) - (right.renderItem.renderPriority ?? 0);
+
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+
+        // 同优先级保留插件声明顺序，避免影响既有插件的叠放语义。
+        return left.index - right.index;
+      })
+      .map((item) => item.renderItem);
   });
 
   /**

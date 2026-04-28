@@ -71,12 +71,27 @@ export interface MapFeatureSnapPreviewOptions {
   lineWidth?: number;
 }
 
-/** 普通图层吸附配置。 */
-export interface MapFeatureSnapOrdinaryLayerOptions {
-  /** 是否启用普通图层吸附。 */
+/** 业务图层吸附配置。 */
+export interface MapFeatureSnapBusinessLayerOptions {
+  /** 是否启用业务图层吸附。 */
   enabled?: boolean;
-  /** 普通图层吸附规则集合。 */
+  /** 业务图层吸附规则集合。 */
   rules: MapFeatureSnapRule[];
+}
+
+/** 旧普通图层吸附配置类型；仅为迁移期兼容，推荐改用 MapFeatureSnapBusinessLayerOptions。 */
+export type MapFeatureSnapOrdinaryLayerOptions = MapFeatureSnapBusinessLayerOptions;
+
+/** 内置吸附目标配置。 */
+export interface MapFeatureSnapTargetOptions {
+  /** 是否启用当前内置吸附目标。 */
+  enabled?: boolean;
+  /** 当前内置目标命中优先级。 */
+  priority?: number;
+  /** 当前内置目标局部吸附范围。 */
+  tolerancePx?: number;
+  /** 当前内置目标允许采用的吸附方式。 */
+  snapTo?: MapFeatureSnapMode[];
 }
 
 /** 地图吸附插件配置。 */
@@ -87,8 +102,14 @@ export interface MapFeatureSnapOptions {
   defaultTolerancePx?: number;
   /** 吸附预览配置。 */
   preview?: MapFeatureSnapPreviewOptions;
-  /** 普通图层吸附配置。 */
-  ordinaryLayers?: MapFeatureSnapOrdinaryLayerOptions;
+  /** 业务图层吸附配置。 */
+  businessLayers?: MapFeatureSnapBusinessLayerOptions;
+  /** 旧普通图层吸附配置；仅为迁移期兼容，推荐改用 businessLayers。 */
+  ordinaryLayers?: MapFeatureSnapBusinessLayerOptions;
+  /** 交点插件内置吸附目标配置。 */
+  intersection?: boolean | MapFeatureSnapTargetOptions;
+  /** 面边线插件内置吸附目标配置。 */
+  polygonEdge?: boolean | MapFeatureSnapTargetOptions;
   /** TerraDraw / Measure 吸附公共默认配置。 */
   terradraw?: {
     /** TerraDraw / Measure 共用默认值。 */

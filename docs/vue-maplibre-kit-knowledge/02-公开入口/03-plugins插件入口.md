@@ -1,6 +1,6 @@
 # plugins 插件入口
 
-适合：需要注册 snap、线草稿、交点、多选、DXF 导出插件的业务开发者。
+适合：需要注册 snap、线草稿、交点、面边线、多选、DXF 导出插件的业务开发者。
 
 先读：[插件注册总览](../09-插件/01-插件注册总览.md)。
 
@@ -25,6 +25,7 @@ const plugins = createBusinessPlugins({
   intersection: {
     sourceIds: ["pipe-source"],
   },
+  polygonEdge: true,
   multiSelect: {
     targetLayerIds: ["pipe-line"],
   },
@@ -49,11 +50,12 @@ await businessMap.plugins.dxfExport.downloadDxf();
 
 ## 聚合入口也暴露什么
 
-`vue-maplibre-kit/plugins` 同时重新导出五个单插件的工厂、常量和类型：
+`vue-maplibre-kit/plugins` 同时重新导出六个单插件的工厂、常量和类型：
 
 - `map-feature-snap`
 - `line-draft-preview`
 - `intersection-preview`
+- `polygon-edge-preview`
 - `map-feature-multi-select`
 - `map-dxf-export`
 

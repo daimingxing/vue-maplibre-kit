@@ -37,7 +37,7 @@ import { LINE_DRAFT_PREVIEW_SOURCE_ID } from '../plugins/line-draft-preview/useL
 import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/useLineDraftPreviewController';
 import {
   MapLineCorridorTool,
-  extractManagedPreviewOriginFromProperties,
+  extractGeneratedParentRef,
   createMapSourceFeatureRef,
   type MapCommonFeature,
   type MapCommonFeatureCollection,
@@ -419,7 +419,7 @@ export function useMapFeatureActions(
    */
   const resolveLineDraftGovernance = (featureId: MapFeatureId): LineDraftGovernance => {
     const lineDraftFeature = getLineDraftPreviewApi()?.getFeatureById(featureId) || null;
-    const originRef = extractManagedPreviewOriginFromProperties(lineDraftFeature?.properties || {});
+    const originRef = extractGeneratedParentRef(lineDraftFeature?.properties || {});
     const targetSource = originRef?.sourceId ? sourceRegistry.getSource(originRef.sourceId) : null;
 
     return {

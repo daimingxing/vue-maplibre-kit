@@ -60,6 +60,22 @@
               {{ intersectionScopeButtonText }}
             </ElButton>
           </mgl-custom-control>
+          <mgl-custom-control position="top-right" :noClasses="false">
+            <ElButton
+              style="background: white; width: 150px"
+              @click="generatePolygonEdgeDemo"
+            >
+              生成面边线
+            </ElButton>
+          </mgl-custom-control>
+          <mgl-custom-control position="top-right" :noClasses="false">
+            <ElButton
+              style="background: white; width: 150px"
+              @click="clearPolygonEdgeDemo"
+            >
+              清理面边线
+            </ElButton>
+          </mgl-custom-control>
         </template>
         <template #dataSource>
           <!--
@@ -174,7 +190,7 @@ import {
   type DxfSummaryOptions,
   type SelectionSummaryRow,
 } from "./components/NGGI00DemoPanel.shared";
-import { computed, ref, reactive } from "vue";
+import { computed, ref, reactive, shallowRef } from "vue";
 import mapGeojson from "./mock/map.geojson";
 import mapGeojson2 from "./mock/map2.geojson";
 import { ElButton, ElMessage } from "element-plus";
@@ -307,7 +323,7 @@ const test_geojson_secondary = ref<MapCommonFeatureCollection>(
  * 当前页面持有的地图组件公开实例引用。
  * 业务层所有地图操作都通过它与底层进行通信。
  */
-const mapInitRef = ref<BusinessKit.MapLibreInitExpose | null>(null);
+const mapInitRef = shallowRef<BusinessKit.MapLibreInitExpose | null>(null);
 
 /**
  * 核心：初始化地图基础配置。
@@ -1276,8 +1292,8 @@ const mapFeatureSnapOptions = {
     lineWidth: 4,
   },
 
-  // 普通业务图层吸附规则。
-  ordinaryLayers: {
+  // 业务图层吸附规则。
+  businessLayers: {
     enabled: true,
     rules: [
       {
@@ -1286,7 +1302,7 @@ const mapFeatureSnapOptions = {
         layerIds: [LAYER_IDS.primaryLine],
         priority: 30,
         snapTo: ["vertex", "segment"],
-        // filter示例，高级定制规则，返回fasle表示当前吸附规则失效
+        // filter 示例，高级定制规则，返回 false 表示当前吸附规则失效。
         // filter: (context) => {
         //   console.log('context', context);
         //   if (context.feature.id === 'line_2') {
@@ -1325,6 +1341,21 @@ const mapFeatureSnapOptions = {
     ],
   },
 
+  // 插件内置目标吸附规则。
+  // 面边线由 polygon-edge-preview 插件生成，snap.polygonEdge 只控制它是否参与吸附。
+  polygonEdge: {
+    enabled: true,
+    priority: 90,
+    snapTo: ["vertex", "segment"],
+  },
+
+  // 交点插件生成的点默认也可参与吸附，这里显式写出便于验证配置入口。
+  intersection: {
+    enabled: true,
+    priority: 110,
+    snapTo: ["vertex"],
+  },
+
   // TerraDraw / Measure 公共默认值。
   // 业务层只需要在控件里传 { enabled: true }，默认就会同时开启原生吸附与普通层候选吸附。
   terradraw: {
@@ -1336,6 +1367,34 @@ const mapFeatureSnapOptions = {
     },
   },
 } satisfies NonNullable<BusinessPluginsOptions["snap"]>;
+
+/**
+ * 面边线预览插件示例。
+ * 当前示例只把它作为验证入口，完整的按钮式演示见 NGGI12。
+ */
+const polygonEdgePreviewOptions = {
+  enabled: true,
+  style: {
+    normal: { color: "#409eff", width: 3, opacity: 0.9 },
+    hover: { color: "#f56c6c", width: 5, opacity: 1 },
+    selected: { color: "#e6a23c", width: 6, opacity: 1 },
+    highlighted: { color: "#67c23a", width: 5, opacity: 1 },
+  },
+  styleRules: [
+    {
+      where: {
+        id: "fill_2",
+      },
+      style: {
+        normal: { color: "#ff7a00", width: 4, opacity: 0.95 },
+        highlighted: { color: "#16a34a", width: 6, opacity: 1 },
+      },
+    },
+  ],
+  onClick: (context) => {
+    ElMessage.info(`已点击面边线：${context.edgeId || "未知边线"}`);
+  },
+} satisfies NonNullable<BusinessPluginsOptions["polygonEdge"]>;
 
 /**
  * DXF 导出插件：第一版只面向业务 source，不包含 TerraDraw / Measure / 手绘要素。
@@ -1677,6 +1736,7 @@ const mapPlugins = [
     snap: mapFeatureSnapOptions,
     lineDraft: lineDraftPreviewOptions,
     intersection: intersectionPreviewOptions,
+    polygonEdge: polygonEdgePreviewOptions,
     multiSelect: mapFeatureMultiSelectOptions,
     dxfExport: mapDxfExportOptions,
   }),
@@ -1718,6 +1778,12 @@ const lineDraftPreview = businessMap.plugins.lineDraft;
  * 业务层通过 businessMap.plugins.intersection 读取交点数量、切换范围和手动刷新。
  */
 const intersectionPreview = businessMap.plugins.intersection;
+
+/**
+ * 统一面边线分组。
+ * 业务层通过 businessMap.plugins.polygonEdge 生成、选择、高亮和清理临时边线。
+ */
+const polygonEdgePreview = businessMap.plugins.polygonEdge;
 
 /**
  * 统一 DXF 导出分组。
@@ -2266,6 +2332,58 @@ const toggleIntersectionPreviewScope = (): void => {
 
   const scopeText = nextScope === "all" ? "全量业务线求交" : "当前选中线求交";
   ElMessage.success(`已切换为${scopeText}，当前共 ${intersectionPreview.count.value} 个`);
+};
+
+/**
+ * 判断当前要素是否为面要素。
+ * @param feature 待判断要素
+ * @returns 是否为 Polygon 或 MultiPolygon
+ */
+const isPolygonFeature = (feature: unknown): feature is MapCommonFeature => {
+  return Boolean(
+    feature &&
+      typeof feature === "object" &&
+      "geometry" in feature &&
+      ((feature as MapCommonFeature).geometry.type === "Polygon" ||
+        (feature as MapCommonFeature).geometry.type === "MultiPolygon")
+  );
+};
+
+/**
+ * 在 NGGI00 综合验证页中生成面边线。
+ * 这里固定使用主业务源的 fill_2，避免综合页还需要先点击面要素。
+ */
+const generatePolygonEdgeDemo = (): void => {
+  const polygonFeature = primaryBusinessSource.resolveFeature("fill_2");
+  if (!isPolygonFeature(polygonFeature)) {
+    ElMessage.warning("未找到 fill_2 面要素，无法生成面边线");
+    return;
+  }
+
+  const result = polygonEdgePreview.generateFromFeature({
+    feature: polygonFeature,
+    origin: primaryBusinessSource.toFeatureRef("fill_2", LAYER_IDS.fill),
+  });
+
+  if (!result.success) {
+    ElMessage.warning(result.message);
+    return;
+  }
+
+  ElMessage.success(`已生成面边线：${result.edgeCount} 条`);
+};
+
+/**
+ * 清理 NGGI00 综合验证页中的面边线。
+ */
+const clearPolygonEdgeDemo = (): void => {
+  const success = polygonEdgePreview.clear();
+  if (!success) {
+    ElMessage.warning("面边线插件尚未初始化完成");
+    return;
+  }
+
+  ElMessage.success("已清理面边线");
 };
 
 /**
@@ -3059,7 +3177,7 @@ const getRawDemoMap = (): RawDemoMap | null => {
     return null;
   }
 
-  return rawMap;
+  return rawMap as RawDemoMap;
 };
 
 /**

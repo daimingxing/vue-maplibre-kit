@@ -8,6 +8,9 @@ import { createEmptyMapFeatureSnapResult } from './useMapFeatureSnapBinding';
 /** 统一地图吸附插件类型标识。 */
 export const MAP_FEATURE_SNAP_PLUGIN_TYPE = 'mapFeatureSnap';
 
+/** 吸附预览渲染优先级，确保吸附点和线段提示压在其他临时预览线之上。 */
+const SNAP_PREVIEW_RENDER_PRIORITY = 1000;
+
 /** 地图吸附插件描述对象。 */
 export interface MapFeatureSnapPluginDescriptor
   extends MapPluginDescriptor<typeof MAP_FEATURE_SNAP_PLUGIN_TYPE, MapFeatureSnapOptions> {}
@@ -34,6 +37,7 @@ export const mapFeatureSnapPlugin = defineMapPlugin({
       getRenderItems: () => [
         {
           id: context.descriptor.id,
+          renderPriority: SNAP_PREVIEW_RENDER_PRIORITY,
           component: MapFeatureSnapPreviewLayers,
           props: {
             enabled: pluginController.previewEnabled.value,

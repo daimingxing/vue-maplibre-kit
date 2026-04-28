@@ -97,6 +97,8 @@ export interface MapSelectionService {
 export interface MapPluginRenderItem {
   /** 当前渲染项唯一标识。 */
   id: string;
+  /** 渲染优先级；数值越大越靠后渲染，也就越容易显示在上层。 */
+  renderPriority?: number;
   /** 当前渲染项对应的组件。 */
   component: Component;
   /** 透传给组件的属性。 */

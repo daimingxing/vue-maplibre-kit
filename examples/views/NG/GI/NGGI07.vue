@@ -93,9 +93,9 @@ const plugins = createBusinessPlugins({
       // 5px 略粗于业务线宽，确保命中线段可见。
       lineWidth: 5,
     },
-    ordinaryLayers: {
+    businessLayers: {
       enabled: true,
-      // ordinaryLayers.rules 表示从普通业务图层中提取可吸附目标。
+      // businessLayers.rules 表示从业务图层中提取可吸附目标。
       // 如果项目还有自定义绘图图层，也可以继续扩展插件配置。
       rules: snapRules,
     },

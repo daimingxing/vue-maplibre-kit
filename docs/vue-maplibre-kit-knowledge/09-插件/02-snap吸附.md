@@ -1,6 +1,6 @@
 # snap 吸附
 
-snap 插件负责把绘制、测量和普通业务图层的吸附能力接入地图。推荐通过 `createBusinessPlugins({ snap: ... })` 注册，通过 `useBusinessMap().plugins.snap` 读取少量主动动作。
+snap 插件负责把绘制、测量、业务图层和插件内置目标的吸附能力接入地图。推荐通过 `createBusinessPlugins({ snap: ... })` 注册，通过 `useBusinessMap().plugins.snap` 读取少量主动动作。
 
 ## 推荐注册
 
@@ -37,9 +37,19 @@ const plugins = createBusinessPlugins({
       lineColor: "#2563eb",
       lineWidth: 5,
     },
-    ordinaryLayers: {
+    businessLayers: {
       enabled: true,
       rules: snapRules,
+    },
+    intersection: {
+      enabled: true,
+      priority: 110,
+      snapTo: ["vertex"],
+    },
+    polygonEdge: {
+      enabled: true,
+      priority: 90,
+      snapTo: ["vertex", "segment"],
     },
   },
 });
@@ -47,15 +57,19 @@ const plugins = createBusinessPlugins({
 
 ## 配置重点
 
-- `layerIds` 是业务预设提供的简写；未显式传 `ordinaryLayers` 时，会生成一条默认普通图层吸附规则。
+- `layerIds` 是业务预设提供的简写；未显式传 `businessLayers` 时，会生成一条默认业务图层吸附规则。
 - `defaultTolerancePx` 是全局默认吸附范围，规则级 `tolerancePx` 可以覆盖它。
 - `preview` 控制吸附点、命中线段的预览样式。
-- `ordinaryLayers.rules` 声明普通业务图层候选来源，每条规则可指定 `layerIds`、`geometryTypes`、`snapTo`、`priority`、`where` 和 `filter`。
+- `businessLayers.rules` 声明业务图层候选来源，每条规则可指定 `layerIds`、`geometryTypes`、`snapTo`、`priority`、`where` 和 `filter`。
+- `intersection` 控制交点插件内置点位是否参与吸附；传 `false` 或 `{ enabled: false }` 可以关闭。
+- `polygonEdge` 控制面边线临时预览线是否参与吸附；传 `false` 或 `{ enabled: false }` 可以关闭。
 - `terradraw.defaults`、`terradraw.draw`、`terradraw.measure` 用于绘图控件和测量控件的吸附公共配置。
+
+`ordinaryLayers` 是旧命名，目前仍可用作迁移期兼容字段。新代码和文档统一推荐 `businessLayers`。
 
 ## 交互行为
 
-snap 主要是注册型插件：业务页把规则传入 `plugins` 后，绘图和测量交互会在地图事件中即时使用吸附结果。普通业务图层吸附是否生效，取决于目标图层是否可查询、几何类型是否匹配、规则是否启用，以及指针位置是否在吸附容差内。
+snap 主要是注册型插件：业务页把规则传入 `plugins` 后，绘图和测量交互会在地图事件中即时使用吸附结果。业务图层吸附是否生效，取决于目标图层是否可查询、几何类型是否匹配、规则是否启用，以及指针位置是否在吸附容差内。
 
 ## 命令式动作
 
@@ -76,6 +90,6 @@ snap.resolveTerradrawSnapOptions("draw", true);
 
 ## 风险提示
 
-- `snap: true` 只启用基础能力，普通业务图层吸附通常还要提供 `layerIds` 或 `ordinaryLayers.rules`。
+- `snap: true` 只启用基础能力，业务图层吸附通常还要提供 `layerIds` 或 `businessLayers.rules`。
 - 规则优先级会影响重叠候选的命中结果；点、线、面同时存在时应显式配置 `priority`。
 - `filter` 是高级动态过滤能力，业务条件复杂时应保持函数逻辑可测试，避免把后端状态码含义写散在规则里。

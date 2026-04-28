@@ -92,9 +92,9 @@ function mergeSnapPreviewOptions(
 }
 
 /**
- * 合并普通图层吸附插件配置。
+ * 合并业务图层吸附插件配置。
  * 第一版只把适合做应用级默认值的字段接入全局配置；
- * ordinaryLayers 仍然保持实例级，避免把页面专属图层绑定信息提升到全局。
+ * businessLayers 仍然保持实例级，避免把页面专属图层绑定信息提升到全局。
  *
  * @param localOptions 实例局部插件配置
  * @returns 最终生效的吸附插件配置
@@ -111,6 +111,15 @@ function resolveMapFeatureSnapOptions(
     ...(globalDefaults || {}),
     ...(localOptions || {}),
     preview: mergeSnapPreviewOptions(globalDefaults?.preview, localOptions?.preview),
+    intersection:
+      localOptions?.intersection !== undefined
+        ? localOptions.intersection
+        : globalDefaults?.intersection,
+    polygonEdge:
+      localOptions?.polygonEdge !== undefined
+        ? localOptions.polygonEdge
+        : globalDefaults?.polygonEdge,
+    businessLayers: localOptions?.businessLayers || localOptions?.ordinaryLayers,
     ordinaryLayers: localOptions?.ordinaryLayers,
     terradraw:
       globalDefaults?.terradraw || localOptions?.terradraw

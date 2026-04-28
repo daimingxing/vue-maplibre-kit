@@ -6,6 +6,7 @@ import {
   type MapFeatureMultiSelectGlobalDefaults,
   type MapFeatureSnapGlobalDefaults,
   type MapKitGlobalConfig,
+  type PolygonEdgePreviewGlobalDefaults,
 } from '../../config';
 
 /** 全局样式默认值类型键。 */
@@ -64,6 +65,16 @@ export function getMapGlobalIntersectionDefaults():
   | IntersectionPreviewGlobalDefaults
   | undefined {
   return getMapGlobalConfig().plugins?.intersection;
+}
+
+/**
+ * 读取面边线预览插件全局默认配置。
+ * @returns 面边线预览插件全局默认配置
+ */
+export function getMapGlobalPolygonEdgeDefaults():
+  | PolygonEdgePreviewGlobalDefaults
+  | undefined {
+  return getMapGlobalConfig().plugins?.polygonEdge;
 }
 
 /**

@@ -149,6 +149,7 @@
 - 多选高级入口：`src/plugins/map-feature-multi-select.ts` 与 `src/MapLibre/plugins/map-feature-multi-select/*`
 - 交点预览高级入口：`src/plugins/intersection-preview.ts` 与 `src/MapLibre/plugins/intersection-preview/*`
 - 线草稿高级入口：`src/plugins/line-draft-preview.ts` 与 `src/MapLibre/plugins/line-draft-preview/*`
+- 面边线预览高级入口：`src/plugins/polygon-edge-preview.ts` 与 `src/MapLibre/plugins/polygon-edge-preview/*`
 
 如果需要联动宿主，再看：
 

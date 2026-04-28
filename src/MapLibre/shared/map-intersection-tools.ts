@@ -7,6 +7,7 @@ import type {
   MapCommonProperties,
   MapSourceFeatureRef,
 } from './map-common-tools';
+import { buildGeneratedFeatureProperties } from './map-common-tools';
 
 /** 坐标比较容差，避免浮点误差把端点交点误判成普通交点。 */
 const ENDPOINT_EPSILON = 1e-9;
@@ -433,6 +434,15 @@ export function buildIntersectionPointFeature(
   intersection: MapIntersectionPoint,
   extraProperties: MapCommonProperties = {}
 ): Feature<Point, MapCommonProperties> {
+  const generatedKind =
+    typeof extraProperties.generatedKind === 'string' ? extraProperties.generatedKind : null;
+  const generatedProperties = generatedKind
+    ? buildGeneratedFeatureProperties({
+        generatedKind,
+        groupId: `${generatedKind}::${intersection.intersectionId}`,
+      })
+    : {};
+
   return {
     type: 'Feature',
     id: intersection.intersectionId as MapFeatureId,
@@ -451,6 +461,7 @@ export function buildIntersectionPointFeature(
       rightFeatureId: intersection.rightRef.featureId,
       leftSegmentIndex: intersection.leftSegmentIndex,
       rightSegmentIndex: intersection.rightSegmentIndex,
+      ...generatedProperties,
       ...extraProperties,
     },
   };

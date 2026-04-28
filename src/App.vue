@@ -32,6 +32,7 @@ import NGGI08 from "../examples/views/NG/GI/NGGI08.vue";
 import NGGI09 from "../examples/views/NG/GI/NGGI09.vue";
 import NGGI10 from "../examples/views/NG/GI/NGGI10.vue";
 import NGGI11 from "../examples/views/NG/GI/NGGI11.vue";
+import NGGI12 from "../examples/views/NG/GI/NGGI12.vue";
 
 interface DemoItem {
   /** 示例唯一键。 */
@@ -55,6 +56,7 @@ const demoList: DemoItem[] = [
   { key: "NGGI09", label: "NGGI09 intersection", component: NGGI09 },
   { key: "NGGI10", label: "NGGI10 multi-select", component: NGGI10 },
   { key: "NGGI11", label: "NGGI11 dxf-export", component: NGGI11 },
+  { key: "NGGI12", label: "NGGI12 polygon-edge", component: NGGI12 },
 ];
 
 const activeKey = shallowRef("NGGI00");
