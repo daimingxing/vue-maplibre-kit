@@ -18,6 +18,7 @@
 - `useBusinessMap().plugins.polygonEdge` 暴露面边线插件能力。
 - 全局配置增加面边线插件默认样式。
 - `snap` 插件增加 `polygonEdge` 和 `intersection` 两个具名内置吸附目标配置。
+- `snap` 插件把现有 `ordinaryLayers` 命名收敛为 `businessLayers`，用于表达普通业务图层吸附。
 - 草稿线、线廊草稿、交点插件、面边线插件统一生成要素元数据字段。
 - 更新 `docs/vue-maplibre-kit-knowledge/11-全局配置` 和插件知识库。
 
@@ -228,6 +229,10 @@ setMapGlobalConfig({
 
 全局配置文档需要更新 `docs/vue-maplibre-kit-knowledge/11-全局配置`，尤其是插件默认值章节和索引。
 
+`plugins.snap` 全局配置只放应用级通用默认值，例如吸附容差、预览样式、TerraDraw / Measure 默认值，以及 `intersection`、`polygonEdge` 这类插件内置吸附目标默认值。普通业务图层吸附规则不放到全局配置中，因为业务图层 `layerId` 通常属于页面级 source / layer 绑定，提升到全局容易让不同业务页面互相污染。
+
+现有知识库中 `plugins.snap` 没有普通业务图层吸附示例，不是漏写示例，而是当前源码不支持把 `ordinaryLayers` 配到全局。本次实现需要把文档说清楚：普通业务图层吸附规则通过页面局部 `createBusinessPlugins({ snap: { businessLayers } })` 配置。
+
 ## 吸附配置
 
 `snap` 插件新增具名内置吸附目标配置，不使用 `builtInTargets`。
@@ -243,7 +248,7 @@ createBusinessPlugins({
     intersection: {
       enabled: true
     },
-    ordinaryLayers: {
+    businessLayers: {
       enabled: true,
       rules: []
     }
@@ -254,9 +259,16 @@ createBusinessPlugins({
 
 `snap.polygonEdge` 表示面边线临时图层是否参与吸附，以及它的内置吸附规则配置。`createBusinessPlugins` 顶层 `polygonEdge` 表示是否注册面边线插件，两者含义不同。
 
+`businessLayers` 表示普通业务图层吸附。它替代当前实现里的 `ordinaryLayers` 命名，原因是项目里业务 source、业务 layer 已经统一使用 business 语义，`ordinary` 既不够直观，也和现有命名体系不一致。项目尚未发布，本次可以直接把公开配置命名收敛到 `businessLayers`。如实现阶段需要降低内部迁移风险，可以只在内部短期兼容旧字段，公开文档和新测试统一使用 `businessLayers`。
+
 类型建议：
 
 ```ts
+businessLayers?: {
+  enabled?: boolean;
+  rules: MapFeatureSnapRule[];
+};
+
 polygonEdge?: boolean | {
   enabled?: boolean;
   priority?: number;
@@ -279,6 +291,7 @@ intersection?: boolean | {
 
 - 启用 `snap` 后，`intersection` 默认参与吸附。
 - 启用 `snap` 且注册 `polygonEdge` 后，面边线默认参与吸附。
+- 普通业务图层吸附需要页面局部提供 `businessLayers.rules` 或业务预设简写 `layerIds`。
 - 业务可通过 `snap.polygonEdge.enabled = false` 关闭边线吸附。
 
 ## 公开入口
@@ -339,6 +352,8 @@ intersection?: boolean | {
 - hover、selected、highlighted 状态优先级。
 - `snap.polygonEdge` 默认启用和显式关闭。
 - `snap.intersection` 从强制内置规则迁移为具名配置后仍默认启用。
+- `snap.businessLayers` 替代 `snap.ordinaryLayers`，页面局部普通业务图层吸附仍可正常命中。
+- `plugins.snap` 全局配置不接收业务图层规则，避免页面专属 layerId 进入应用级默认值。
 - 草稿线、线廊草稿、交点插件写入统一生成字段。
 - 旧字段兼容读取不破坏 `useMapFeatureActions`、属性编辑和选中查询。
 
@@ -364,7 +379,7 @@ intersection?: boolean | {
 - `docs/vue-maplibre-kit-knowledge/02-公开入口/03-plugins插件入口.md`：增加 `polygonEdge`。
 - `docs/vue-maplibre-kit-knowledge/02-公开入口/06-插件子路径.md`：增加高级入口。
 - `docs/vue-maplibre-kit-knowledge/09-插件`：新增面边线插件文档，并调整 snap 文档。
-- `docs/vue-maplibre-kit-knowledge/11-全局配置`：增加 `plugins.polygonEdge` 全局样式配置。
+- `docs/vue-maplibre-kit-knowledge/11-全局配置`：增加 `plugins.polygonEdge` 全局样式配置，并明确 `plugins.snap` 全局配置不包含普通业务图层规则。
 - 示例页说明继续强调 `createBusinessPlugins()` 注册和 `useBusinessMap().plugins.*` 读取。
 
 ## 验收标准
@@ -376,5 +391,7 @@ intersection?: boolean | {
 - 面边线不会写回正式业务 source。
 - 面边线默认可被 snap 插件吸附，且可通过 `snap.polygonEdge.enabled = false` 关闭。
 - 交点吸附配置收敛为 `snap.intersection` 后保持默认可吸附。
+- 普通业务图层吸附公开配置命名为 `snap.businessLayers`，不再使用 `ordinaryLayers` 作为推荐文档名称。
+- 全局 `plugins.snap` 文档明确说明普通业务图层规则应放在页面局部配置，而不是全局配置。
 - 草稿线、线廊草稿、交点插件和面边线插件生成要素均写入统一元数据字段。
 - 现有草稿线、交点、属性编辑、选中查询和吸附测试不回退。
