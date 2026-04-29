@@ -13,9 +13,13 @@ describe('map-layer-style-config', () => {
 
   it('无全局配置时应保持现有默认样式行为', () => {
     const lineStyle = createLineLayerStyle();
+    const linePaint = lineStyle.paint;
+    if (!linePaint) {
+      throw new Error('线图层默认样式缺少 paint，无法继续断言');
+    }
 
-    expect(lineStyle.paint['line-color']).toBe('#0000ff');
-    expect(lineStyle.paint['line-width']).toBe(3);
+    expect(linePaint['line-color']).toBe('#0000ff');
+    expect(linePaint['line-width']).toBe(3);
   });
 
   it('应先继承全局样式，再应用当前工厂局部覆写', () => {
@@ -35,9 +39,13 @@ describe('map-layer-style-config', () => {
         'line-width': 7,
       },
     });
+    const linePaint = lineStyle.paint;
+    if (!linePaint) {
+      throw new Error('线图层合并样式缺少 paint，无法继续断言');
+    }
 
-    expect(lineStyle.paint['line-color']).toBe('#1677ff');
-    expect(lineStyle.paint['line-width']).toBe(7);
+    expect(linePaint['line-color']).toBe('#1677ff');
+    expect(linePaint['line-width']).toBe(7);
   });
 
   it('不同图层类型应只读取自己对应的全局 style defaults', () => {
@@ -56,8 +64,13 @@ describe('map-layer-style-config', () => {
       },
     });
 
-    expect(createCircleLayerStyle().paint['circle-radius']).toBe(9);
-    expect(createRasterLayerStyle().paint['raster-opacity']).toBe(0.4);
+    const circlePaint = createCircleLayerStyle().paint;
+    const rasterPaint = createRasterLayerStyle().paint;
+    if (!circlePaint || !rasterPaint) {
+      throw new Error('图层类型默认样式缺少 paint，无法继续断言');
+    }
+
+    expect(circlePaint['circle-radius']).toBe(9);
+    expect(rasterPaint['raster-opacity']).toBe(0.4);
   });
 });
-

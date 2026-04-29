@@ -155,6 +155,9 @@ describe("NGGI00DemoPanel.shared", () => {
     expect(feature.properties?.id).toBe("intersection-a-b");
     expect(feature.properties?.generatedKind).toBe("intersection-materialized");
     expect(feature.properties?.leftFeatureId).toBe("line-a");
-    expect(feature.geometry.coordinates).toEqual([121.5, 31.2]);
+    expect(feature.geometry?.type === "Point" ? feature.geometry.coordinates : null).toEqual([
+      121.5,
+      31.2,
+    ]);
   });
 });

@@ -1,5 +1,6 @@
 import { shallowRef } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
+import type { FeatureCollection } from 'geojson';
 import { useMapLayerActions } from './useMapLayerActions';
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
 
@@ -65,7 +66,7 @@ describe('useMapLayerActions', () => {
       setPaintProperty: vi.fn(),
     };
     const actions = useMapLayerActions(shallowRef(createMapExpose(rawMap)));
-    const data = {
+    const data: FeatureCollection = {
       type: 'FeatureCollection',
       features: [],
     };

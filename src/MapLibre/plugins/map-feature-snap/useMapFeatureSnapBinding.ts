@@ -1,4 +1,4 @@
-import type { FeatureCollection, Geometry } from 'geojson';
+import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import type { Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
 import { ref } from 'vue';
 import type { TerraDrawMouseEvent } from 'terra-draw';
@@ -25,22 +25,16 @@ type ResolvedMapFeatureSnapRule = MapFeatureSnapRule & {
   id: string;
 };
 
-interface SnapFeatureLike {
-  /** GeoJSON 要素类型。 */
-  type: 'Feature';
-  /** 要素 ID。 */
-  id?: string | number;
-  /** 要素属性。 */
-  properties?: Record<string, any> | null;
-  /** 要素几何。 */
-  geometry: Geometry;
+type SnapFeatureBase = Feature<Geometry, Record<string, any> | null>;
+
+type SnapFeatureLike = SnapFeatureBase & {
   /** MapLibre 渲染要素 source ID。 */
   source?: string;
   /** MapLibre 渲染要素 source-layer。 */
   sourceLayer?: string;
   /** MapLibre 渲染要素所在图层。 */
   layer?: { id?: string };
-}
+};
 
 interface SnapCandidate {
   rule: ResolvedMapFeatureSnapRule;

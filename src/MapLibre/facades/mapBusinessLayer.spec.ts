@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import type { LineLayerSpecification } from 'maplibre-gl';
 import { resetMapGlobalConfig, setMapGlobalConfig } from '../../config';
 import { resolveMapBusinessLayerStyle } from './mapBusinessLayer';
 
@@ -23,7 +24,7 @@ describe('mapBusinessLayer', () => {
       layerId: 'line-layer',
     });
 
-    expect(style.paint['line-color']).toBe('#1677ff');
+    expect((style.paint as LineLayerSpecification['paint'])?.['line-color']).toBe('#1677ff');
   });
 
   it('显式传入完整 layer.style 时应视为页面完全接管，不叠加全局 style', () => {
@@ -60,4 +61,3 @@ describe('mapBusinessLayer', () => {
     });
   });
 });
-

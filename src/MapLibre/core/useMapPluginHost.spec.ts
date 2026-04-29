@@ -47,7 +47,7 @@ function createHostHarness(descriptors: AnyMapPluginDescriptor[] | (() => AnyMap
   });
 
   return {
-    host: host as ReturnType<typeof useMapPluginHost>,
+    host: host as unknown as ReturnType<typeof useMapPluginHost>,
     scope,
   };
 }
@@ -304,7 +304,7 @@ describe('useMapPluginHost', () => {
               get value() {
                 throw error;
               },
-            },
+            } as any,
           }),
         },
       }),

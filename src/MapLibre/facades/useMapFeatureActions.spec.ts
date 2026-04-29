@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createMapLibreRawHandles,
@@ -135,7 +135,8 @@ function createMapExpose(lineDraftApi: LineDraftPreviewPluginApi): MapLibreInitE
   } as MapInstance;
   const pluginHost: MapPluginHostExpose = {
     has: (pluginId) => pluginId === 'lineDraftPreview',
-    getApi: (pluginId) => (pluginId === 'lineDraftPreview' ? lineDraftApi : null),
+    getApi: <TApi = unknown>(pluginId: string) =>
+      pluginId === 'lineDraftPreview' ? (lineDraftApi as unknown as TApi) : null,
     getState: () => null,
     list: () => [
       {
@@ -186,7 +187,7 @@ describe('useMapFeatureActions', () => {
     });
     const sourceRegistry = createSourceRegistry([businessLine]);
     const featureActions = useMapFeatureActions({
-      mapRef: ref(
+      mapRef: shallowRef(
         createMapExpose(
           createLineDraftApi({
             previewLine,
@@ -242,7 +243,7 @@ describe('useMapFeatureActions', () => {
     const sourceRegistry = createSourceRegistry([businessLine]);
     const replaceFeatures = vi.spyOn(sourceRegistry, 'replaceFeatures');
     const featureActions = useMapFeatureActions({
-      mapRef: ref(
+      mapRef: shallowRef(
         createMapExpose(
           createLineDraftApi({
             replacePreviewRegion,

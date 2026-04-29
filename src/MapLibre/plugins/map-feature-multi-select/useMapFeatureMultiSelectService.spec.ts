@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick, ref } from 'vue';
 import { resetMapGlobalConfig, setMapGlobalConfig } from '../../../config';
+import type { MapFeatureMultiSelectOptions } from './types';
 import { useMapFeatureMultiSelectService } from './useMapFeatureMultiSelectService';
 
 describe('useMapFeatureMultiSelectService', () => {
@@ -45,7 +46,7 @@ describe('useMapFeatureMultiSelectService', () => {
   });
 
   it('destroy 后应解绑当前交互控制器并停止配置监听', async () => {
-    const optionsRef = ref({
+    const optionsRef = ref<MapFeatureMultiSelectOptions>({
       enabled: true,
       deactivateBehavior: 'clear' as const,
     });

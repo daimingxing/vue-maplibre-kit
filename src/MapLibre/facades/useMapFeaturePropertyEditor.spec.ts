@@ -1,10 +1,9 @@
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 import { describe, expect, it } from 'vitest';
 import type {
   MaplibreMeasureControl,
   MaplibreTerradrawControl,
 } from '@watergis/maplibre-gl-terradraw';
-import type { TerraDraw } from 'terra-draw';
 import type { FeatureProperties, MapFeatureId } from '../composables/useMapDataUpdate';
 import {
   createMapLibreRawHandles,
@@ -39,7 +38,11 @@ import { useMapFeaturePropertyEditor } from './useMapFeaturePropertyEditor';
 const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
 
 /** TerraDraw 测试替身统一使用的最小实例形状。 */
-type TerradrawStub = Pick<TerraDraw, 'hasFeature' | 'getSnapshotFeature' | 'updateFeatureProperties'>;
+interface TerradrawStub {
+  hasFeature: (featureId: MapFeatureId) => boolean;
+  getSnapshotFeature: (featureId: MapFeatureId) => TerradrawFeature | null;
+  updateFeatureProperties: (featureId: MapFeatureId, patch: FeatureProperties) => void;
+}
 
 /**
  * 创建测试用点要素。
@@ -140,7 +143,7 @@ function createDrawControlStub(
 
   const control = {
     getTerraDrawInstance: () => terradraw,
-  } satisfies Pick<MaplibreTerradrawControl, 'getTerraDrawInstance'>;
+  };
 
   return control as unknown as MaplibreTerradrawControl;
 }
@@ -162,7 +165,7 @@ function createMeasureControlStub(
 
   const control = {
     getTerraDrawInstance: () => terradraw,
-  } satisfies Pick<MaplibreMeasureControl, 'getTerraDrawInstance'>;
+  };
 
   return control as unknown as MaplibreMeasureControl;
 }
@@ -399,7 +402,7 @@ describe('useMapFeaturePropertyEditor', () => {
   it('map 目标可以统一保存单个属性键', () => {
     const { source, sourceRegistry } = createBusinessSourceHarness();
     const propertyEditor = useMapFeaturePropertyEditor({
-      mapRef: ref(createMapExpose()),
+      mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
 
@@ -423,7 +426,7 @@ describe('useMapFeaturePropertyEditor', () => {
   it('map 目标可以统一删除单个属性键', () => {
     const { source, sourceRegistry } = createBusinessSourceHarness();
     const propertyEditor = useMapFeaturePropertyEditor({
-      mapRef: ref(createMapExpose()),
+      mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
 
@@ -444,7 +447,7 @@ describe('useMapFeaturePropertyEditor', () => {
   it('map 目标会按图层 propertyPolicy 阻止固定字段删除', () => {
     const { source, sourceRegistry } = createBusinessSourceHarness();
     const propertyEditor = useMapFeaturePropertyEditor({
-      mapRef: ref(createMapExpose()),
+      mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
 
@@ -468,7 +471,7 @@ describe('useMapFeaturePropertyEditor', () => {
     const { source, sourceRegistry } = createBusinessSourceHarness();
     const lineDraftHarness = createLineDraftApi(source);
     const propertyEditor = useMapFeaturePropertyEditor({
-      mapRef: ref(createMapExpose(lineDraftHarness.api)),
+      mapRef: shallowRef(createMapExpose(lineDraftHarness.api)),
       sourceRegistry,
     });
 
@@ -514,7 +517,7 @@ describe('useMapFeaturePropertyEditor', () => {
       geometry: null,
     } as unknown as TerradrawFeature);
     const propertyEditor = useMapFeaturePropertyEditor({
-      mapRef: ref(createMapExpose(null, drawHarness.terradraw, measureHarness.terradraw)),
+      mapRef: shallowRef(createMapExpose(null, drawHarness.terradraw, measureHarness.terradraw)),
       sourceRegistry,
     });
 
@@ -554,7 +557,7 @@ describe('useMapFeaturePropertyEditor', () => {
   it('底层动作失败时会保留现有错误消息语义', () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const propertyEditor = useMapFeaturePropertyEditor({
-      mapRef: ref(createMapExpose()),
+      mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
 

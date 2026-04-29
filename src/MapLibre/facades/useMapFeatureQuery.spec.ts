@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 import { describe, expect, it } from 'vitest';
 import {
   createMapLibreRawHandles,
@@ -237,7 +237,7 @@ describe('useMapFeatureQuery', () => {
   it('toBusinessContext 会优先解析最新业务要素并保留选择态信息', () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const featureQuery = useMapFeatureQuery({
-      mapRef: ref(createMapExpose()),
+      mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
     const staleFeature = createPointFeature('feature-1', {
@@ -293,7 +293,7 @@ describe('useMapFeatureQuery', () => {
   it('toBusinessContext 在无法解析最新要素时会回退到原始上下文快照', () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const featureQuery = useMapFeatureQuery({
-      mapRef: ref(createMapExpose()),
+      mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
     const rawFeature = createLineFeature('temp-line', {
@@ -329,7 +329,7 @@ describe('useMapFeatureQuery', () => {
   it('toBusinessContext 在命中面要素时会正确标记 geometryType 与 isPolygon', () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const featureQuery = useMapFeatureQuery({
-      mapRef: ref(createMapExpose()),
+      mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
     const staleFeature = createPolygonFeature('polygon-1', {
@@ -363,7 +363,7 @@ describe('useMapFeatureQuery', () => {
   it('toBusinessContext 在空白点击时会返回结构化空结果', () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const featureQuery = useMapFeatureQuery({
-      mapRef: ref(createMapExpose()),
+      mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
 
@@ -388,7 +388,7 @@ describe('useMapFeatureQuery', () => {
   it('toSelectionBusinessContext 会优先解析最新业务要素并在失败时回退到选中快照', () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const featureQuery = useMapFeatureQuery({
-      mapRef: ref(createMapExpose()),
+      mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
     const resolvedSnapshot = createPointFeature('feature-1', {
@@ -465,7 +465,7 @@ describe('useMapFeatureQuery', () => {
       generatedKind: 'intersection-materialized',
     });
     const featureQuery = useMapFeatureQuery({
-      mapRef: ref(
+      mapRef: shallowRef(
         createMapExpose({
           selectedMapFeatureContext: () =>
             ({

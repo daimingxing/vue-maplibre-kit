@@ -80,10 +80,16 @@ describe('useLineDraftPreviewController', () => {
       clearPluginSelectedFeature: () => undefined,
     });
 
-    expect(controller.lineStyle.value.paint['line-blur']).toBe(2);
-    expect(controller.lineStyle.value.paint['line-opacity']).toBe(0.6);
-    expect(controller.fillStyle.value.paint['fill-opacity']).toBe(0.7);
-    expect(controller.fillStyle.value.paint['fill-color']).toBe('#1677ff');
+    const linePaint = controller.lineStyle.value.paint;
+    const fillPaint = controller.fillStyle.value.paint;
+    if (!linePaint || !fillPaint) {
+      throw new Error('线草稿样式缺少 paint，无法继续断言');
+    }
+
+    expect(linePaint['line-blur']).toBe(2);
+    expect(linePaint['line-opacity']).toBe(0.6);
+    expect(fillPaint['fill-opacity']).toBe(0.7);
+    expect(fillPaint['fill-color']).toBe('#1677ff');
   });
 
   it('destroy 后应停止状态监听和启用状态清理监听', async () => {

@@ -3,6 +3,8 @@ import { renderToString } from 'vue/server-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type UseMapEffectResult, useMapEffect } from './useMapEffect';
 
+type FeatureStateCall = [{ id?: string | number }, { isFlashing?: unknown }];
+
 /** 创建测试用闪烁目标。 */
 function createFlashTarget(id: string | number) {
   return {
@@ -16,9 +18,11 @@ function getFeatureFlashHistory(
   setFeatureState: ReturnType<typeof vi.fn>,
   featureId: string | number
 ): boolean[] {
-  return setFeatureState.mock.calls
-    .filter(([target]) => target?.id === featureId)
-    .map(([, state]) => Boolean(state?.isFlashing));
+  const calls = setFeatureState.mock.calls as FeatureStateCall[];
+
+  return calls
+    .filter((call) => call[0]?.id === featureId)
+    .map((call) => Boolean(call[1]?.isFlashing));
 }
 
 /**

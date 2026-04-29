@@ -31,11 +31,11 @@ export interface UseMapInteractiveOptions {
   /** 获取当前普通图层选择服务 */
   getSelectionService?: () => MapSelectionService | null | undefined;
   /** 判断当前指针事件是否应被外部绘制/测量语义接管。 */
-  shouldIgnorePointerEvent?: (
-    event: MapMouseEvent,
-    eventType: MapLayerInteractiveEventType
-  ) => boolean;
+  shouldIgnorePointerEvent?: PointerEventGuard;
 }
+
+/** 普通图层指针事件拦截判断函数。 */
+type PointerEventGuard = (event: MapMouseEvent, eventType: MapLayerInteractiveEventType) => boolean;
 
 interface HoveredLayerTarget {
   feature: MapGeoJSONFeature;
@@ -330,9 +330,7 @@ function createMapInteractiveBinding(
   getInteractive: () => MapLayerInteractiveOptions | null | undefined,
   getSnapBinding?: (() => MapSnapBinding | null | undefined) | undefined,
   getSelectionService?: (() => MapSelectionService | null | undefined) | undefined,
-  shouldIgnorePointerEvent?:
-    | ((event: MapMouseEvent, eventType: MapLayerInteractiveEventType) => boolean)
-    | undefined
+  shouldIgnorePointerEvent?: PointerEventGuard
 ): MapInteractiveBinding {
   const selectionService = getSelectionService?.() || null;
   let hoveredTarget: HoveredLayerTarget | null = null;

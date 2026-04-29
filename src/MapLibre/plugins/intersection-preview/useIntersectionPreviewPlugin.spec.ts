@@ -17,6 +17,17 @@ import {
   type IntersectionPreviewPluginDescriptor,
 } from './useIntersectionPreviewPlugin';
 
+type IntersectionRenderProps = {
+  sourceId?: string;
+  materializedSourceId?: string;
+  style: {
+    paint: Record<string, any>;
+  };
+  materializedStyle: {
+    paint: Record<string, any>;
+  };
+};
+
 vi.mock('vue-maplibre-gl', () => ({
   MglCircleLayer: {
     name: 'MglCircleLayer',
@@ -93,6 +104,17 @@ function createPluginOptions(): IntersectionPreviewOptions {
         ref: createFeatureRef('line-b'),
       },
     ],
+  };
+}
+
+/**
+ * 创建测试用插件配置引用，避免 Vue ref 对复杂插件配置做过深类型展开。
+ * @param options 插件配置
+ * @returns 插件配置引用
+ */
+function createOptionsRef(options: IntersectionPreviewOptions = createPluginOptions()): { value: IntersectionPreviewOptions } {
+  return {
+    value: options,
   };
 }
 
@@ -182,7 +204,7 @@ function createPluginContext(
 
 describe('intersectionPreviewPlugin', () => {
   it('应在插件内部同时声明预览层与正式交点层，并通过插件专用交互通道暴露图层交互', () => {
-    const optionsRef = ref(createPluginOptions());
+    const optionsRef = createOptionsRef();
     const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
     const renderItems = pluginInstance.getRenderItems?.() || [];
     const patch = pluginInstance.getMapInteractivePatch?.();
@@ -202,7 +224,7 @@ describe('intersectionPreviewPlugin', () => {
   });
 
   it('点击预览交点后应自动生成正式点要素', () => {
-    const optionsRef = ref(createPluginOptions());
+    const optionsRef = createOptionsRef();
     const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
     const pluginApi = pluginInstance.getApi?.();
     if (!pluginApi) {
@@ -229,7 +251,7 @@ describe('intersectionPreviewPlugin', () => {
   });
 
   it('预览点与正式点共存时，选中正式点应返回正式点上下文，并支持显式分层查询', () => {
-    const optionsRef = ref(createPluginOptions());
+    const optionsRef = createOptionsRef();
     const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
     const pluginApi = pluginInstance.getApi?.();
     if (!pluginApi) {
@@ -270,7 +292,7 @@ describe('intersectionPreviewPlugin', () => {
   });
 
   it('selected 模式下切换选中线后应自动刷新交点', () => {
-    const optionsRef = ref<IntersectionPreviewOptions>({
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
       scope: 'selected',
     });
@@ -297,7 +319,7 @@ describe('intersectionPreviewPlugin', () => {
   });
 
   it('selected 模式下切到插件内部交点图层时不应清空当前预览', () => {
-    const optionsRef = ref<IntersectionPreviewOptions>({
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
       scope: 'selected',
     });
@@ -333,7 +355,7 @@ describe('intersectionPreviewPlugin', () => {
   });
 
   it('未传 getCandidates 时应自动从 sourceRegistry 提取目标线', () => {
-    const optionsRef = ref<IntersectionPreviewOptions>({
+    const optionsRef = createOptionsRef({
       enabled: true,
       visible: true,
       scope: 'all',
@@ -352,7 +374,7 @@ describe('intersectionPreviewPlugin', () => {
   });
 
   it('应允许覆写预览层和正式交点层样式', () => {
-    const optionsRef = ref<IntersectionPreviewOptions>({
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
       previewStyleOverrides: {
         paint: {
@@ -368,7 +390,7 @@ describe('intersectionPreviewPlugin', () => {
 
     const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
     const renderItems = pluginInstance.getRenderItems?.() || [];
-    const renderProps = renderItems[0]?.props;
+    const renderProps = renderItems[0]?.props as IntersectionRenderProps;
 
     expect(renderProps.style.paint['circle-color']).toBe('#111111');
     expect(renderProps.materializedStyle.paint['circle-radius']).toBe(12);
@@ -398,7 +420,7 @@ describe('intersectionPreviewPlugin', () => {
       },
     });
 
-    const optionsRef = ref<IntersectionPreviewOptions>({
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
       previewStyleOverrides: {
         paint: {
@@ -409,7 +431,7 @@ describe('intersectionPreviewPlugin', () => {
 
     const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
     const renderItems = pluginInstance.getRenderItems?.() || [];
-    const renderProps = renderItems[0]?.props;
+    const renderProps = renderItems[0]?.props as IntersectionRenderProps;
 
     expect(renderProps.style.paint['circle-color']).toBe('#111111');
     expect(renderProps.style.paint['circle-radius']).toBe(8);
@@ -418,7 +440,7 @@ describe('intersectionPreviewPlugin', () => {
   });
 
   it('应支持通过状态样式配置覆写交点 selected 颜色', () => {
-    const optionsRef = ref<IntersectionPreviewOptions>({
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
       previewStateStyles: {
         selected: {
@@ -434,7 +456,7 @@ describe('intersectionPreviewPlugin', () => {
 
     const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
     const renderItems = pluginInstance.getRenderItems?.() || [];
-    const renderProps = renderItems[0]?.props;
+    const renderProps = renderItems[0]?.props as IntersectionRenderProps;
 
     expect(renderProps.style.paint['circle-color'][2]).toBe('#ffcc00');
     expect(renderProps.materializedStyle.paint['circle-color'][2]).toBe('#00aaff');
@@ -443,7 +465,7 @@ describe('intersectionPreviewPlugin', () => {
   it('应支持交点 hover enter / leave 回调，并通过插件交互配置触发', () => {
     const onHoverEnter = vi.fn();
     const onHoverLeave = vi.fn();
-    const optionsRef = ref<IntersectionPreviewOptions>({
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
       onHoverEnter,
       onHoverLeave,

@@ -131,24 +131,6 @@ function extractFirstPoint(content: string): [number, number, number] {
 }
 
 /**
- * 提取 DXF 文本中的首个圆实体坐标。
- * @param content DXF 文本
- * @returns 圆实体圆心坐标
- */
-function extractFirstCircleCenter(content: string): [number, number, number] {
-  const matchResult = content.match(/0\nCIRCLE[\s\S]*?\n10\n([^\n]+)\n20\n([^\n]+)\n30\n([^\n]+)/);
-  if (!matchResult) {
-    throw new Error('未找到圆实体');
-  }
-
-  return [
-    Number(matchResult[1]),
-    Number(matchResult[2]),
-    Number(matchResult[3]),
-  ];
-}
-
-/**
  * 判断 DXF 文本中是否存在指定图层名的实体引用。
  * @param content DXF 文本
  * @param layerName 图层名
@@ -1032,4 +1014,3 @@ describe('exportBusinessSourcesToDxf', () => {
     ).toThrowError('当前没有可导出的业务要素');
   });
 });
-

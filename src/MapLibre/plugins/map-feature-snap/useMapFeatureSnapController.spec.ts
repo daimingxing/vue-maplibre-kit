@@ -35,9 +35,15 @@ describe('useMapFeatureSnapController', () => {
       getMap: () => null,
     });
 
-    expect(controller.previewPointStyle.value.paint['circle-color']).toBe('#1677ff');
-    expect(controller.previewLineStyle.value.paint['line-color']).toBe('#ff4d4f');
-    expect(controller.previewLineStyle.value.paint['line-width']).toBe(6);
+    const pointPaint = controller.previewPointStyle.value.paint;
+    const linePaint = controller.previewLineStyle.value.paint;
+    if (!pointPaint || !linePaint) {
+      throw new Error('吸附预览样式缺少 paint，无法继续断言');
+    }
+
+    expect(pointPaint['circle-color']).toBe('#1677ff');
+    expect(linePaint['line-color']).toBe('#ff4d4f');
+    expect(linePaint['line-width']).toBe(6);
   });
 
   it('resolveTerradrawSnapOptions 应按 全局默认 -> 控件默认 -> 实例局部 覆写合并', () => {
