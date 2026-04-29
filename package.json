@@ -70,7 +70,8 @@
     "dev": "vite",
     "build": "vite build && vue-tsc -p tsconfig.build.json",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ts:check": "npx vue-tsc -p tsconfig.app.json --noEmit --pretty false && npx vue-tsc -p tsconfig.build.json --noEmit --pretty false"
   },
   "dependencies": {
     "@tarikjabiri/dxf": "^2.8.9",
