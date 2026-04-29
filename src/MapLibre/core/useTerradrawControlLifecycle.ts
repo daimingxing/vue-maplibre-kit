@@ -144,7 +144,7 @@ export function useTerradrawControlLifecycle<
 
   /**
    * 提取控件实例启停所需的最小依赖。
-   * 控件创建后不会根据其余配置做热更新，因此这里只跟踪地图就绪态与 isUse 开关。
+   * 构造期配置变化不会触发控件重建，避免清空临时绘制/测量数据。
    * @returns 控件实例启停依赖快照
    */
   const getControlMountWatchSource = () => ({

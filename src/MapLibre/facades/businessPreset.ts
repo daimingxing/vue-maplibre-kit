@@ -12,7 +12,6 @@ import {
   type PolygonEdgePreviewOptions,
 } from '../plugins/polygon-edge-preview';
 import type { MapPluginDescriptor } from '../plugins/types';
-import type { MapControlsConfig } from '../shared/mapLibre-controls-types';
 import {
   createCircleLayerStyle,
   createFillLayerStyle,
@@ -93,9 +92,6 @@ export interface LayerGroupOptions {
   /** 子图层声明列表。 */
   layers: LayerGroupItem[];
 }
-
-/** 控件预设名称。 */
-export type MapControlsPresetName = 'minimal' | 'basic' | 'draw' | 'full';
 
 /** 吸附插件简写配置。 */
 export interface BusinessSnapPresetOptions extends Partial<MapFeatureSnapOptions> {
@@ -207,48 +203,6 @@ export function createLayerGroup(options: LayerGroupOptions): MapBusinessLayerDe
         return createCircleBusinessLayer(base as Parameters<typeof createCircleBusinessLayer>[0]);
     }
   });
-}
-
-/**
- * 创建地图控件预设。
- * @param preset 预设名称
- * @param overrides 局部覆盖配置
- * @returns 现有 MapControlsConfig 配置对象
- */
-export function createMapControlsPreset(
-  preset: MapControlsPresetName,
-  overrides: Partial<MapControlsConfig> = {}
-): MapControlsConfig {
-  const presetMap: Record<MapControlsPresetName, MapControlsConfig> = {
-    minimal: {
-      MglNavigationControl: {},
-      MglScaleControl: {},
-    },
-    basic: {
-      MglNavigationControl: {},
-      MglFullscreenControl: {},
-      MglScaleControl: {},
-      MaplibreTerradrawControl: {},
-    },
-    draw: {
-      MglNavigationControl: {},
-      MaplibreTerradrawControl: {},
-      MaplibreMeasureControl: {},
-    },
-    full: {
-      MglNavigationControl: {},
-      MglFullscreenControl: {},
-      MglGeolocationControl: {},
-      MglScaleControl: {},
-      MaplibreTerradrawControl: {},
-      MaplibreMeasureControl: {},
-    },
-  };
-
-  return {
-    ...presetMap[preset],
-    ...overrides,
-  };
 }
 
 /**

@@ -11,15 +11,17 @@
 TerraDraw 绘图控件和测量控件可以在 controls 中声明 `propertyPolicy`。
 
 ```ts
-const controls = createMapControlsPreset("draw", {
-  MaplibreTerradrawControl: {
+import type { MapControlsConfig } from "vue-maplibre-kit/business";
+
+const controls: MapControlsConfig = {
+  MaplibreMeasureControl: {
     isUse: true,
     propertyPolicy: {
       readonlyKeys: ["id"],
       removableKeys: ["remark"],
     },
   },
-});
+};
 ```
 
 这套规则只作用于 TerraDraw / Measure 要素，不会自动影响正式业务 source。

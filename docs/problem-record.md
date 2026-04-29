@@ -1,3 +1,15 @@
+## 2026-04-29 Popup 与 TerraDraw 配置热更新记录
+
+- 状态：已解决
+- 问题：`MglPopup` 初始创建后没有响应 `options` 变化，业务运行时修改 `closeButton`、`closeOnClick`、`maxWidth` 等配置不会同步到原生 Popup。
+- 处理：把 Popup 生命周期抽到 `useMglPopupLifecycle()`，监听 `options` 变化后重建原生 Popup，并在内部重建时屏蔽 `close` 事件向外同步，避免误改 `v-model:visible`。
+- 经验：MapLibre Popup 的部分配置涉及事件绑定和内部 DOM，统一重建比逐项补丁更稳定；重建时必须恢复当前 `visible` 和 `lngLat`。
+
+- 状态：设计确认不改
+- 问题：TerraDraw / Measure 控件的 `position`、`modes`、`modeOptions` 等构造期配置只在首次创建时读取。
+- 处理：不做构造期配置热更新和控件重建，避免重建导致临时绘制、测量要素和当前编辑状态丢失。`interactive`、`lineDecoration`、`snapping` 继续沿用现有独立 watcher。
+- 经验：绘图控件的构造期配置应尽量在启用前确定；如需切换大块构造配置，业务侧应先保存临时数据，再通过 `isUse` 显式销毁和重新启用控件。
+
 ## 2026-04-28 polygonEdge 类型检查记录
 
 - 状态：已解决

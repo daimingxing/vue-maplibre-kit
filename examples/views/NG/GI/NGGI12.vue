@@ -53,7 +53,7 @@ import {
 type EdgeStyleMode = "default" | "warning";
 
 // 本页只演示 polygon-edge-preview：从面生成临时边线、切换边线样式、用 API 高亮与清理。
-const kit = createExampleKit("draw");
+const kit = createExampleKit("measure");
 const mapRef = shallowRef<MapLibreInitExpose | null>(null);
 const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry: kit.registry });
 const polygonEdge = businessMap.plugins.polygonEdge;

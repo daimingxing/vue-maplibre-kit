@@ -45,7 +45,7 @@ const dxfExport = businessMap.plugins.dxfExport;
 - [开始使用](00-开始使用/index.md)：安装样式、最小地图、推荐引入方式。
 - [核心概念](01-核心概念/index.md)：地图实例、source/layer/feature、响应式数据、声明式与命令式。
 - [公开入口](02-公开入口/index.md)：`business`、`plugins`、`config`、`geometry`、根入口和插件子路径。
-- [地图与控件](03-地图与控件/index.md)：`MapLibreInit`、`mapOptions`、`mapControls`、自定义控件。
+- [地图与控件](03-地图与控件/index.md)：`MapLibreInit`、`mapOptions`、`mapControls`、`MglPopup`、自定义控件。
 - [业务数据源](04-业务数据源/index.md)：业务 GeoJSON source、source 注册表、响应式数据维护。
 - [业务图层](05-业务图层/index.md)：业务图层工厂、图层组、运行时图层动作。
 - [样式与状态](06-样式与状态/index.md)：样式工厂、表达式、hover、selected、feature-state。

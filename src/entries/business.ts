@@ -107,9 +107,6 @@ export { createSimpleFillStyle } from '../MapLibre/facades/businessPreset';
 /** 业务图层组工厂。 */
 export { createLayerGroup } from '../MapLibre/facades/businessPreset';
 
-/** 地图控件预设工厂。 */
-export { createMapControlsPreset } from '../MapLibre/facades/businessPreset';
-
 /** 常用业务插件预设工厂。兼容入口；新业务页面推荐从 `vue-maplibre-kit/plugins` 引入。 */
 export { createBusinessPlugins } from '../MapLibre/facades/businessPreset';
 
@@ -246,7 +243,6 @@ export type {
   BusinessSnapPresetOptions,
   LayerGroupItem,
   LayerGroupOptions,
-  MapControlsPresetName,
   SimpleCircleStyleOptions,
   SimpleFillStyleOptions,
   SimpleLineStyleOptions,

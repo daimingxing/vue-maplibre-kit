@@ -6,23 +6,23 @@
 
 对应示例：[NGGI01](../../../examples/views/NG/GI/NGGI01.vue)、[NGGI05](../../../examples/views/NG/GI/NGGI05.vue)。
 
-## 使用控件预设
+## 页面局部控件
 
 ```ts
-import { createMapControlsPreset } from "vue-maplibre-kit/business";
+import type { MapControlsConfig } from "vue-maplibre-kit/business";
 
-const controls = createMapControlsPreset("basic", {
+const controls: MapControlsConfig = {
   MglNavigationControl: { isUse: true, position: "top-left" },
   MglScaleControl: { isUse: true, position: "bottom-left" },
-  MaplibreTerradrawControl: {
+  MaplibreMeasureControl: {
     isUse: true,
-    position: "top-left",
+    position: "top-right",
     snapping: true,
   },
-});
+};
 ```
 
-预设名称包括 `minimal`、`basic`、`draw`、`full`。预设只是默认开关集合，业务页面仍可以通过第二个参数覆盖具体控件。
+页面局部 `controls` 适合处理当前页面独有的控件开关和位置。应用级默认值优先写到 `vue-maplibre-kit/config` 的 `mapControls`，页面只覆盖差异。
 
 ## 常用控件
 

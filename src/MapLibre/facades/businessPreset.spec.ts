@@ -54,17 +54,10 @@ describe('businessPreset', () => {
     });
   });
 
-  it('应创建控件预设并支持局部覆盖', async () => {
+  it('不再提供控件预设工厂', async () => {
     const businessPreset = await loadBusinessPreset();
-    const { createMapControlsPreset } = businessPreset;
-    const controls = createMapControlsPreset('basic', {
-      MglFullscreenControl: undefined,
-    });
 
-    expect(controls.MglNavigationControl).toEqual({});
-    expect(controls.MglScaleControl).toEqual({});
-    expect(controls.MaplibreTerradrawControl).toEqual({});
-    expect(controls.MglFullscreenControl).toBeUndefined();
+    expect('createMapControlsPreset' in businessPreset).toBe(false);
   });
 
   it('应创建常用业务插件配置', async () => {

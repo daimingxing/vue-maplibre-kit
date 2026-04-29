@@ -30,13 +30,13 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 
 import {
   createLayerGroup,
   createMapBusinessSource,
-  createMapControlsPreset,
   createSimpleCircleStyle,
   createSimpleFillStyle,
   createSimpleLineStyle,
   MapBusinessSourceLayers,
   MapLibreInit,
   type MapCommonFeatureCollection,
+  type MapControlsConfig,
   type MapLayerInteractiveOptions,
   type MapLibreInitExpose,
   type MapOptions,
@@ -141,10 +141,10 @@ const mapOptions: Partial<MapOptions & { mapStyle: object }> = {
   // 10 级缩放能让示例点线面同时出现在首屏。
   zoom: 10,
 };
-const controls = createMapControlsPreset("minimal", {
+const controls: MapControlsConfig = {
   MglNavigationControl: { isUse: true, position: "top-left" },
   MglScaleControl: { isUse: true, position: "bottom-left" },
-});
+};
 const data = ref(createGroupData());
 const layers = createLayerGroup({
   defaultPolicy: {

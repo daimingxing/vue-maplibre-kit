@@ -9,7 +9,7 @@
 | 导出 | 类型 | 用途 | 推荐程度 |
 | --- | --- | --- | --- |
 | `MapLibreInit` | 组件 | 地图根组件 | 推荐 |
-| `MglPopup` | 组件 | 地图弹窗 | 推荐 |
+| `MglPopup` | 组件 | 地图弹窗，支持 `options` 运行时更新 | 推荐 |
 | `MglCustomControl` | 组件 | 自定义地图控件 | 按需 |
 | `MapBusinessSourceLayers` | 组件 | 声明式渲染业务 source 和图层 | 推荐 |
 | `useBusinessMap` | 函数 | 高层业务聚合门面 | 推荐 |
@@ -25,7 +25,6 @@
 | `createSimpleCircleStyle` | 函数 | 创建简单点样式 | 推荐 |
 | `createSimpleFillStyle` | 函数 | 创建简单面样式 | 推荐 |
 | `createLayerGroup` | 函数 | 批量创建图层 | 推荐 |
-| `createMapControlsPreset` | 函数 | 创建控件预设 | 推荐 |
 | `createBusinessPlugins` | 函数 | 兼容导出，推荐从 `plugins` 入口引入 | 兼容 |
 | `businessSources` | 对象 | source 工厂分组 | 按需 |
 | `businessLayers` | 对象 | layer 工厂分组 | 按需 |

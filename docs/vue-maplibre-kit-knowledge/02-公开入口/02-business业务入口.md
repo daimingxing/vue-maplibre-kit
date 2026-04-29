@@ -30,7 +30,7 @@ import {
 | --- | --- |
 | `MapLibreInit` | 挂载地图 |
 | `MapBusinessSourceLayers` | 声明式渲染业务 source 和图层 |
-| `MglPopup` | 展示点击要素属性 |
+| `MglPopup` | 展示点击要素属性，支持 `options` 运行时更新 |
 | `MglCustomControl` | 挂自定义地图控件 |
 | `useBusinessMap` | 统一读取 source、selection、feature、layers、editor、effect、plugins |
 | `useMapLayerActions` | 单独使用图层命令式动作 |
@@ -40,7 +40,6 @@ import {
 | `create*BusinessLayer` | 创建业务图层描述 |
 | `createSimple*Style` | 快速创建常用样式 |
 | `createLayerGroup` | 批量创建业务图层 |
-| `createMapControlsPreset` | 创建地图控件预设 |
 
 ## `createBusinessPlugins` 的位置
 

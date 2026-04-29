@@ -5,7 +5,6 @@ import {
   createLayerGroup,
   createMapBusinessSource,
   createMapBusinessSourceRegistry,
-  createMapControlsPreset,
   createSimpleCircleStyle,
   createSimpleFillStyle,
   createSimpleLineStyle,
@@ -42,6 +41,8 @@ export interface ExampleKit {
   source: MapBusinessSource;
   registry: MapBusinessSourceRegistry;
 }
+
+export type ExampleControlKind = "minimal" | "basic" | "measure" | "full";
 
 /**
  * 根据相对步长生成示例坐标。
@@ -86,28 +87,33 @@ export function createExampleMapOptions(): Partial<MapOptions & { mapStyle: obje
 }
 
 /**
- * 创建示例控件预设。
- * @param preset 控件预设名称
- * @returns 已显式开启的控件配置
+ * 创建示例页面使用的控件组合。
+ * @param kind 示例控件组合名称
+ * @returns 已显式声明开关的控件配置
  */
-export function createExampleControls(
-  preset: "minimal" | "basic" | "draw" | "full" = "minimal"
-): MapControlsConfig {
-  return createMapControlsPreset(preset, {
+export function createExampleControls(kind: ExampleControlKind = "minimal"): MapControlsConfig {
+  const controls: MapControlsConfig = {
     MglNavigationControl: { isUse: true, position: "top-left" },
     MglScaleControl: { isUse: true, position: "bottom-left" },
-    MglFullscreenControl: { isUse: preset === "basic" || preset === "full" },
-    MaplibreTerradrawControl: {
-      isUse: preset === "draw" || preset === "full",
-      position: "top-left",
-      snapping: true,
-    },
-    MaplibreMeasureControl: {
-      isUse: preset === "draw" || preset === "full",
+  };
+
+  if (kind === "basic" || kind === "full") {
+    controls.MglFullscreenControl = { isUse: true };
+  }
+
+  if (kind === "measure" || kind === "full") {
+    controls.MaplibreMeasureControl = {
+      isUse: true,
       position: "top-right",
       snapping: true,
-    },
-  });
+    };
+  }
+
+  if (kind === "full") {
+    controls.MglGeolocationControl = { isUse: true, position: "top-right" };
+  }
+
+  return controls;
 }
 
 /**
@@ -301,19 +307,17 @@ export function createExampleSourceKit(
 
 /**
  * 创建最常用的示例组合。
- * @param preset 控件预设名称
+ * @param kind 示例控件组合名称
  * @returns 示例页面可直接使用的组合对象
  */
-export function createExampleKit(
-  preset: "minimal" | "basic" | "draw" | "full" = "minimal"
-): ExampleKit {
+export function createExampleKit(kind: ExampleControlKind = "minimal"): ExampleKit {
   const sourceData = ref(createMixedData());
   const layers = createExampleLayers();
   const { source, registry } = createExampleSourceKit(sourceData, layers);
 
   return {
     mapOptions: createExampleMapOptions(),
-    controls: createExampleControls(preset),
+    controls: createExampleControls(kind),
     layers,
     sourceData,
     source,
