@@ -12,6 +12,12 @@ import { buildGeneratedFeatureProperties } from './map-common-tools';
 /** 坐标比较容差，避免浮点误差把端点交点误判成普通交点。 */
 const ENDPOINT_EPSILON = 1e-9;
 
+/** 交点预览要素 generatedKind 固定值。 */
+export const INTERSECTION_PREVIEW_KIND = 'intersection-preview';
+
+/** 正式交点要素 generatedKind 固定值。 */
+export const INTERSECTION_MATERIALIZED_KIND = 'intersection-materialized';
+
 /** 交点求交范围。 */
 export type IntersectionScope = 'all' | 'selected';
 
@@ -480,7 +486,7 @@ export function buildMaterializedIntersectionFeature(
   return buildIntersectionPointFeature(intersection, {
     name: '交点',
     mark: 'intersection',
-    generatedKind: 'intersection-materialized',
+    generatedKind: INTERSECTION_MATERIALIZED_KIND,
     ...extraProperties,
   });
 }

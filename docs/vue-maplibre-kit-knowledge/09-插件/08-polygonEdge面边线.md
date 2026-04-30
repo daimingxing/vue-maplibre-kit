@@ -78,7 +78,7 @@ polygonEdge.clear();
 
 每条边线都会带统一生成要素字段：
 
-- `generatedKind`：固定为 `polygon-edge-preview`。
+- `generatedKind`：固定为 `polygon-edge-preview`，对应公开常量 `POLYGON_EDGE_PREVIEW_KIND`。
 - `generatedGroupId`：同一个来源面生成的边线共享同一分组。
 - `generatedParentSourceId`、`generatedParentFeatureId`、`generatedParentLayerId`：来源业务要素引用。
 - `polygonId`：来源面的整体分组 ID。
@@ -91,7 +91,7 @@ polygonEdge.clear();
 
 GeoJSON 中 Polygon 的坐标是 ring 数组。第一个 ring 是外环边界，后续 ring 表示洞。插件可以只高亮一个 ring，因此不一定每次都高亮整个图形。
 
-`generatedKind` 是生成要素公开元数据，可用于业务层区分 intersection、lineDraft、polygonEdge 等生成要素类型。常规业务逻辑优先依赖门面能力，不建议依赖具体 preview sourceId。
+业务交互回调中的 `context.generatedKind` 会读取当前边线要素的 `feature.properties.generatedKind`。需要判断面边线时，优先使用 `generatedKind` 或 `POLYGON_EDGE_PREVIEW_KIND`；`POLYGON_EDGE_PREVIEW_SOURCE_ID`、`POLYGON_EDGE_PREVIEW_LINE_LAYER_ID` 主要用于高级调试、样式覆盖、图层识别或测试断言。
 
 ## 样式规则
 

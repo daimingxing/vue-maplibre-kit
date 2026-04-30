@@ -70,3 +70,15 @@ await businessMap.plugins.dxfExport.downloadDxf();
 - `map-dxf-export`
 
 这些能力适合高级定制。普通业务页面先使用 `createBusinessPlugins()`。
+
+## generatedKind 常量
+
+部分插件会创建临时或正式的生成要素，并在要素属性和交互上下文里写入 `generatedKind`。`vue-maplibre-kit/plugins` 会统一导出这些公开常量：
+
+- `LINE_DRAFT_PREVIEW_EXTENSION_KIND`：线延长草稿，值为 `line-extension-draft`。
+- `LINE_DRAFT_PREVIEW_CORRIDOR_KIND`：线廊面草稿，值为 `line-corridor-draft`。
+- `INTERSECTION_PREVIEW_KIND`：预览交点，值为 `intersection-preview`。
+- `INTERSECTION_MATERIALIZED_KIND`：正式交点，值为 `intersection-materialized`。
+- `POLYGON_EDGE_PREVIEW_KIND`：面边线预览要素，值为 `polygon-edge-preview`。
+
+snap、multiSelect、dxfExport 不创建业务生成要素，因此没有 `generatedKind` 常量。

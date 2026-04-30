@@ -41,10 +41,22 @@
 | 子路径 | 用途 |
 | --- | --- |
 | `vue-maplibre-kit/plugins/map-feature-snap` | 吸附插件工厂、规则、类型 |
-| `vue-maplibre-kit/plugins/line-draft-preview` | 线草稿插件工厂、常量、类型 |
-| `vue-maplibre-kit/plugins/intersection-preview` | 交点插件工厂、样式类型 |
-| `vue-maplibre-kit/plugins/polygon-edge-preview` | 面边线预览插件工厂、常量、类型 |
+| `vue-maplibre-kit/plugins/line-draft-preview` | 线草稿插件工厂、source/layer/generatedKind 常量、类型 |
+| `vue-maplibre-kit/plugins/intersection-preview` | 交点插件工厂、source/layer/generatedKind 常量、样式类型 |
+| `vue-maplibre-kit/plugins/polygon-edge-preview` | 面边线预览插件工厂、source/layer/generatedKind 常量、类型 |
 | `vue-maplibre-kit/plugins/map-feature-multi-select` | 多选插件工厂、类型 |
 | `vue-maplibre-kit/plugins/map-dxf-export` | DXF 插件工厂、任务配置、resolver 类型 |
 
 普通业务页面优先使用聚合入口；子路径适合高级定制。
+
+## generatedKind 常量
+
+| 常量 | 值 | 来源插件 | 用途 |
+| --- | --- | --- | --- |
+| `LINE_DRAFT_PREVIEW_EXTENSION_KIND` | `line-extension-draft` | lineDraft | 判断线延长草稿 |
+| `LINE_DRAFT_PREVIEW_CORRIDOR_KIND` | `line-corridor-draft` | lineDraft | 判断线廊面草稿 |
+| `INTERSECTION_PREVIEW_KIND` | `intersection-preview` | intersection | 判断预览交点 |
+| `INTERSECTION_MATERIALIZED_KIND` | `intersection-materialized` | intersection | 判断正式交点 |
+| `POLYGON_EDGE_PREVIEW_KIND` | `polygon-edge-preview` | polygonEdge | 判断面边线预览要素 |
+
+snap、multiSelect、dxfExport 不创建业务生成要素，因此没有 `generatedKind` 常量。

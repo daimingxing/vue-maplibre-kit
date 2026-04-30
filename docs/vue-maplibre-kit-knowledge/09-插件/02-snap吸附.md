@@ -96,6 +96,12 @@ snap.resolveTerradrawSnapOptions("draw", true);
 
 `clearPreview()` 成功拿到插件时返回 `true`，可用于按钮或流程切换时主动清理吸附预览。`resolveMapEvent()` 适合高级业务交互自行解析一次普通地图事件的吸附结果。
 
+## 生成要素与 generatedKind
+
+snap 只渲染吸附点和吸附线段预览，不把这些预览作为业务生成要素暴露给业务层，因此不会写入 `context.generatedKind`。
+
+公开常量 `MAP_FEATURE_SNAP_PREVIEW_SOURCE_ID`、`MAP_FEATURE_SNAP_PREVIEW_POINT_LAYER_ID`、`MAP_FEATURE_SNAP_PREVIEW_LINE_LAYER_ID` 只用于高级调试、样式覆盖或测试断言。常规业务判断不要依赖 snap 预览 source/layer ID。
+
 ## 示例引用
 
 - `examples/views/NG/GI/NGGI07.vue`：点、线、面三类业务图层吸附规则，以及 TerraDraw 已绘制要素跨模式吸附。

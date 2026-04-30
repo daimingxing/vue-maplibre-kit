@@ -2,6 +2,7 @@ import {
   buildIntersectionPointFeature,
   buildMaterializedIntersectionFeature,
   collectLineIntersections,
+  INTERSECTION_PREVIEW_KIND,
   type IntersectionScope,
 } from '../../shared/map-intersection-tools';
 import type { MapCommonFeature, MapCommonProperties } from '../../shared/map-common-tools';
@@ -65,7 +66,7 @@ function createPreviewIntersectionContext(
   return {
     ...intersection,
     feature: buildIntersectionPointFeature(intersection, {
-      generatedKind: 'intersection-preview',
+      generatedKind: INTERSECTION_PREVIEW_KIND,
     }) as MapCommonFeature,
   };
 }

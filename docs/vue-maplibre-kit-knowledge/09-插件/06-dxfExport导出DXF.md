@@ -149,6 +149,10 @@ async function exportDxf(): Promise<void> {
 - `downloadDxf(overrides)`：生成并下载 DXF 文件。
 - `getResolvedOptions(overrides)`：读取本次最终生效的导出配置，适合调试和参数面板展示。
 
+## 生成要素与 generatedKind
+
+dxfExport 只读取业务 source 并输出 DXF 文本或文件，不创建地图预览要素，也不会写入 `context.generatedKind`。导出结果应通过 `lastFeatureCount`、`lastEntityCount`、`lastWarnings` 和 `exportDxf()` 返回值判断。
+
 ## 示例引用
 
 - `examples/views/NG/GI/NGGI11.vue`：全部导出、下载、管线过滤导出、图层名和颜色解析器。

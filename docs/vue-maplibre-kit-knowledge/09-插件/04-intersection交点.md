@@ -79,6 +79,17 @@ intersection.clear();
 - `setScope("all" | "selected")`：切换求交范围。
 - `clearMaterialized()`：清空正式交点集合。
 
+## 生成要素与 generatedKind
+
+intersection 会生成预览交点和正式交点两类点要素。业务交互回调中的 `context.generatedKind` 会读取当前交点要素的 `feature.properties.generatedKind`。
+
+| generatedKind | 公开常量 | 含义 |
+| --- | --- | --- |
+| `intersection-preview` | `INTERSECTION_PREVIEW_KIND` | 刷新后临时显示的预览交点 |
+| `intersection-materialized` | `INTERSECTION_MATERIALIZED_KIND` | `materialize()` 生成的正式交点 |
+
+预览交点对应 `INTERSECTION_PREVIEW_SOURCE_ID`、`INTERSECTION_PREVIEW_LAYER_ID`；正式交点对应 `INTERSECTION_MATERIALIZED_SOURCE_ID`、`INTERSECTION_MATERIALIZED_LAYER_ID`。source/layer 常量主要用于高级调试、样式覆盖、图层识别或测试断言；普通业务判断优先使用 `generatedKind`。
+
 ## 示例引用
 
 - `examples/views/NG/GI/NGGI09.vue`：刷新交点、生成正式点、设置正式点属性、删除正式点、读取 GeoJSON。

@@ -31,6 +31,21 @@
 | multiSelect | `multiSelect` | `businessMap.plugins.multiSelect` | 多选模式、选中集读取、选中态样式联动 | `NGGI10.vue` |
 | dxfExport | `dxfExport` | `businessMap.plugins.dxfExport` | 生成或下载 DXF，读取导出状态 | `NGGI11.vue` |
 
+## generatedKind 速查
+
+`generatedKind` 是插件生成要素的公开元数据。需要判断生成要素类型时，优先读取 `context.generatedKind` 或 `feature.properties.generatedKind`，再按需要使用公开常量。
+
+| 插件 | generatedKind | 公开常量 |
+| --- | --- | --- |
+| snap | 无 | 无 |
+| lineDraft | `line-extension-draft` | `LINE_DRAFT_PREVIEW_EXTENSION_KIND` |
+| lineDraft | `line-corridor-draft` | `LINE_DRAFT_PREVIEW_CORRIDOR_KIND` |
+| intersection | `intersection-preview` | `INTERSECTION_PREVIEW_KIND` |
+| intersection | `intersection-materialized` | `INTERSECTION_MATERIALIZED_KIND` |
+| polygonEdge | `polygon-edge-preview` | `POLYGON_EDGE_PREVIEW_KIND` |
+| multiSelect | 无 | 无 |
+| dxfExport | 无 | 无 |
+
 ## 最小接入骨架
 
 ```ts

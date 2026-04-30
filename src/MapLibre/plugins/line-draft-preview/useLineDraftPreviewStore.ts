@@ -40,6 +40,9 @@ export const LINE_DRAFT_PREVIEW_FILL_LAYER_ID = 'lineDraftFillLayer';
 /** 线草稿预览线廊草稿 generatedKind 固定值。 */
 export const LINE_DRAFT_PREVIEW_CORRIDOR_KIND = 'line-corridor-draft';
 
+/** 线草稿预览延长线 generatedKind 固定值。 */
+export const LINE_DRAFT_PREVIEW_EXTENSION_KIND = 'line-extension-draft';
+
 /** 线草稿内部托管来源字段。 */
 export const LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS = [
   MANAGED_PREVIEW_ORIGIN_SOURCE_ID_PROPERTY,

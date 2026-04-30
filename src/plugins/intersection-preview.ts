@@ -12,6 +12,12 @@ export {
   buildIntersectionCandidatesFromSources,
 } from '../MapLibre/plugins/intersection-preview';
 
+/** 交点预览 generatedKind 常量。识别预览交点要素时使用。 */
+export { INTERSECTION_PREVIEW_KIND } from '../MapLibre/plugins/intersection-preview';
+
+/** 正式交点 generatedKind 常量。识别已落点交点要素时使用。 */
+export { INTERSECTION_MATERIALIZED_KIND } from '../MapLibre/plugins/intersection-preview';
+
 /** 交点预览插件实现体。需要直接组合底层插件定义时使用。 */
 export { intersectionPreviewPlugin } from '../MapLibre/plugins/intersection-preview';
 

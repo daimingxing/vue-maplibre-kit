@@ -4,6 +4,7 @@ import type { LineDraftPreviewOptions } from './types';
 import LineDraftPreviewLayers from './LineDraftPreviewLayers.vue';
 import {
   LINE_DRAFT_PREVIEW_CORRIDOR_KIND,
+  LINE_DRAFT_PREVIEW_EXTENSION_KIND,
   LINE_DRAFT_PREVIEW_FILL_LAYER_ID,
   LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
@@ -157,3 +158,6 @@ export { LINE_DRAFT_PREVIEW_FILL_LAYER_ID };
 
 /** 线草稿预览线廊 generatedKind 固定值。 */
 export { LINE_DRAFT_PREVIEW_CORRIDOR_KIND };
+
+/** 线草稿预览延长线 generatedKind 固定值。 */
+export { LINE_DRAFT_PREVIEW_EXTENSION_KIND };

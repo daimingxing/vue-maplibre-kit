@@ -68,6 +68,10 @@ linePaint["line-width"] = createFeatureStateExpression({
 });
 ```
 
+## 生成要素与 generatedKind
+
+multiSelect 只维护选中集和 feature-state，不创建新的地图要素，因此不会写入 `context.generatedKind`。选中来源应通过 `selectedFeatures` 中的 `sourceId`、`layerId`、`featureId` 和 `snapshot` 判断。
+
 ## 示例引用
 
 - `examples/views/NG/GI/NGGI10.vue`：切换多选、清空选中、读取选中要素、选中态样式接入。
