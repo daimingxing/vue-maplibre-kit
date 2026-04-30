@@ -65,18 +65,20 @@ describe('businessPreset', () => {
     const { createBusinessPlugins } = businessPreset;
     const sourceRegistry = createMapBusinessSourceRegistry([]);
     const plugins = createBusinessPlugins({
+      sourceRegistry,
       snap: {
         layerIds: ['pipe-line'],
       },
       lineDraft: true,
       intersection: {
-        sourceRegistry,
         targetSourceIds: ['primary'],
       },
       polygonEdge: true,
       multiSelect: true,
       dxfExport: {
-        sourceRegistry,
+        control: {
+          enabled: false,
+        },
       },
     });
 
@@ -90,7 +92,70 @@ describe('businessPreset', () => {
     ]);
     expect((plugins[0].options as any).businessLayers.rules[0].layerIds).toEqual(['pipe-line']);
     expect((plugins[0].options as any).businessLayers.rules[0].id).toBeUndefined();
+    expect((plugins[2].options as any).sourceRegistry).toBe(sourceRegistry);
     expect((plugins[3].options as any).enabled).toBe(true);
+    expect((plugins[5].options as any).sourceRegistry).toBe(sourceRegistry);
+    expect((plugins[5].options as any).control.enabled).toBe(false);
+  });
+
+  it('应支持顶层 sourceRegistry 复用和 dxfExport 布尔简写', async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+    const sourceRegistry = createMapBusinessSourceRegistry([]);
+    const plugins = createBusinessPlugins({
+      sourceRegistry,
+      intersection: {
+        targetLayerIds: ['pipe-line'],
+      },
+      dxfExport: true,
+    });
+
+    expect(plugins.map((plugin) => plugin.type)).toEqual([
+      'intersectionPreview',
+      'mapDxfExport',
+    ]);
+    expect((plugins[0].options as any).sourceRegistry).toBe(sourceRegistry);
+    expect((plugins[0].options as any).targetSourceIds).toEqual([]);
+    expect((plugins[0].options as any).targetLayerIds).toEqual(['pipe-line']);
+    expect((plugins[1].options as any).sourceRegistry).toBe(sourceRegistry);
+    expect((plugins[1].options as any).enabled).toBe(true);
+  });
+
+  it('应把 DXF 扁平任务参数归入 defaults', async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+    const sourceRegistry = createMapBusinessSourceRegistry([]);
+    const plugins = createBusinessPlugins({
+      sourceRegistry,
+      dxfExport: {
+        control: { enabled: false },
+        sourceCrs: 'EPSG:4326',
+        targetCrs: 'EPSG:3857',
+        fileName: 'business.dxf',
+        defaults: {
+          pointMode: 'circle',
+        },
+      },
+    });
+
+    expect((plugins[0].options as any).control).toEqual({ enabled: false });
+    expect((plugins[0].options as any).defaults).toMatchObject({
+      sourceCrs: 'EPSG:4326',
+      targetCrs: 'EPSG:3857',
+      fileName: 'business.dxf',
+      pointMode: 'circle',
+    });
+  });
+
+  it('intersection 缺少目标范围时应提示业务层补充 targetSourceIds 或 targetLayerIds', async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+
+    expect(() =>
+      createBusinessPlugins({
+        intersection: {} as any,
+      })
+    ).toThrow('createBusinessPlugins({ intersection }) 需要 targetSourceIds 或 targetLayerIds');
   });
 
   it('应允许 snap 直接传完整 businessLayers 配置', async () => {

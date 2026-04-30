@@ -71,7 +71,7 @@ linePaint["line-width"] = createFeatureStateExpression({
 ## 示例引用
 
 - `examples/views/NG/GI/NGGI10.vue`：切换多选、清空选中、读取选中要素、选中态样式接入。
-- `examples/views/NG/GI/NGGI06.vue`：五插件总览中的多选状态和选中 ID 展示。
+- `examples/views/NG/GI/NGGI06.vue`：业务插件总览中的多选状态和选中 ID 展示。
 
 ## 风险提示
 

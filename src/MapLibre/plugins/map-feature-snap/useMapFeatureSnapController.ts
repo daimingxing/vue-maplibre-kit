@@ -10,6 +10,7 @@ import type {
   MapFeatureSnapMode,
   MapFeatureSnapOptions,
   MapFeatureSnapPreviewOptions,
+  MapFeatureSnapTargetOptions,
 } from './types';
 
 const DEFAULT_TOLERANCE_PX = 16;
@@ -179,6 +180,36 @@ function mergeSnapPreviewOptions(
 }
 
 /**
+ * 合并插件内置吸附目标配置。
+ * 布尔值表示整项开关；对象配置按字段合并，便于页面只覆写单个默认值。
+ *
+ * @param globalConfig 全局目标默认配置
+ * @param localConfig 实例局部目标配置
+ * @returns 合并后的目标配置
+ */
+function mergeSnapTargetOptions(
+  globalConfig: boolean | MapFeatureSnapTargetOptions | undefined,
+  localConfig: boolean | MapFeatureSnapTargetOptions | undefined
+): boolean | MapFeatureSnapTargetOptions | undefined {
+  if (typeof localConfig === 'boolean') {
+    return localConfig;
+  }
+
+  if (typeof globalConfig === 'boolean') {
+    return localConfig == null ? globalConfig : localConfig;
+  }
+
+  if (!globalConfig && !localConfig) {
+    return undefined;
+  }
+
+  return {
+    ...(globalConfig || {}),
+    ...(localConfig || {}),
+  };
+}
+
+/**
  * 合并业务图层吸附插件配置。
  * 第一版只把适合做应用级默认值的字段接入全局配置；
  * businessLayers 仍然保持实例级，避免把页面专属图层绑定信息提升到全局。
@@ -198,14 +229,8 @@ function resolveMapFeatureSnapOptions(
     ...(globalDefaults || {}),
     ...(localOptions || {}),
     preview: mergeSnapPreviewOptions(globalDefaults?.preview, localOptions?.preview),
-    intersection:
-      localOptions?.intersection !== undefined
-        ? localOptions.intersection
-        : globalDefaults?.intersection,
-    polygonEdge:
-      localOptions?.polygonEdge !== undefined
-        ? localOptions.polygonEdge
-        : globalDefaults?.polygonEdge,
+    intersection: mergeSnapTargetOptions(globalDefaults?.intersection, localOptions?.intersection),
+    polygonEdge: mergeSnapTargetOptions(globalDefaults?.polygonEdge, localOptions?.polygonEdge),
     businessLayers: localOptions?.businessLayers,
     terradraw:
       globalDefaults?.terradraw || localOptions?.terradraw

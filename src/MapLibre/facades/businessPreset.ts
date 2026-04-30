@@ -1,5 +1,9 @@
 import type { FilterSpecification } from 'maplibre-gl';
-import { createMapDxfExportPlugin } from '../plugins/map-dxf-export';
+import {
+  createMapDxfExportPlugin,
+  type MapDxfExportOptions,
+  type MapDxfExportTaskOptions,
+} from '../plugins/map-dxf-export';
 import { createLineDraftPreviewPlugin } from '../plugins/line-draft-preview';
 import { createMapFeatureMultiSelectPlugin } from '../plugins/map-feature-multi-select';
 import { createMapFeatureSnapPlugin, type MapFeatureSnapOptions } from '../plugins/map-feature-snap';
@@ -28,6 +32,7 @@ import {
   type MapBusinessLayerGeometryType,
   type MapBusinessLayerWhere,
 } from './mapBusinessLayer';
+import type { MapBusinessSourceRegistry } from './createMapBusinessSource';
 
 /** 简单线样式配置。 */
 export interface SimpleLineStyleOptions {
@@ -99,20 +104,41 @@ export interface BusinessSnapPresetOptions extends Partial<MapFeatureSnapOptions
   layerIds?: string[];
 }
 
+/** 交点插件业务预设配置。 */
+export interface BusinessIntersectionPresetOptions
+  extends Omit<IntersectionPreviewOptions, 'targetSourceIds' | 'sourceRegistry'> {
+  /** 参与求交的来源 source 列表；未传时可仅按 targetLayerIds 限定。 */
+  targetSourceIds?: string[];
+  /** 当前页面业务 source 注册表；未提供时默认使用 createBusinessPlugins 的顶层 sourceRegistry 配置。 */
+  sourceRegistry?: MapBusinessSourceRegistry;
+}
+
+/** DXF 导出插件业务预设配置。 */
+export interface BusinessDxfExportPresetOptions
+  extends Omit<MapDxfExportOptions, 'sourceRegistry' | 'defaults'>,
+    MapDxfExportTaskOptions {
+  /** 当前页面业务 source 注册表；未提供时默认使用 createBusinessPlugins 的顶层 sourceRegistry 配置。 */
+  sourceRegistry?: MapBusinessSourceRegistry;
+  /** DXF 导出任务默认值。 */
+  defaults?: MapDxfExportTaskOptions;
+}
+
 /** 业务插件预设配置。 */
 export interface BusinessPluginsOptions {
+  /** 当前页面业务 source 注册表，供交点和 DXF 导出插件复用。 */
+  sourceRegistry?: MapBusinessSourceRegistry;
   /** 吸附插件配置；传 true 时只启用基础能力和插件内部默认目标，业务图层吸附需传 layerIds 或 businessLayers。 */
   snap?: boolean | BusinessSnapPresetOptions;
   /** 线草稿插件配置；传 true 时启用默认配置。 */
   lineDraft?: boolean | Parameters<typeof createLineDraftPreviewPlugin>[0];
-  /** 交点插件配置。 */
-  intersection?: IntersectionPreviewOptions;
+  /** 交点插件配置；必须传 targetSourceIds 或 targetLayerIds。 */
+  intersection?: BusinessIntersectionPresetOptions;
   /** 面边线预览插件配置；传 true 时启用默认配置。 */
   polygonEdge?: boolean | PolygonEdgePreviewOptions;
   /** 多选插件配置；传 true 时启用默认配置。 */
   multiSelect?: boolean | Parameters<typeof createMapFeatureMultiSelectPlugin>[0];
-  /** DXF 导出插件配置。 */
-  dxfExport?: Parameters<typeof createMapDxfExportPlugin>[0];
+  /** DXF 导出插件配置；传 true 时使用顶层 sourceRegistry 和全局默认值。 */
+  dxfExport?: boolean | BusinessDxfExportPresetOptions;
 }
 
 /**
@@ -238,6 +264,64 @@ function resolveSnapOptions(options: true | BusinessSnapPresetOptions): MapFeatu
 }
 
 /**
+ * 解析交点插件预设配置。
+ * @param context 当前业务插件预设总配置
+ * @param options 交点插件局部配置
+ * @returns 标准交点插件配置
+ */
+function resolveIntersectionOptions(
+  context: BusinessPluginsOptions,
+  options: BusinessIntersectionPresetOptions
+): IntersectionPreviewOptions {
+  if (!options.targetSourceIds?.length && !options.targetLayerIds?.length) {
+    throw new Error('createBusinessPlugins({ intersection }) 需要 targetSourceIds 或 targetLayerIds');
+  }
+
+  return {
+    ...options,
+    targetSourceIds: options.targetSourceIds || [],
+    sourceRegistry: options.sourceRegistry || context.sourceRegistry,
+  };
+}
+
+/**
+ * 解析 DXF 导出插件预设配置。
+ * @param context 当前业务插件预设总配置
+ * @param options DXF 导出插件局部配置
+ * @returns 标准 DXF 导出插件配置
+ */
+function resolveDxfOptions(
+  context: BusinessPluginsOptions,
+  options: true | BusinessDxfExportPresetOptions
+): MapDxfExportOptions {
+  const sourceRegistry =
+    options === true ? context.sourceRegistry : options.sourceRegistry || context.sourceRegistry;
+  if (!sourceRegistry) {
+    throw new Error('createBusinessPlugins({ dxfExport }) 需要 sourceRegistry');
+  }
+
+  if (options === true) {
+    return {
+      enabled: true,
+      sourceRegistry,
+    };
+  }
+
+  const { control, defaults, enabled, sourceRegistry: localRegistry, ...flatDefaults } = options;
+  void localRegistry;
+
+  return {
+    enabled: enabled !== false,
+    sourceRegistry,
+    control,
+    defaults: {
+      ...(defaults || {}),
+      ...flatDefaults,
+    },
+  };
+}
+
+/**
  * 创建常用业务插件预设。
  * @param options 插件预设配置
  * @returns 标准插件描述对象数组
@@ -256,7 +340,7 @@ export function createBusinessPlugins(options: BusinessPluginsOptions): MapPlugi
   }
 
   if (options.intersection) {
-    plugins.push(createIntersectionPreviewPlugin(options.intersection));
+    plugins.push(createIntersectionPreviewPlugin(resolveIntersectionOptions(options, options.intersection)));
   }
 
   if (options.polygonEdge) {
@@ -276,7 +360,7 @@ export function createBusinessPlugins(options: BusinessPluginsOptions): MapPlugi
   }
 
   if (options.dxfExport) {
-    plugins.push(createMapDxfExportPlugin(options.dxfExport));
+    plugins.push(createMapDxfExportPlugin(resolveDxfOptions(options, options.dxfExport)));
   }
 
   return plugins;

@@ -20,6 +20,7 @@ import type { LineDraftPreviewStyleOverrides } from '../MapLibre/plugins/line-dr
 import type {
   IntersectionPreviewStateStyles,
   IntersectionPreviewStyleOverrides,
+  IntersectionPreviewScope,
 } from '../MapLibre/plugins/intersection-preview/types';
 import type {
   PolygonEdgePreviewStateStyles,
@@ -95,6 +96,18 @@ export interface LineDraftPreviewGlobalDefaults {
 
 /** 交点预览插件全局默认配置。 */
 export interface IntersectionPreviewGlobalDefaults {
+  /** 当前交点层默认是否可见。 */
+  visible?: boolean;
+  /** 点击预览交点时是否自动生成正式交点点要素。 */
+  materializeOnClick?: boolean;
+  /** 当前求交范围。 */
+  scope?: IntersectionPreviewScope;
+  /** 是否保留端点交点。 */
+  includeEndpoint?: boolean;
+  /** 交点坐标归一化小数位。 */
+  coordDigits?: number;
+  /** 是否忽略同一条线自交。 */
+  ignoreSelf?: boolean;
   /** 全局预览交点状态样式配置。 */
   previewStateStyles?: IntersectionPreviewStateStyles;
   /** 全局正式交点状态样式配置。 */
@@ -115,8 +128,6 @@ export interface PolygonEdgePreviewGlobalDefaults {
 
 /** 要素多选插件全局默认配置。 */
 export interface MapFeatureMultiSelectGlobalDefaults {
-  /** 是否启用多选插件。 */
-  enabled?: boolean;
   /** 控件显示位置。 */
   position?: ControlPosition;
   /** 退出多选后的处理策略。 */

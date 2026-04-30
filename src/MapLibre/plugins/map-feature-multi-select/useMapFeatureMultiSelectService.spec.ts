@@ -20,7 +20,6 @@ describe('useMapFeatureMultiSelectService', () => {
     setMapGlobalConfig({
       plugins: {
         multiSelect: {
-          enabled: true,
           position: 'bottom-left',
           deactivateBehavior: 'retain',
           closeOnEscape: false,

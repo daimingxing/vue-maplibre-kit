@@ -18,24 +18,28 @@ import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 
 ```ts
 const plugins = createBusinessPlugins({
+  sourceRegistry: registry,
   snap: {
     layerIds: ["pipe-line"],
   },
   lineDraft: true,
   intersection: {
-    sourceIds: ["pipe-source"],
+    targetLayerIds: ["pipe-line"],
   },
   polygonEdge: true,
   multiSelect: {
     targetLayerIds: ["pipe-line"],
   },
-  dxfExport: {
-    defaults: {
-      fileName: "pipe.dxf",
-    },
-  },
+  dxfExport: true,
 });
 ```
+
+补充规则：
+
+- `sourceRegistry` 推荐放在顶层，供 `intersection` 和 `dxfExport` 复用。
+- `intersection` 不支持 `true`，必须传入 `targetSourceIds` 或 `targetLayerIds`。
+- `dxfExport: true` 使用顶层 `sourceRegistry`、库内默认值和全局 DXF 默认值。
+- `dxfExport` 对象写法允许把 `sourceCrs`、`targetCrs`、`fileName` 等任务默认值扁平写在业务预设层。
 
 ## 读取插件能力
 

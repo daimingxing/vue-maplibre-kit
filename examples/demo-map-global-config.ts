@@ -67,7 +67,6 @@ export const demoMapGlobalConfig = defineMapGlobalConfig({
       },
     },
     multiSelect: {
-      enabled: true,
       position: 'top-right',
       deactivateBehavior: 'retain',
     },

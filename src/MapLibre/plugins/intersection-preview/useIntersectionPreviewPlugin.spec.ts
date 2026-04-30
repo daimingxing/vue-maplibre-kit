@@ -439,6 +439,66 @@ describe('intersectionPreviewPlugin', () => {
     expect(renderProps.materializedStyle.paint['circle-radius']).toBe(9);
   });
 
+  it('应继承全局交点行为默认值，并允许实例局部单项覆写', () => {
+    setMapGlobalConfig({
+      plugins: {
+        intersection: {
+          visible: false,
+          materializeOnClick: false,
+          scope: 'selected',
+          includeEndpoint: true,
+          coordDigits: 4,
+          ignoreSelf: true,
+        },
+      },
+    });
+    const optionsRef = createOptionsRef({
+      ...createPluginOptions(),
+      visible: undefined,
+      scope: 'all',
+      coordDigits: 6,
+    });
+    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error('未获取到交点插件 API');
+    }
+
+    expect(pluginInstance.state?.value.visible).toBe(false);
+    expect(pluginInstance.state?.value.scope).toBe('all');
+    expect(pluginApi.getData().features).toHaveLength(1);
+  });
+
+  it('全局 materializeOnClick 默认值应影响预览交点点击行为', () => {
+    setMapGlobalConfig({
+      plugins: {
+        intersection: {
+          materializeOnClick: false,
+        },
+      },
+    });
+    const optionsRef = createOptionsRef();
+    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error('未获取到交点插件 API');
+    }
+
+    const [previewFeature] = pluginApi.getData().features;
+    if (!previewFeature?.id) {
+      throw new Error('当前预览交点为空，无法继续断言');
+    }
+
+    (pluginInstance as any)
+      .getPluginLayerInteractivePatch?.()
+      ?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]
+      ?.onClick?.({
+        featureId: previewFeature.id,
+      } as any);
+
+    expect(pluginApi.getMaterializedData().features).toHaveLength(0);
+  });
+
   it('应支持通过状态样式配置覆写交点 selected 颜色', () => {
     const optionsRef = createOptionsRef({
       ...createPluginOptions(),

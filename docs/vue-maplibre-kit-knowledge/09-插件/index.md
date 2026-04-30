@@ -11,21 +11,23 @@
 5. [multiSelect 多选](./05-multiSelect多选.md)
 6. [dxfExport 导出 DXF](./06-dxfExport导出DXF.md)
 7. [单插件子路径高级用法](./07-单插件子路径高级用法.md)
+8. [polygonEdge 面边线](./08-polygonEdge面边线.md)
 
 ## 核心约定
 
 - 注册入口：从 `vue-maplibre-kit/plugins` 引入 `createBusinessPlugins`。
-- 读取入口：从 `vue-maplibre-kit/business` 引入 `useBusinessMap`，再通过 `businessMap.plugins.snap`、`businessMap.plugins.lineDraft`、`businessMap.plugins.intersection`、`businessMap.plugins.multiSelect`、`businessMap.plugins.dxfExport` 读取能力。
-- 示例来源：`examples/views/NG/GI/NGGI06.vue` 是五插件总览；`NGGI07.vue` 到 `NGGI11.vue` 分别对应五个插件的独立示例。
+- 读取入口：从 `vue-maplibre-kit/business` 引入 `useBusinessMap`，再通过 `businessMap.plugins.snap`、`businessMap.plugins.lineDraft`、`businessMap.plugins.intersection`、`businessMap.plugins.polygonEdge`、`businessMap.plugins.multiSelect`、`businessMap.plugins.dxfExport` 读取能力。
+- 示例来源：`examples/views/NG/GI/NGGI06.vue` 是业务插件总览；`NGGI07.vue` 到 `NGGI11.vue` 分别对应部分插件的独立示例，polygonEdge 以本目录文档为准。
 - 门面边界：业务模拟层应使用包名路径，不直接引用 `src/MapLibre/**`。
 
-## 五插件速查
+## 业务插件速查
 
 | 插件 | 注册配置键 | 读取路径 | 典型用途 | 示例 |
 | --- | --- | --- | --- | --- |
 | snap | `snap` | `businessMap.plugins.snap` | 绘制、测量、普通业务图层吸附 | `NGGI07.vue` |
 | lineDraft | `lineDraft` | `businessMap.plugins.lineDraft` | 生成延长线、线廊草稿、草稿属性维护 | `NGGI08.vue` |
 | intersection | `intersection` | `businessMap.plugins.intersection` | 线交点预览、正式交点生成与属性维护 | `NGGI09.vue` |
+| polygonEdge | `polygonEdge` | `businessMap.plugins.polygonEdge` | 面边线临时预览、边线高亮、边线吸附目标 | `08-polygonEdge面边线.md` |
 | multiSelect | `multiSelect` | `businessMap.plugins.multiSelect` | 多选模式、选中集读取、选中态样式联动 | `NGGI10.vue` |
 | dxfExport | `dxfExport` | `businessMap.plugins.dxfExport` | 生成或下载 DXF，读取导出状态 | `NGGI11.vue` |
 
@@ -47,21 +49,24 @@ const businessMap = useBusinessMap({
 });
 
 const plugins = createBusinessPlugins({
+  sourceRegistry: kit.registry,
   snap: { layerIds: [lineLayerId] },
   lineDraft: true,
   intersection: {
-    enabled: true,
-    targetSourceIds: [kit.source.sourceId],
     targetLayerIds: [lineLayerId],
-    sourceRegistry: kit.registry,
   },
+  polygonEdge: true,
   multiSelect: { enabled: true, targetLayerIds: [lineLayerId] },
-  dxfExport: {
-    enabled: true,
-    sourceRegistry: kit.registry,
-  },
+  dxfExport: true,
 });
 ```
+
+关键规则：
+
+- `sourceRegistry` 放在顶层，供 `intersection` 和 `dxfExport` 复用。
+- `intersection` 不支持 `true`，必须传入 `targetSourceIds` 或 `targetLayerIds`。
+- `dxfExport: true` 使用顶层 `sourceRegistry`、库内默认值和全局 DXF 默认值。
+- `dxfExport` 对象写法允许把 `sourceCrs`、`targetCrs`、`fileName` 等任务默认值扁平写在业务预设层。
 
 模板中把 `plugins` 传给地图容器：
 

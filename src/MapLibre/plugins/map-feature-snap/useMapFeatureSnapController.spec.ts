@@ -2,6 +2,43 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetMapGlobalConfig, setMapGlobalConfig } from '../../../config';
 import { useMapFeatureSnapController } from './useMapFeatureSnapController';
 
+const INTERSECTION_MATERIALIZED_LAYER_ID = 'intersection-materialized-layer';
+const POLYGON_EDGE_PREVIEW_LAYER_ID = 'polygonEdgePreviewLineLayer';
+
+/**
+ * 创建吸附控制器测试用地图桩。
+ * @param features 当前查询应返回的渲染要素
+ * @returns 最小地图桩对象
+ */
+function createMapStub(features: any[]) {
+  return {
+    on: vi.fn(),
+    off: vi.fn(),
+    getLayer: vi.fn((layerId: string) => ({ id: layerId })),
+    queryRenderedFeatures: vi.fn((_bbox: unknown, options?: { layers?: string[] }) => {
+      const layers = options?.layers || [];
+      return features.filter((feature) => layers.includes(feature.layer.id));
+    }),
+    project: vi.fn((coordinate: [number, number]) => ({
+      x: coordinate[0],
+      y: coordinate[1],
+    })),
+    unproject: vi.fn((point: [number, number] | { x: number; y: number }) => {
+      if (Array.isArray(point)) {
+        return {
+          lng: point[0],
+          lat: point[1],
+        };
+      }
+
+      return {
+        lng: point.x,
+        lat: point.y,
+      };
+    }),
+  };
+}
+
 describe('useMapFeatureSnapController', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
@@ -120,6 +157,129 @@ describe('useMapFeatureSnapController', () => {
     });
 
     controller.destroy();
+  });
+
+  it('应按字段合并 snap 内置目标全局默认值和实例局部配置', () => {
+    setMapGlobalConfig({
+      plugins: {
+        snap: {
+          intersection: {
+            priority: 130,
+            tolerancePx: 12,
+            snapTo: ['vertex'],
+          },
+          polygonEdge: {
+            tolerancePx: 4,
+            snapTo: ['vertex'],
+          },
+        },
+      },
+    });
+
+    const map = createMapStub([
+      {
+        id: 'intersection-a',
+        source: 'intersection-source',
+        properties: {
+          id: 'intersection-a',
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: [5, 5],
+        },
+        layer: {
+          id: INTERSECTION_MATERIALIZED_LAYER_ID,
+        },
+      },
+      {
+        id: 'business-a',
+        source: 'business-source',
+        properties: {
+          id: 'business-a',
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: [5, 5],
+        },
+        layer: {
+          id: 'business-point-layer',
+        },
+      },
+      {
+        id: 'polygon-edge-a',
+        source: 'polygon-edge-source',
+        properties: {
+          id: 'polygon-edge-a',
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [0, 0],
+            [10, 0],
+          ],
+        },
+        layer: {
+          id: POLYGON_EDGE_PREVIEW_LAYER_ID,
+        },
+      },
+    ]);
+    const intersectionController = useMapFeatureSnapController({
+      getOptions: () => ({
+        intersection: {
+          tolerancePx: 8,
+        },
+        polygonEdge: false,
+        businessLayers: {
+          enabled: true,
+          rules: [
+            {
+              id: 'business-point',
+              layerIds: ['business-point-layer'],
+              priority: 120,
+              tolerancePx: 12,
+              snapTo: ['vertex'],
+            },
+          ],
+        },
+      }),
+      getMap: () => map as any,
+    });
+
+    const priorityResult = intersectionController.resolveMapEvent({
+      point: { x: 5, y: 5 },
+      lngLat: { lng: 5, lat: 5 },
+    });
+    const toleranceResult = intersectionController.resolveMapEvent({
+      point: { x: 5, y: 17 },
+      lngLat: { lng: 5, lat: 17 },
+    });
+    intersectionController.destroy();
+
+    const polygonController = useMapFeatureSnapController({
+      getOptions: () => ({
+        intersection: false,
+        polygonEdge: {
+          priority: 95,
+        },
+      }),
+      getMap: () => map as any,
+    });
+    const polygonSegmentResult = polygonController.resolveMapEvent({
+      point: { x: 5, y: 1 },
+      lngLat: { lng: 5, lat: 1 },
+    });
+    const polygonVertexResult = polygonController.resolveMapEvent({
+      point: { x: 0, y: 1 },
+      lngLat: { lng: 0, lat: 1 },
+    });
+
+    expect(priorityResult.targetLayerId).toBe(INTERSECTION_MATERIALIZED_LAYER_ID);
+    expect(toleranceResult.targetLayerId).toBe('business-point-layer');
+    expect(polygonSegmentResult.targetLayerId).not.toBe(POLYGON_EDGE_PREVIEW_LAYER_ID);
+    expect(polygonVertexResult.targetLayerId).toBe(POLYGON_EDGE_PREVIEW_LAYER_ID);
+    expect(polygonVertexResult.snapKind).toBe('vertex');
+
+    polygonController.destroy();
   });
 
   it('destroy 后应停止配置监听并销毁当前吸附绑定', async () => {

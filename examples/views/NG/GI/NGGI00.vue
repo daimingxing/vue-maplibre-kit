@@ -1731,16 +1731,15 @@ const intersectionPreviewOptions = {
 /**
  * 集中注册当前页面需要启用的地图能力扩展。
  */
-const mapPlugins = [
-  ...createBusinessPlugins({
-    snap: mapFeatureSnapOptions,
-    lineDraft: lineDraftPreviewOptions,
-    intersection: intersectionPreviewOptions,
-    polygonEdge: polygonEdgePreviewOptions,
-    multiSelect: mapFeatureMultiSelectOptions,
-    dxfExport: mapDxfExportOptions,
-  }),
-];
+const mapPlugins = createBusinessPlugins({
+  sourceRegistry: businessSourceRegistry,
+  snap: mapFeatureSnapOptions,
+  lineDraft: lineDraftPreviewOptions,
+  intersection: intersectionPreviewOptions,
+  polygonEdge: polygonEdgePreviewOptions,
+  multiSelect: mapFeatureMultiSelectOptions,
+  dxfExport: mapDxfExportOptions,
+});
 
 /**
  * 当前页面统一使用的业务聚合门面。

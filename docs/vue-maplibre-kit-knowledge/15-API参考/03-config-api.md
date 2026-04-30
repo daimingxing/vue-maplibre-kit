@@ -18,6 +18,7 @@
 | `MapFeatureSnapGlobalDefaults` | 类型 | snap 全局默认值 |
 | `LineDraftPreviewGlobalDefaults` | 类型 | lineDraft 全局默认值 |
 | `IntersectionPreviewGlobalDefaults` | 类型 | intersection 全局默认值 |
+| `PolygonEdgePreviewGlobalDefaults` | 类型 | polygonEdge 全局默认值 |
 | `MapFeatureMultiSelectGlobalDefaults` | 类型 | multiSelect 全局默认值 |
 | `MapDxfExportGlobalDefaults` | 类型 | dxfExport 全局默认值 |
 
@@ -31,6 +32,7 @@ interface MapKitGlobalConfig {
     snap?: MapFeatureSnapGlobalDefaults;
     lineDraft?: LineDraftPreviewGlobalDefaults;
     intersection?: IntersectionPreviewGlobalDefaults;
+    polygonEdge?: PolygonEdgePreviewGlobalDefaults;
     multiSelect?: MapFeatureMultiSelectGlobalDefaults;
     dxfExport?: MapDxfExportGlobalDefaults;
   };

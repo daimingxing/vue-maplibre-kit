@@ -533,6 +533,8 @@ export function useIntersectionPreviewController(
    */
   const setScope = (nextScope: IntersectionScope): void => {
     const pluginOptions = options.getOptions();
+    options.setScope?.(nextScope);
+
     if (pluginOptions) {
       pluginOptions.scope = nextScope;
     }

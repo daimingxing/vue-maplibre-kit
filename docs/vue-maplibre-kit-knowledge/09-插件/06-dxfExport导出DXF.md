@@ -58,9 +58,9 @@ const defaults: MapDxfExportTaskOptions = {
 };
 
 const plugins = createBusinessPlugins({
+  sourceRegistry: registry,
   dxfExport: {
     enabled: true,
-    sourceRegistry: registry,
     defaults,
     control: {
       enabled: true,
@@ -73,10 +73,35 @@ const plugins = createBusinessPlugins({
 
 上面三个 resolver 的职责分别是生成图层名、返回图层默认颜色、返回单要素覆盖颜色。
 
+简写注册：
+
+```ts
+const plugins = createBusinessPlugins({
+  sourceRegistry: registry,
+  dxfExport: true,
+});
+```
+
+扁平任务参数写法：
+
+```ts
+const plugins = createBusinessPlugins({
+  sourceRegistry: registry,
+  dxfExport: {
+    control: { enabled: false },
+    sourceCrs: "EPSG:4326",
+    targetCrs: "EPSG:3857",
+    fileName: "business.dxf",
+  },
+});
+```
+
 ## 配置重点
 
-- `sourceRegistry` 是必需配置，插件通过它读取业务 source。
+- `sourceRegistry` 是必需配置，推荐放在 `createBusinessPlugins()` 顶层，插件通过它读取业务 source。
+- `dxfExport: true` 使用顶层 `sourceRegistry`、库内默认值和全局 DXF 默认值。
 - `defaults` 是页面级默认导出参数，可覆盖 DXF 模块的全局默认值。
+- `sourceCrs`、`targetCrs`、`fileName` 等任务默认值可以扁平写在业务预设层，最终会合并进 `defaults`。
 - `control.enabled` 控制是否渲染内置导出控件。
 - `sourceIds` 为 `null` 时导出全部业务 source；传数组时只导出指定 source。
 - `featureFilter` 可按业务字段过滤要素。
@@ -127,7 +152,7 @@ async function exportDxf(): Promise<void> {
 ## 示例引用
 
 - `examples/views/NG/GI/NGGI11.vue`：全部导出、下载、管线过滤导出、图层名和颜色解析器。
-- `examples/views/NG/GI/NGGI06.vue`：五插件总览中的 `businessMap.plugins.dxfExport.exportDxf()`。
+- `examples/views/NG/GI/NGGI06.vue`：业务插件总览中的 `businessMap.plugins.dxfExport.exportDxf()`。
 
 ## 风险提示
 

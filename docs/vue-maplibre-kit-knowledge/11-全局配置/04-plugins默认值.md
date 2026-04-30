@@ -2,6 +2,10 @@
 
 全局 plugins 用于给内置业务插件提供应用级默认参数。当前按 src/entries/config.ts 支持六个插件键。
 
+全局 plugins 只配置“插件启用后的默认行为”，不配置插件是否注册或启用。插件是否启用由页面局部的 `createBusinessPlugins()` 决定。
+
+对全局支持的字段，合并顺序统一为：插件内置默认值 -> 全局默认值 -> 页面局部配置。全局不包含页面运行期对象、业务 source/layer 绑定和页面交互回调。
+
 ## plugins.snap 全局配置项
 
 ```ts
@@ -116,11 +120,17 @@ plugins: {
 
 ## plugins.intersection 全局配置项
 
-> 当前全局只负责预览交点层和正式交点层的默认视觉，不负责“哪些业务线参与求交”和“点击交点后如何物化”。
+> 当前全局负责交点插件启用后的默认行为、算法参数和默认视觉；不负责页面数据范围、运行期对象、正式点业务属性和页面交互回调。
 
 ```ts
 plugins: {
   intersection: {
+    visible: true, // 当前交点层默认是否可见
+    materializeOnClick: true, // 点击预览交点时是否自动生成正式交点点要素
+    scope: 'all', // 当前求交范围：all / selected
+    includeEndpoint: false, // 是否保留端点交点
+    coordDigits: 6, // 交点坐标归一化小数位
+    ignoreSelf: true, // 是否忽略同一条线自交
     previewStateStyles: {
       default: {
         // radius: 5, // 默认态半径
@@ -187,7 +197,8 @@ plugins: {
 
 - `previewStateStyles`、`materializedStateStyles` 的合并顺序是“插件内置默认值 -> 全局默认值 -> 当前实例”。
 - `previewStyleOverrides`、`materializedStyleOverrides` 的合并顺序是“全局默认值 -> 当前实例”。
-- 当前全局没有 `enabled`、`visible`、`scope`、`materializeOnClick`、`targetSourceIds`、`targetLayerIds`、`sourceRegistry`、`getCandidates`、`materializedProperties`、`inheritMaterializedPropertiesFromLayerId`、`onHoverEnter`、`onHoverLeave`、`onClick`、`onContextMenu` 这些字段。
+- 当前全局允许 `visible`、`materializeOnClick`、`scope`、`includeEndpoint`、`coordDigits`、`ignoreSelf`、`previewStateStyles`、`materializedStateStyles`、`previewStyleOverrides`、`materializedStyleOverrides` 这些字段。
+- 当前全局没有 `enabled`、`targetSourceIds`、`targetLayerIds`、`sourceRegistry`、`getCandidates`、`materializedProperties`、`inheritMaterializedPropertiesFromLayerId`、`onHoverEnter`、`onHoverLeave`、`onClick`、`onContextMenu` 这些字段。
 
 ---
 
@@ -244,13 +255,17 @@ plugins: {
 plugins: {
   // 多选插件：统一控制多选模式默认行为
   multiSelect: {
-    // enabled: true, // 是否启用多选插件
     // position: 'top-right', // 多选控件位置
     // deactivateBehavior: 'retain', // 退出多选后是清空还是保留选中集：clear / retain
     // closeOnEscape: true, // 是否允许按 Esc 退出多选
   },
 },
 ```
+
+补充说明：
+
+- 全局 `plugins.multiSelect` 不包含 `enabled`，插件是否注册或启用由页面局部 `createBusinessPlugins({ multiSelect })` 决定。
+- `targetLayerIds`、`excludeLayerIds`、`canSelect` 依赖具体页面图层和业务规则，应在页面局部配置。
 
 ---
 

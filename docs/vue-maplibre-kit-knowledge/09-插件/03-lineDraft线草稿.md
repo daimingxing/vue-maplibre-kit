@@ -88,7 +88,7 @@ function addRegion(): void {
 ## 示例引用
 
 - `examples/views/NG/GI/NGGI08.vue`：选中线段、生成延长线、生成线廊、读写草稿属性、读取草稿 GeoJSON。
-- `examples/views/NG/GI/NGGI06.vue`：五插件总览中的 `previewLine`、`previewRegion`、`clearDraft`。
+- `examples/views/NG/GI/NGGI06.vue`：业务插件总览中的 `previewLine`、`previewRegion`、`clearDraft`。
 
 ## 风险提示
 

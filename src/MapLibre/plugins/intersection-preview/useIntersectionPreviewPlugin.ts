@@ -128,6 +128,33 @@ function resolveIntersectionStateStyles(
 }
 
 /**
+ * 合并交点插件行为配置。
+ * 全局只托管默认行为和算法参数，页面局部仍负责数据范围、业务对象和回调。
+ *
+ * @param localOptions 页面局部交点插件配置
+ * @returns 合并全局默认值后的交点插件配置
+ */
+function resolveIntersectionOptions(
+  localOptions: IntersectionPreviewOptions | null | undefined
+): IntersectionPreviewOptions | null | undefined {
+  const globalDefaults = getMapGlobalIntersectionDefaults();
+  if (!globalDefaults && !localOptions) {
+    return localOptions;
+  }
+
+  return {
+    ...(localOptions || {}),
+    visible: localOptions?.visible ?? globalDefaults?.visible,
+    materializeOnClick:
+      localOptions?.materializeOnClick ?? globalDefaults?.materializeOnClick,
+    scope: localOptions?.scope ?? globalDefaults?.scope,
+    includeEndpoint: localOptions?.includeEndpoint ?? globalDefaults?.includeEndpoint,
+    coordDigits: localOptions?.coordDigits ?? globalDefaults?.coordDigits,
+    ignoreSelf: localOptions?.ignoreSelf ?? globalDefaults?.ignoreSelf,
+  } as IntersectionPreviewOptions;
+}
+
+/**
  * 解析预览交点图层样式。
  * 当前交点图层的 hover / selected 视觉状态由状态样式配置驱动，
  * 最后再叠加原始 styleOverrides，保留低层逃生口。
@@ -359,9 +386,15 @@ export const intersectionPreviewPlugin = defineMapPlugin<
 >({
   type: INTERSECTION_PREVIEW_PLUGIN_TYPE,
   createInstance(context) {
+    /**
+     * 读取合并全局默认值后的交点插件配置。
+     * @returns 最终用于运行期行为的交点配置
+     */
+    const getResolvedOptions = () => resolveIntersectionOptions(context.getOptions());
+
     const pluginState = ref<IntersectionPreviewState>({
-      visible: context.getOptions()?.visible !== false,
-      scope: context.getOptions()?.scope || 'all',
+      visible: getResolvedOptions()?.visible !== false,
+      scope: getResolvedOptions()?.scope || 'all',
       count: 0,
       materializedCount: 0,
       selectedId: null,
@@ -422,9 +455,9 @@ export const intersectionPreviewPlugin = defineMapPlugin<
       );
     };
     const controller = useIntersectionPreviewController({
-      getOptions: () => context.getOptions(),
+      getOptions: getResolvedOptions,
       getCandidates: () => {
-        const pluginOptions = context.getOptions();
+        const pluginOptions = getResolvedOptions();
         if (pluginOptions?.getCandidates) {
           return pluginOptions.getCandidates();
         }
@@ -432,6 +465,12 @@ export const intersectionPreviewPlugin = defineMapPlugin<
         return buildCandidatesFromSourceRegistry(pluginOptions);
       },
       getSelectedFeatureContext: context.getSelectedFeatureContext,
+      setScope: (scope) => {
+        const rawOptions = context.getOptions();
+        if (rawOptions) {
+          rawOptions.scope = scope;
+        }
+      },
       onStateChange: (stateSnapshot) => {
         pluginState.value = stateSnapshot;
       },
@@ -507,7 +546,7 @@ export const intersectionPreviewPlugin = defineMapPlugin<
      * @returns 当前是否需要跟随选中态刷新交点
      */
     const shouldRefreshBySelectionChange = (): boolean => {
-      if ((context.getOptions()?.scope || 'all') !== 'selected') {
+      if ((getResolvedOptions()?.scope || 'all') !== 'selected') {
         return false;
       }
 
@@ -540,11 +579,11 @@ export const intersectionPreviewPlugin = defineMapPlugin<
         enableFeatureStateSelected: true,
         onHoverEnter: (contextSnapshot: { featureId: string | number | null }) => {
           const intersection = resolveIntersectionContext(contextSnapshot.featureId, layerId);
-          intersection && context.getOptions()?.onHoverEnter?.(intersection);
+          intersection && getResolvedOptions()?.onHoverEnter?.(intersection);
         },
         onHoverLeave: (contextSnapshot: { featureId: string | number | null }) => {
           const intersection = resolveIntersectionContext(contextSnapshot.featureId, layerId);
-          intersection && context.getOptions()?.onHoverLeave?.(intersection);
+          intersection && getResolvedOptions()?.onHoverLeave?.(intersection);
         },
         onFeatureSelect: (contextSnapshot: { featureId: string | number | null }) => {
           syncSelectedIntersection(
@@ -561,12 +600,12 @@ export const intersectionPreviewPlugin = defineMapPlugin<
           if (shouldMaterializeOnClick && intersection) {
             controller.materialize(intersection.intersectionId);
           }
-          intersection && context.getOptions()?.onClick?.(intersection);
+          intersection && getResolvedOptions()?.onClick?.(intersection);
         },
         onContextMenu: (contextSnapshot: { featureId: string | number | null }) => {
           const intersection = resolveIntersectionContext(contextSnapshot.featureId, layerId);
           syncSelectedIntersection(intersection, layerId);
-          intersection && context.getOptions()?.onContextMenu?.(intersection);
+          intersection && getResolvedOptions()?.onContextMenu?.(intersection);
         },
       };
     };
@@ -660,7 +699,7 @@ export const intersectionPreviewPlugin = defineMapPlugin<
         layers: {
           [INTERSECTION_PREVIEW_LAYER_ID]: createIntersectionLayerInteractiveConfig(
             INTERSECTION_PREVIEW_LAYER_ID,
-            context.getOptions()?.materializeOnClick !== false
+            getResolvedOptions()?.materializeOnClick !== false
           ),
           [INTERSECTION_MATERIALIZED_LAYER_ID]: createIntersectionLayerInteractiveConfig(
             INTERSECTION_MATERIALIZED_LAYER_ID,

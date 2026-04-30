@@ -9,7 +9,7 @@
 - [01-配置入口.md](./01-配置入口.md)：真实项目推荐目录、启动阶段注册方式、完整起手模板。
 - [02-mapOptions默认值.md](./02-mapOptions默认值.md)：地图初始化参数完整模板。
 - [03-mapControls默认值.md](./03-mapControls默认值.md)：内置控件、绘图控件和测量控件完整模板。
-- [04-plugins默认值.md](./04-plugins默认值.md)：snap、lineDraft、intersection、multiSelect、dxfExport 完整模板。
+- [04-plugins默认值.md](./04-plugins默认值.md)：snap、lineDraft、intersection、polygonEdge、multiSelect、dxfExport 完整模板。
 - [05-styles默认值.md](./05-styles默认值.md)：circle、line、fill、symbol、raster 的 layout / paint 模板。
 - [06-优先级和覆盖规则.md](./06-优先级和覆盖规则.md)：全局、页面和单次命令的合并关系。
 
@@ -59,6 +59,9 @@ defineMapGlobalConfig({
     intersection: {
       // ...
     },
+    polygonEdge: {
+      // ...
+    },
     multiSelect: {
       // ...
     },
@@ -93,6 +96,7 @@ defineMapGlobalConfig({
 - `config.plugins.snap`：吸附插件默认参数
 - `config.plugins.lineDraft`：线草稿预览插件默认参数
 - `config.plugins.intersection`：交点预览插件默认参数
+- `config.plugins.polygonEdge`：面边线预览插件默认参数
 - `config.plugins.multiSelect`：多选插件默认参数
 - `config.plugins.dxfExport`：DXF 导出插件默认参数
 - `config.styles.circle`：点图层样式工厂默认值
@@ -106,4 +110,3 @@ defineMapGlobalConfig({
 ## 迁移来源
 
 本目录从旧文档 docs/vue-mapLibre-kit知识库/vue-maplibre-kit-全局配置说明.md 拆分迁移，并按 src/entries/config.ts 校对。旧文档只作为迁移来源，新业务文档应以本目录为准。
-
