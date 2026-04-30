@@ -469,6 +469,23 @@ describe('intersectionPreviewPlugin', () => {
     expect(pluginApi.getData().features).toHaveLength(1);
   });
 
+  it('setScope 应更新运行期范围且不修改原始插件配置对象', () => {
+    const optionsRef = createOptionsRef({
+      ...createPluginOptions(),
+      scope: 'all',
+    });
+    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error('未获取到交点插件 API');
+    }
+
+    pluginApi.setScope('selected');
+
+    expect(optionsRef.value.scope).toBe('all');
+    expect(pluginInstance.state?.value.scope).toBe('selected');
+  });
+
   it('全局 materializeOnClick 默认值应影响预览交点点击行为', () => {
     setMapGlobalConfig({
       plugins: {

@@ -11,6 +11,7 @@ import type {
   IntersectionPreviewContext,
   IntersectionPreviewOptions,
   IntersectionPreviewPluginApi,
+  IntersectionPreviewScope,
   IntersectionPreviewState,
   IntersectionPreviewStateStyles,
   IntersectionPreviewStyleOverrides,
@@ -386,11 +387,23 @@ export const intersectionPreviewPlugin = defineMapPlugin<
 >({
   type: INTERSECTION_PREVIEW_PLUGIN_TYPE,
   createInstance(context) {
+    const scopePatch = ref<IntersectionPreviewScope | null>(null);
+
     /**
      * 读取合并全局默认值后的交点插件配置。
      * @returns 最终用于运行期行为的交点配置
      */
-    const getResolvedOptions = () => resolveIntersectionOptions(context.getOptions());
+    const getResolvedOptions = () => {
+      const resolvedOptions = resolveIntersectionOptions(context.getOptions());
+      if (!resolvedOptions || scopePatch.value == null) {
+        return resolvedOptions;
+      }
+
+      return {
+        ...resolvedOptions,
+        scope: scopePatch.value,
+      };
+    };
 
     const pluginState = ref<IntersectionPreviewState>({
       visible: getResolvedOptions()?.visible !== false,
@@ -466,10 +479,7 @@ export const intersectionPreviewPlugin = defineMapPlugin<
       },
       getSelectedFeatureContext: context.getSelectedFeatureContext,
       setScope: (scope) => {
-        const rawOptions = context.getOptions();
-        if (rawOptions) {
-          rawOptions.scope = scope;
-        }
+        scopePatch.value = scope;
       },
       onStateChange: (stateSnapshot) => {
         pluginState.value = stateSnapshot;
