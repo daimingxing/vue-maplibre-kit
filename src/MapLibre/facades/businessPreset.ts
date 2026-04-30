@@ -273,14 +273,26 @@ function resolveIntersectionOptions(
   context: BusinessPluginsOptions,
   options: BusinessIntersectionPresetOptions
 ): IntersectionPreviewOptions {
-  if (!options.targetSourceIds?.length && !options.targetLayerIds?.length) {
-    throw new Error('createBusinessPlugins({ intersection }) 需要 targetSourceIds 或 targetLayerIds');
+  const hasTargetScope = Boolean(options.targetSourceIds?.length || options.targetLayerIds?.length);
+  const hasCustomCandidates = typeof options.getCandidates === 'function';
+  const sourceRegistry = options.sourceRegistry || context.sourceRegistry;
+
+  if (!hasTargetScope && !hasCustomCandidates) {
+    throw new Error(
+      'createBusinessPlugins({ intersection }) 自动模式需要 targetSourceIds 或 targetLayerIds'
+    );
+  }
+
+  if (!hasCustomCandidates && !sourceRegistry) {
+    throw new Error(
+      'createBusinessPlugins({ intersection }) 自动模式需要 sourceRegistry；高级模式请改用 getCandidates'
+    );
   }
 
   return {
     ...options,
     targetSourceIds: options.targetSourceIds || [],
-    sourceRegistry: options.sourceRegistry || context.sourceRegistry,
+    sourceRegistry,
   };
 }
 

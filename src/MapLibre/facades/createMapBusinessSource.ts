@@ -940,7 +940,12 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
     const nextCollection = replaceFeatureCollectionFeatures(snapshotRef.value.featureCollection, nextFeatures);
     const normalizedSnapshot = normalizeBusinessSourceData(nextCollection, options);
 
-    // replace 是业务层显式提交的最新结果，这里直接把标准化后的集合写回本地数据引用。
+    if (!normalizedSnapshot.valid) {
+      console.warn(normalizedSnapshot.validationMessage);
+      return false;
+    }
+
+    // replace 是业务层显式提交的最新结果，只在索引有效时写回，避免进入“看得见但查不到”的无效状态。
     commitSnapshot(normalizedSnapshot);
     return true;
   };

@@ -1,6 +1,6 @@
 # plugins 命令
 
-`businessMap.plugins` 是五个内置插件能力的短路径。业务层应优先从这里调用插件动作，而不是从业务入口单独引多个 `use*`。
+`businessMap.plugins` 是六个内置插件能力的短路径。业务层应优先从这里调用插件动作，而不是从业务入口单独引多个 `use*`。
 
 ## snap
 
@@ -44,6 +44,23 @@ businessMap.plugins.intersection.clearMaterialized();
 - `selectedId`
 - `lastError`
 
+## polygonEdge
+
+```ts
+businessMap.plugins.polygonEdge.featureCount.value;
+businessMap.plugins.polygonEdge.selectedEdgeId.value;
+businessMap.plugins.polygonEdge.generateFromSelected();
+businessMap.plugins.polygonEdge.clearHighlight();
+businessMap.plugins.polygonEdge.clear();
+```
+
+常用动作：
+
+- `generateFromFeature()`：从指定面要素生成边线。
+- `highlightPolygon()`、`highlightRing()`、`highlightEdge()`：高亮面、ring 或单条边线。
+- `selectEdge()`：选中单条边线。
+- `getData()`：读取当前边线 GeoJSON。
+
 ## multiSelect
 
 ```ts
@@ -83,4 +100,3 @@ export async function downloadDxf(businessMap) {
 ```txt
 注册插件 -> 从 businessMap.plugins.* 读取状态和动作 -> 必要时用单次 overrides 覆盖
 ```
-

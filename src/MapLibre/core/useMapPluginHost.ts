@@ -718,6 +718,8 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
 
       return pluginRecord;
     } catch (error) {
+      // 插件初始化失败只跳过当前插件，避免单个业务插件拖垮整张地图。
+      // 业务层可通过控制台错误和 businessMap.plugins.* 能力不可用来定位配置问题。
       console.error(`[MapPluginHost] 插件 '${descriptor.id}' 初始化失败，已跳过`, error);
       return null;
     }
@@ -785,6 +787,8 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
   /**
    * 提取插件描述符的顶层依赖。
    * 这里只跟踪 id / type / plugin / options 引用变化，避免 deep watch 对函数配置做递归遍历。
+   * 动态配置请替换 descriptor/options 顶层引用，例如用 computed 重新调用 createBusinessPlugins()。
+   * 不深度监听嵌套对象，是为了避免递归遍历函数配置和大对象造成额外开销。
    * @returns 当前插件描述符的同步依赖快照
    */
   function getDescriptorDependencies(): MapPluginDescriptorDependency[] {

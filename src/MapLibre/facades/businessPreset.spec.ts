@@ -147,15 +147,49 @@ describe('businessPreset', () => {
     });
   });
 
-  it('intersection 缺少目标范围时应提示业务层补充 targetSourceIds 或 targetLayerIds', async () => {
+  it('intersection 使用 getCandidates 高级模式时不强制要求目标范围和 sourceRegistry', async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+    const getCandidates = () => [];
+
+    const plugins = createBusinessPlugins({
+      intersection: {
+        getCandidates,
+      },
+    });
+
+    expect(plugins).toHaveLength(1);
+    expect(plugins[0].type).toBe('intersectionPreview');
+    expect((plugins[0].options as any).getCandidates).toBe(getCandidates);
+    expect((plugins[0].options as any).targetSourceIds).toEqual([]);
+  });
+
+  it('intersection 自动模式缺少目标范围时应提示补充 targetSourceIds 或 targetLayerIds', async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+    const sourceRegistry = createMapBusinessSourceRegistry([]);
+
+    expect(() =>
+      createBusinessPlugins({
+        sourceRegistry,
+        intersection: {} as any,
+      })
+    ).toThrow('createBusinessPlugins({ intersection }) 自动模式需要 targetSourceIds 或 targetLayerIds');
+  });
+
+  it('intersection 自动模式缺少 sourceRegistry 时应提示补充数据来源', async () => {
     const businessPreset = await loadBusinessPreset();
     const { createBusinessPlugins } = businessPreset;
 
     expect(() =>
       createBusinessPlugins({
-        intersection: {} as any,
+        intersection: {
+          targetLayerIds: ['pipe-line'],
+        },
       })
-    ).toThrow('createBusinessPlugins({ intersection }) 需要 targetSourceIds 或 targetLayerIds');
+    ).toThrow(
+      'createBusinessPlugins({ intersection }) 自动模式需要 sourceRegistry；高级模式请改用 getCandidates'
+    );
   });
 
   it('应允许 snap 直接传完整 businessLayers 配置', async () => {

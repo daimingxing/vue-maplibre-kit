@@ -51,8 +51,28 @@ polygonEdge.highlightPolygon("polygon::source-a::land-1");
 polygonEdge.highlightRing("ring::source-a::land-1::0::0");
 polygonEdge.highlightEdge("polygon-edge::source-a::land-1::0::0::0");
 polygonEdge.selectEdge("polygon-edge::source-a::land-1::0::0::0");
+polygonEdge.clearHighlight();
+polygonEdge.getData();
 polygonEdge.clear();
 ```
+
+## 状态与动作速查
+
+| 能力 | 用途 |
+| --- | --- |
+| `featureCount` | 当前临时边线数量 |
+| `selectedEdgeId` | 当前选中的边线 ID |
+| `generateFromFeature()` | 从指定面要素生成边线 |
+| `generateFromSelected()` | 从当前选中面要素生成边线 |
+| `highlightPolygon()` | 高亮同一个来源面生成的全部边线 |
+| `highlightRing()` | 高亮指定 ring 的边线 |
+| `highlightEdge()` | 高亮单条边线 |
+| `selectEdge()` | 选中单条边线 |
+| `clearHighlight()` | 清理高亮状态 |
+| `getData()` | 读取边线 FeatureCollection |
+| `clear()` | 清空边线 |
+
+完整按钮式流程可参考 `examples/views/NG/GI/NGGI12.vue`：生成边线 -> 读取数量 -> 高亮 polygon/ring/edge -> 选择 edge -> 清理高亮 -> 清空。
 
 ## 生成字段
 
@@ -70,6 +90,8 @@ polygonEdge.clear();
 - `isOuterRing`：是否外环。
 
 GeoJSON 中 Polygon 的坐标是 ring 数组。第一个 ring 是外环边界，后续 ring 表示洞。插件可以只高亮一个 ring，因此不一定每次都高亮整个图形。
+
+`generatedKind` 是生成要素公开元数据，可用于业务层区分 intersection、lineDraft、polygonEdge 等生成要素类型。常规业务逻辑优先依赖门面能力，不建议依赖具体 preview sourceId。
 
 ## 样式规则
 

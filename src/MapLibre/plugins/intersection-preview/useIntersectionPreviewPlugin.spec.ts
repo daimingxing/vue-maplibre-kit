@@ -2,7 +2,11 @@ import { ref } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MapPluginContext } from '../types';
 import type { MapLayerInteractiveContext } from '../../shared/mapLibre-controls-types';
-import type { MapCommonLineFeature, MapSourceFeatureRef } from '../../shared/map-common-tools';
+import type {
+  MapCommonFeature,
+  MapCommonLineFeature,
+  MapSourceFeatureRef,
+} from '../../shared/map-common-tools';
 import { createMapBusinessSource, createMapBusinessSourceRegistry } from '../../facades/createMapBusinessSource';
 import { resetMapGlobalConfig, setMapGlobalConfig } from '../../../config';
 import { createLineBusinessLayer } from '../../facades/mapBusinessLayer';
@@ -57,6 +61,30 @@ function createLineFeature(id: string, coordinates: [number, number][]): MapComm
     },
     geometry: {
       type: 'LineString',
+      coordinates,
+    },
+  };
+}
+
+/**
+ * 创建测试用多线要素。
+ * @param id 多线要素 ID
+ * @param coordinates 多线坐标串
+ * @returns 标准多线要素
+ */
+function createMultiLineFeature(
+  id: string,
+  coordinates: [number, number][][]
+): MapCommonFeature {
+  return {
+    type: 'Feature',
+    id,
+    properties: {
+      id,
+      name: id,
+    },
+    geometry: {
+      type: 'MultiLineString',
       coordinates,
     },
   };
@@ -362,6 +390,61 @@ describe('intersectionPreviewPlugin', () => {
       sourceRegistry: createSourceRegistry(),
       targetSourceIds: ['line-source', 'line-source-2'],
       targetLayerIds: ['line-layer', 'line-layer-2'],
+    });
+
+    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error('未获取到交点插件 API');
+    }
+
+    expect(pluginApi.getData().features).toHaveLength(1);
+  });
+
+  it('未传 getCandidates 时应把目标 MultiLineString 拆成候选线', () => {
+    const sourceRegistry = createMapBusinessSourceRegistry([
+      createMapBusinessSource({
+        sourceId: 'line-source',
+        data: ref({
+          type: 'FeatureCollection',
+          features: [
+            createMultiLineFeature('multi-line-a', [
+              [
+                [0, 0],
+                [10, 10],
+              ],
+              [
+                [20, 20],
+                [30, 30],
+              ],
+            ]),
+            createLineFeature('line-b', [
+              [0, 10],
+              [10, 0],
+            ]),
+          ],
+        }),
+        promoteId: 'id',
+        layers: [
+          createLineBusinessLayer({
+            layerId: 'line-layer',
+            geometryTypes: ['MultiLineString'],
+            style: {
+              layout: {},
+              paint: {},
+            },
+          }),
+        ],
+      }),
+    ]);
+    const optionsRef = createOptionsRef({
+      enabled: true,
+      visible: true,
+      scope: 'all',
+      sourceRegistry,
+      targetSourceIds: ['line-source'],
+      targetLayerIds: ['line-layer'],
+      includeEndpoint: true,
     });
 
     const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));

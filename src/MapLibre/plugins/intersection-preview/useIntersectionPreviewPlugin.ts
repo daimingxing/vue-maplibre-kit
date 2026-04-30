@@ -311,6 +311,34 @@ function matchesLayerWhere(feature: MapCommonFeature, layer: MapBusinessLayerDes
 }
 
 /**
+ * 将业务线要素拆成自动求交候选支持的 LineString 要素。
+ * @param feature 当前业务要素
+ * @returns 可参与求交计算的线要素列表
+ */
+function toLineCandidateFeatures(feature: MapCommonFeature): MapCommonLineFeature[] {
+  if (feature.geometry?.type === 'LineString') {
+    return [feature as MapCommonLineFeature];
+  }
+
+  if (feature.geometry?.type !== 'MultiLineString') {
+    return [];
+  }
+
+  return feature.geometry.coordinates.map((coordinates, index) => ({
+    ...feature,
+    id: feature.id === undefined ? feature.id : `${String(feature.id)}::${index}`,
+    properties: {
+      ...(feature.properties || {}),
+      multiLineIndex: index,
+    },
+    geometry: {
+      type: 'LineString',
+      coordinates,
+    },
+  })) as MapCommonLineFeature[];
+}
+
+/**
  * 从业务 source 注册表中自动提取交点候选线。
  * 业务层只需声明 sourceRegistry + targetSourceIds + targetLayerIds，
  * 插件会自行把最新业务线数据转换成求交候选集合。
@@ -361,12 +389,12 @@ function buildCandidatesFromSourceRegistry(
               type: 'FeatureCollection',
               // 自动模式只托管常见 line + where 场景；
               // 更复杂的 raw filter 仍交给 getCandidates 手动兜底。
-              features: (sourceData.features || []).filter((feature) => {
-                if ((feature as MapCommonFeature).geometry?.type !== 'LineString') {
-                  return false;
+              features: (sourceData.features || []).flatMap((feature) => {
+                if (!matchesLayerWhere(feature as MapCommonFeature, layer)) {
+                  return [];
                 }
 
-                return matchesLayerWhere(feature as MapCommonFeature, layer);
+                return toLineCandidateFeatures(feature as MapCommonFeature);
               }) as MapCommonLineFeature[],
             },
           },

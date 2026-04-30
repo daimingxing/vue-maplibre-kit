@@ -54,11 +54,15 @@ import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 不要分别记多个插件 composable。业务页面统一从 `useBusinessMap().plugins.*` 读取：
 
 ```ts
-const businessMap = useBusinessMap(mapRef);
+const businessMap = useBusinessMap({
+  mapRef: () => mapRef.value,
+  sourceRegistry: registry,
+});
 
 businessMap.plugins.snap.clearPreview();
 businessMap.plugins.lineDraft.clear();
 businessMap.plugins.intersection.refresh();
+businessMap.plugins.polygonEdge.clear();
 businessMap.plugins.multiSelect.toggle();
 businessMap.plugins.dxfExport.downloadDxf();
 ```

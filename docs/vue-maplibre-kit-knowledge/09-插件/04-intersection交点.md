@@ -29,8 +29,9 @@ const plugins = createBusinessPlugins({
 
 - `targetSourceIds` 是参与求交的业务 source 列表。
 - `targetLayerIds` 用于限制参与求交的业务图层。
-- `sourceRegistry` 推荐放在 `createBusinessPlugins()` 顶层，插件会自动从业务 source 注册表提取候选线。
-- `intersection` 不支持 `true`，必须传入 `targetSourceIds` 或 `targetLayerIds`。
+- 自动模式必须提供 `sourceRegistry`，推荐放在 `createBusinessPlugins()` 顶层，插件会自动从业务 source 注册表提取 `LineString` 和 `MultiLineString` 候选线。
+- `intersection` 不支持 `true`；自动模式必须传入 `targetSourceIds` 或 `targetLayerIds`。
+- 高级模式可以只传 `getCandidates`，此时不强制要求 `sourceRegistry` 和目标范围，候选线完全由业务方负责。
 - `includeEndpoint` 控制是否把端点接触算作交点。
 - `coordDigits` 控制交点坐标归一化小数位，用于去重稳定性。
 - `ignoreSelf` 控制是否忽略同一条线自交。
@@ -86,5 +87,6 @@ intersection.clear();
 ## 风险提示
 
 - `targetSourceIds` 或 `targetLayerIds` 至少传一个；缺少业务 source 或 source 中没有线要素时，刷新不会得到预期交点。
+- 如果使用自动模式，`sourceRegistry` 也必须存在；如果业务数据筛选规则很复杂，优先改用 `getCandidates`。
 - `includeEndpoint: false` 表示只计算线段真实交叉，不把线端点接触算作交点；端点是否算交点应按业务规则明确。
 - `coordDigits` 影响去重，位数过低可能合并近邻交点，位数过高可能让浮点误差形成重复点。

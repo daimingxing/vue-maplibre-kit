@@ -145,6 +145,8 @@ export function useTerradrawControlLifecycle<
   /**
    * 提取控件实例启停所需的最小依赖。
    * 构造期配置变化不会触发控件重建，避免清空临时绘制/测量数据。
+   * 这是明确的生命周期契约：position、modeOptions 和控件构造参数只在首次创建时读取。
+   * 自动重建会清空临时绘制、测量和编辑状态；业务需要热切换大块配置时，应先保存数据再切换 isUse。
    * @returns 控件实例启停依赖快照
    */
   const getControlMountWatchSource = () => ({

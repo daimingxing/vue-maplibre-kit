@@ -11,7 +11,7 @@
 | 渲染业务 source 和 layer | [业务数据源](04-业务数据源/index.md)、[业务图层](05-业务图层/index.md) |
 | 做点击、hover、弹窗、查找要素 | [交互与查询](07-交互与查询/index.md) |
 | 做属性编辑 | [属性编辑](08-属性编辑/index.md) |
-| 注册 snap、线草稿、交点、多选、DXF | [插件](09-插件/index.md) |
+| 注册 snap、线草稿、交点、面边线、多选、DXF | [插件](09-插件/index.md) |
 | 调用命令式动作 | [命令式能力](12-命令式能力/index.md) |
 | 统一配置地图默认值 | [全局配置](11-全局配置/index.md) |
 | 做线延长、线廊、交点计算 | [几何工具](10-几何工具/index.md) |
@@ -31,14 +31,20 @@ import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 注册插件用 `createBusinessPlugins()`，读取插件状态和动作统一用 `useBusinessMap().plugins.*`：
 
 ```ts
-const businessMap = useBusinessMap(mapRef);
+const businessMap = useBusinessMap({
+  mapRef: () => mapRef.value,
+  sourceRegistry: registry,
+});
 
 const snap = businessMap.plugins.snap;
 const lineDraft = businessMap.plugins.lineDraft;
 const intersection = businessMap.plugins.intersection;
+const polygonEdge = businessMap.plugins.polygonEdge;
 const multiSelect = businessMap.plugins.multiSelect;
 const dxfExport = businessMap.plugins.dxfExport;
 ```
+
+`sourceRegistry` 是正式业务 source 的统一注册表，查询、编辑、交点和 DXF 导出等能力都会依赖它。
 
 ## 知识库地图
 
@@ -51,12 +57,12 @@ const dxfExport = businessMap.plugins.dxfExport;
 - [样式与状态](06-样式与状态/index.md)：样式工厂、表达式、hover、selected、feature-state。
 - [交互与查询](07-交互与查询/index.md)：点击、hover、Popup、要素查询和选中态。
 - [属性编辑](08-属性编辑/index.md)：`propertyPolicy`、属性面板状态、保存和删除属性。
-- [插件](09-插件/index.md)：五个业务插件的注册、配置、交互和命令式动作。
+- [插件](09-插件/index.md)：六个业务插件的注册、配置、交互和命令式动作。
 - [几何工具](10-几何工具/index.md)：线延长、线廊、线测量、交点和来源引用。
 - [全局配置](11-全局配置/index.md)：`setMapGlobalConfig()` 与全局默认值。
 - [命令式能力](12-命令式能力/index.md)：`useBusinessMap()` 的分组动作。
 - [底层逃生通道](13-底层逃生通道/index.md)：`rawHandles`、MapLibre、TerraDraw 和自定义插件。
-- [示例索引](14-示例索引/index.md)：`NGGI00` 到 `NGGI11` 的功能地图。
+- [示例索引](14-示例索引/index.md)：`NGGI00` 到 `NGGI12` 的功能地图。
 - [API 参考](15-API参考/index.md)：按公开入口列出导出能力。
 
 ## 重要边界
@@ -64,4 +70,4 @@ const dxfExport = businessMap.plugins.dxfExport;
 - 推荐业务代码使用包名路径，例如 `vue-maplibre-kit/business`。
 - 不建议业务项目直接引用 `src/MapLibre/**`，那是库内部实现。
 - 单插件子路径属于高级用法，普通业务页面优先用 `createBusinessPlugins()`。
-- `NGGI00` 是完整业务验证页，小示例 `NGGI01` 到 `NGGI11` 更适合按功能学习。
+- `NGGI00` 是完整业务验证页，小示例 `NGGI01` 到 `NGGI12` 更适合按功能学习。

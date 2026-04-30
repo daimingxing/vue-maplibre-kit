@@ -21,6 +21,7 @@
 | `snap` | 吸附插件配置，支持 `true` 或配置对象 |
 | `lineDraft` | 线草稿插件配置 |
 | `intersection` | 交点插件配置 |
+| `polygonEdge` | 面边线预览插件配置，支持 `true` 或配置对象 |
 | `multiSelect` | 多选插件配置 |
 | `dxfExport` | DXF 导出插件配置 |
 
@@ -31,6 +32,7 @@
 | `snap` | `clearPreview()`、`resolveMapEvent()`、`resolveTerradrawSnapOptions()` |
 | `lineDraft` | `state`、`previewLine()`、`replacePreviewRegion()`、`saveProperties()`、`removeProperties()`、`getFeatureById()`、`clear()` |
 | `intersection` | `state`、`refresh()`、`clear()`、`materialize()`、`removeMaterialized()`、`updateMaterializedProperties()`、`clearMaterialized()`、`getData()`、`getMaterializedData()` |
+| `polygonEdge` | `featureCount`、`selectedEdgeId`、`generateFromFeature()`、`generateFromSelected()`、`highlightPolygon()`、`highlightRing()`、`highlightEdge()`、`selectEdge()`、`clearHighlight()`、`getData()`、`clear()` |
 | `multiSelect` | `isActive`、`selectionMode`、`selectedCount`、`selectedFeatures`、`activate()`、`deactivate()`、`toggle()`、`clear()`、`getActive()`、`getSelectedFeatures()` |
 | `dxfExport` | `state`、`isExporting`、`lastFileName`、`lastWarnings`、`lastError`、`exportDxf()`、`downloadDxf()`、`getResolvedOptions()` |
 
@@ -41,6 +43,7 @@
 | `vue-maplibre-kit/plugins/map-feature-snap` | 吸附插件工厂、规则、类型 |
 | `vue-maplibre-kit/plugins/line-draft-preview` | 线草稿插件工厂、常量、类型 |
 | `vue-maplibre-kit/plugins/intersection-preview` | 交点插件工厂、样式类型 |
+| `vue-maplibre-kit/plugins/polygon-edge-preview` | 面边线预览插件工厂、常量、类型 |
 | `vue-maplibre-kit/plugins/map-feature-multi-select` | 多选插件工厂、类型 |
 | `vue-maplibre-kit/plugins/map-dxf-export` | DXF 插件工厂、任务配置、resolver 类型 |
 

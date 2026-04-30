@@ -81,6 +81,15 @@ function createLayerActionResult(success: boolean, message: string): MapLayerAct
 }
 
 /**
+ * 把未知异常转换成业务层可展示的短消息。
+ * @param error 原始异常
+ * @returns 异常消息
+ */
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
  * 读取当前地图的原生图层操作对象。
  * @param mapExpose 地图公开实例
  * @returns 原生地图实例；地图未就绪时返回 null
@@ -211,12 +220,16 @@ export function useMapLayerActions(
         return createLayerActionResult(false, '当前地图不支持添加 source');
       }
 
-      rawMap.addSource(sourceId, {
-        ...options,
-        type: 'geojson',
-        data,
-      });
-      return createLayerActionResult(true, 'source 已添加');
+      try {
+        rawMap.addSource(sourceId, {
+          ...options,
+          type: 'geojson',
+          data,
+        });
+        return createLayerActionResult(true, 'source 已添加');
+      } catch (error) {
+        return createLayerActionResult(false, `source 添加失败：${getErrorMessage(error)}`);
+      }
     },
     addLayer: (layer) => {
       const { rawMap, result } = getMapOrFail();
@@ -251,8 +264,12 @@ export function useMapLayerActions(
         return createLayerActionResult(false, '当前地图不支持添加图层');
       }
 
-      rawMap.addLayer(layer);
-      return createLayerActionResult(true, '图层已添加');
+      try {
+        rawMap.addLayer(layer);
+        return createLayerActionResult(true, '图层已添加');
+      } catch (error) {
+        return createLayerActionResult(false, `图层添加失败：${getErrorMessage(error)}`);
+      }
     },
     removeLayer: (layerId) => {
       const { rawMap, result } = getMapOrFail();
@@ -264,8 +281,12 @@ export function useMapLayerActions(
         return createLayerActionResult(false, `未找到图层：${layerId}`);
       }
 
-      rawMap.removeLayer?.(layerId);
-      return createLayerActionResult(true, '图层已移除');
+      try {
+        rawMap.removeLayer?.(layerId);
+        return createLayerActionResult(true, '图层已移除');
+      } catch (error) {
+        return createLayerActionResult(false, `图层移除失败：${getErrorMessage(error)}`);
+      }
     },
     removeSource: (sourceId) => {
       const { rawMap, result } = getMapOrFail();
@@ -277,8 +298,12 @@ export function useMapLayerActions(
         return createLayerActionResult(false, `未找到 source：${sourceId}`);
       }
 
-      rawMap.removeSource?.(sourceId);
-      return createLayerActionResult(true, 'source 已移除');
+      try {
+        rawMap.removeSource?.(sourceId);
+        return createLayerActionResult(true, 'source 已移除');
+      } catch (error) {
+        return createLayerActionResult(false, `source 移除失败：${getErrorMessage(error)}`);
+      }
     },
     show: (layerId) => setLayerValues(layerId, { visibility: 'visible' }, 'setLayoutProperty'),
     hide: (layerId) => setLayerValues(layerId, { visibility: 'none' }, 'setLayoutProperty'),

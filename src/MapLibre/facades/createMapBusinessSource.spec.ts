@@ -189,6 +189,37 @@ describe('createMapBusinessSource', () => {
     errorSpy.mockRestore();
   });
 
+  it('replaceFeatures 遇到重复业务 ID 时应返回 false 且保留旧快照', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const source = createMapBusinessSource({
+      sourceId: 'business-replace',
+      promoteId: 'id',
+      data: ref(
+        createFeatureCollection([
+          createPointFeature('origin', {
+            properties: { id: 'origin', name: '旧要素' },
+          }),
+        ])
+      ),
+      layers: ref([]),
+    });
+
+    const success = source.replaceFeatures([
+      createPointFeature('dup-a', {
+        properties: { id: 'dup', name: '重复 A' },
+      }),
+      createPointFeature('dup-b', {
+        properties: { id: 'dup', name: '重复 B' },
+      }),
+    ]);
+
+    expect(success).toBe(false);
+    expect(source.resolveFeature('origin')?.properties?.name).toBe('旧要素');
+    expect(source.resolveFeature('dup')).toBeNull();
+
+    warnSpy.mockRestore();
+  });
+
   it('promoteId 路径本地属性写回后会直接复用增量结果，不再重新标准化', () => {
     const data = ref(
       createFeatureCollection([

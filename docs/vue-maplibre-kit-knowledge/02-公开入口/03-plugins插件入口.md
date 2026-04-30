@@ -4,7 +4,7 @@
 
 先读：[插件注册总览](../09-插件/01-插件注册总览.md)。
 
-对应示例：`NGGI06`、`NGGI07`、`NGGI08`、`NGGI09`、`NGGI10`、`NGGI11`。
+对应示例：`NGGI06`、`NGGI07`、`NGGI08`、`NGGI09`、`NGGI10`、`NGGI11`、`NGGI12`。
 
 ## 推荐导入
 
@@ -37,7 +37,8 @@ const plugins = createBusinessPlugins({
 补充规则：
 
 - `sourceRegistry` 推荐放在顶层，供 `intersection` 和 `dxfExport` 复用。
-- `intersection` 不支持 `true`，必须传入 `targetSourceIds` 或 `targetLayerIds`。
+- `intersection` 不支持 `true`；自动模式必须传入 `targetSourceIds` 或 `targetLayerIds`，并提供顶层或局部 `sourceRegistry`。
+- 高级模式可以只传 `intersection.getCandidates`，此时候选线完全由业务方提供。
 - `dxfExport: true` 使用顶层 `sourceRegistry`、库内默认值和全局 DXF 默认值。
 - `dxfExport` 对象写法允许把 `sourceCrs`、`targetCrs`、`fileName` 等任务默认值扁平写在业务预设层。
 
@@ -46,11 +47,16 @@ const plugins = createBusinessPlugins({
 注册负责“装上插件”，读取负责“调用插件”。读取统一从业务门面走：
 
 ```ts
-const businessMap = useBusinessMap(mapRef);
+const businessMap = useBusinessMap({
+  mapRef: () => mapRef.value,
+  sourceRegistry: registry,
+});
 
 const selected = businessMap.plugins.multiSelect.getSelectedFeatures();
 await businessMap.plugins.dxfExport.downloadDxf();
 ```
+
+动态修改插件配置时，请替换 `descriptor/options` 顶层引用。推荐写法是 `computed(() => createBusinessPlugins(...))`，不要原地改写嵌套配置对象后期待宿主重新同步。
 
 ## 聚合入口也暴露什么
 

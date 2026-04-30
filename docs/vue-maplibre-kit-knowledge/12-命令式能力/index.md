@@ -18,7 +18,7 @@ import { useBusinessMap } from 'vue-maplibre-kit/business';
 | `layers` | 运行时增删 source/layer、改 paint/layout、写 feature-state |
 | `editor` | 统一属性编辑器状态、单字段保存、单字段删除 |
 | `effect` | feature-state 闪烁动效 |
-| `plugins` | snap、lineDraft、intersection、multiSelect、dxfExport 快捷入口 |
+| `plugins` | snap、lineDraft、intersection、polygonEdge、multiSelect、dxfExport 快捷入口 |
 
 ## 目录
 
@@ -33,4 +33,3 @@ import { useBusinessMap } from 'vue-maplibre-kit/business';
 - 持久业务数据优先放在业务 source 和声明式图层中。
 - 命令式适合用户操作后的临时动作和明确的一次性写回。
 - 若同一状态需要跨页面、跨刷新稳定存在，不应只依赖命令式图层变更。
-

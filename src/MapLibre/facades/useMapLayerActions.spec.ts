@@ -121,6 +121,42 @@ describe('useMapLayerActions', () => {
     expect(actions.removeSource('missing-source').success).toBe(false);
   });
 
+  it('应把 MapLibre 原生 source 和 layer 异常转换为结构化失败结果', () => {
+    const rawMap = {
+      getLayer: vi.fn((layerId: string) => (layerId === 'runtime-layer' ? { id: layerId } : null)),
+      getSource: vi.fn((sourceId: string) => (sourceId === 'runtime-source' ? { id: sourceId } : null)),
+      addSource: vi.fn(() => {
+        throw new Error('style is not done loading');
+      }),
+      addLayer: vi.fn(() => {
+        throw new Error('layer spec is invalid');
+      }),
+      removeLayer: vi.fn(() => {
+        throw new Error('layer is locked');
+      }),
+      removeSource: vi.fn(() => {
+        throw new Error('Source is in use');
+      }),
+      setLayoutProperty: vi.fn(),
+      setPaintProperty: vi.fn(),
+    };
+    const actions = useMapLayerActions(shallowRef(createMapExpose(rawMap)));
+    const data: FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [],
+    };
+
+    expect(actions.addGeoJsonSource('new-source', data).success).toBe(false);
+    expect(actions.addGeoJsonSource('new-source', data).message).toContain(
+      'style is not done loading'
+    );
+    expect(actions.addLayer({ id: 'new-layer', type: 'circle', source: 'runtime-source' }).success).toBe(
+      false
+    );
+    expect(actions.removeLayer('runtime-layer').message).toContain('layer is locked');
+    expect(actions.removeSource('runtime-source').message).toContain('Source is in use');
+  });
+
   it('应支持图层显隐、样式和 feature-state 动作', () => {
     const setMapFeatureState = vi.fn(() => false);
     const rawMap = {

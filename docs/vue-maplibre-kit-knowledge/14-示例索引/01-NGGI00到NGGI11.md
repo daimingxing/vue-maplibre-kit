@@ -1,4 +1,4 @@
-# NGGI00 到 NGGI11
+# NGGI00 到 NGGI12
 
 适合：逐页理解示例覆盖范围的开发者。
 
@@ -6,7 +6,7 @@
 
 ## `NGGI00` 完整业务验证页
 
-演示地图初始化、业务 source/layer、属性面板、Popup、feature-state、绘图测量、snap、lineDraft、intersection、multiSelect、dxfExport 和底层逃生通道。
+演示地图初始化、业务 source/layer、属性面板、Popup、feature-state、绘图测量、snap、lineDraft、intersection、polygonEdge、multiSelect、dxfExport 和底层逃生通道。
 
 它适合当“完整真实项目接入参考”，但文件较大，不建议初学者从这里开始。
 
@@ -32,7 +32,7 @@
 
 ## `NGGI06` 插件总览
 
-演示通过 `createBusinessPlugins()` 注册五个插件，并通过 `businessMap.plugins.*` 读取插件状态和动作。
+演示通过 `createBusinessPlugins()` 注册六个插件，并通过 `businessMap.plugins.*` 读取插件状态和动作。
 
 ## `NGGI07` snap 吸附
 
@@ -53,3 +53,7 @@
 ## `NGGI11` dxfExport 导出 DXF
 
 演示生成 DXF 文本、下载 DXF、按 source 过滤导出、配置图层名 resolver、图层颜色 resolver、要素颜色 resolver 和 CRS。
+
+## `NGGI12` polygonEdge 面边线
+
+演示通过 `createBusinessPlugins()` 注册 polygonEdge，联动 `snap.polygonEdge`，并通过 `businessMap.plugins.polygonEdge` 生成面边线、高亮 polygon/ring/edge、选择 edge、清理高亮和清空边线。
