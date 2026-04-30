@@ -205,11 +205,20 @@ import {
   LINE_DRAFT_PREVIEW_SOURCE_ID,
 } from "vue-maplibre-kit/plugins/line-draft-preview";
 import {
-  createBusinessPlugins,
-  type BusinessPluginsOptions,
+  createIntersectionPreviewPlugin,
+  createLineDraftPreviewPlugin,
+  createMapDxfExportPlugin,
+  createMapFeatureMultiSelectPlugin,
+  createMapFeatureSnapPlugin,
+  createPolygonEdgePreviewPlugin,
+  type IntersectionPreviewOptions,
+  type LineDraftPreviewOptions,
   type MapDxfExportOptions,
   type MapDxfExportTaskOptions,
   type MapDxfLayerNameResolver,
+  type MapFeatureMultiSelectOptions,
+  type MapFeatureSnapOptions,
+  type PolygonEdgePreviewOptions,
 } from "vue-maplibre-kit/plugins";
 import type { GeoJSONSource } from "maplibre-gl";
 
@@ -1245,7 +1254,7 @@ const lineDraftPreviewOptions = {
   onContextMenu: (context) => {
     console.log("[NGGI00 草稿线示例] context menu", context);
   },
-} satisfies NonNullable<BusinessPluginsOptions["lineDraft"]>;
+} satisfies LineDraftPreviewOptions;
 
 // 2. 要素多选配置：提供框选和点击多选能力
 const mapFeatureMultiSelectOptions = {
@@ -1271,7 +1280,7 @@ const mapFeatureMultiSelectOptions = {
     // 对于主点图层，拦截 id 为 'point_4' 的要素，使其无法被选中
     return properties?.id !== "point_4";
   },
-} satisfies NonNullable<BusinessPluginsOptions["multiSelect"]>;
+} satisfies MapFeatureMultiSelectOptions;
 
 // 3. 要素吸附配置：配置哪些图层允许作为测绘的吸附目标
 const mapFeatureSnapOptions = {
@@ -1366,7 +1375,7 @@ const mapFeatureSnapOptions = {
       useMapTargets: true,
     },
   },
-} satisfies NonNullable<BusinessPluginsOptions["snap"]>;
+} satisfies MapFeatureSnapOptions;
 
 /**
  * 面边线预览插件示例。
@@ -1394,7 +1403,7 @@ const polygonEdgePreviewOptions = {
   onClick: (context) => {
     ElMessage.info(`已点击面边线：${context.edgeId || "未知边线"}`);
   },
-} satisfies NonNullable<BusinessPluginsOptions["polygonEdge"]>;
+} satisfies PolygonEdgePreviewOptions;
 
 /**
  * DXF 导出插件：第一版只面向业务 source，不包含 TerraDraw / Measure / 手绘要素。
@@ -1726,20 +1735,20 @@ const intersectionPreviewOptions = {
     });
     ElMessage.success(`已删除正式交点：${context.intersectionId}`);
   },
-} satisfies NonNullable<BusinessPluginsOptions["intersection"]>;
+} satisfies IntersectionPreviewOptions;
 
 /**
  * 集中注册当前页面需要启用的地图能力扩展。
+ * NGGI00 使用单插件工厂逐个注册，便于查看每个插件完整 options 的高级写法。
  */
-const mapPlugins = createBusinessPlugins({
-  sourceRegistry: businessSourceRegistry,
-  snap: mapFeatureSnapOptions,
-  lineDraft: lineDraftPreviewOptions,
-  intersection: intersectionPreviewOptions,
-  polygonEdge: polygonEdgePreviewOptions,
-  multiSelect: mapFeatureMultiSelectOptions,
-  dxfExport: mapDxfExportOptions,
-});
+const mapPlugins = [
+  createMapFeatureSnapPlugin(mapFeatureSnapOptions),
+  createLineDraftPreviewPlugin(lineDraftPreviewOptions),
+  createIntersectionPreviewPlugin(intersectionPreviewOptions),
+  createPolygonEdgePreviewPlugin(polygonEdgePreviewOptions),
+  createMapFeatureMultiSelectPlugin(mapFeatureMultiSelectOptions),
+  createMapDxfExportPlugin(mapDxfExportOptions),
+];
 
 /**
  * 当前页面统一使用的业务聚合门面。

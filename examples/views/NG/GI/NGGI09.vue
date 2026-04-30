@@ -52,12 +52,13 @@ const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry:
 const intersection = businessMap.plugins.intersection;
 const message = ref("等待交点操作");
 const plugins = createBusinessPlugins({
+  // sourceRegistry 放在顶层，intersection 会按目标 source/layer 从这里读取候选线。
+  sourceRegistry: kit.registry,
   intersection: {
     enabled: true,
     visible: true,
     targetSourceIds: [kit.source.sourceId],
     targetLayerIds: [EXAMPLE_LINE_LAYER_ID],
-    sourceRegistry: kit.registry,
     // false 表示只计算线段真实交叉，不把线端点接触当成交点。
     includeEndpoint: false,
     // 保留 6 位小数可兼顾深圳示例范围内的米级识别和去重稳定性。

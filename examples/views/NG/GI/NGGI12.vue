@@ -65,7 +65,7 @@ const styleModeText = computed(() => (styleMode.value === "default" ? "蓝绿方
 const plugins = computed(() =>
   createBusinessPlugins({
     snap: {
-      // layerIds 会自动生成一条默认业务图层吸附规则；详细说明见本轮回复。
+      // layerIds 会自动生成一条默认业务图层吸附规则，适合小示例快速接入业务图层吸附。
       layerIds: [EXAMPLE_LINE_LAYER_ID, EXAMPLE_FILL_LAYER_ID],
       polygonEdge: {
         enabled: true,

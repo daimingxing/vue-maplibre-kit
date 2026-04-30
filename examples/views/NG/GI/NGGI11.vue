@@ -111,9 +111,10 @@ const lineOnlyOptions: MapDxfExportTaskOptions = {
 };
 
 const plugins = createBusinessPlugins({
+  // sourceRegistry 放在顶层，dxfExport 会复用它读取业务 source。
+  sourceRegistry: kit.registry,
   dxfExport: {
     enabled: true,
-    sourceRegistry: kit.registry,
     defaults: allOptions,
     control: {
       enabled: true,

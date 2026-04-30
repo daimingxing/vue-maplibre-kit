@@ -64,14 +64,16 @@ const interactive = createExampleInteractive((text) => {
   message.value = text;
 });
 const plugins = createBusinessPlugins({
+  // sourceRegistry 放在顶层，交点和 DXF 导出插件会复用同一份业务 source 注册表。
+  sourceRegistry: kit.registry,
   snap: { layerIds: [EXAMPLE_LINE_LAYER_ID] },
+  // lineDraft: true 使用线草稿插件默认配置，适合总览页快速注册能力。
   lineDraft: true,
   intersection: {
     enabled: true,
     visible: true,
     targetSourceIds: [kit.source.sourceId],
     targetLayerIds: [EXAMPLE_LINE_LAYER_ID],
-    sourceRegistry: kit.registry,
   },
   polygonEdge: {
     enabled: true,
@@ -85,7 +87,6 @@ const plugins = createBusinessPlugins({
   multiSelect: { enabled: true, targetLayerIds: [EXAMPLE_LINE_LAYER_ID] },
   dxfExport: {
     enabled: true,
-    sourceRegistry: kit.registry,
     defaults: {
       fileName: "nggi06-five-plugins.dxf",
       lineWidth: 2,

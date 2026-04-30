@@ -62,6 +62,7 @@ const message = ref("等待生成草稿");
 const selectedLine = shallowRef<MapCommonLineFeature | null>(null);
 const selectedLineRef = shallowRef<MapSourceFeatureRef | null>(null);
 const plugins = createBusinessPlugins({
+  // lineDraft 对象写法用于配置页面级样式和交互回调，未声明字段继续使用插件默认值。
   lineDraft: {
     enabled: true,
     styleOverrides: {
