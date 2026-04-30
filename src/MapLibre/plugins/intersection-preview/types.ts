@@ -158,7 +158,7 @@ export interface UseIntersectionPreviewControllerOptions {
   getCandidates: () => MapIntersectionCandidate[];
   /** 读取当前选中上下文。 */
   getSelectedFeatureContext: () => MapLayerInteractiveContext | null | undefined;
-  /** 同步求交范围到外部原始插件配置。 */
+  /** 同步求交范围到插件运行期覆写值。 */
   setScope?: (scope: IntersectionPreviewScope) => void;
   /** 状态变化回调。 */
   onStateChange?: (state: IntersectionPreviewState) => void;

@@ -526,19 +526,12 @@ export function useIntersectionPreviewController(
 
   /**
    * 切换当前求交范围。
-   * 当前实现会同步回写外部描述对象上的 scope，
-   * 这样插件宿主、门面与运行时控制器会始终读取到同一份最新范围。
+   * 插件层通过 setScope 接管运行期范围，避免修改业务层传入的原始配置对象。
    *
    * @param nextScope 目标范围
    */
   const setScope = (nextScope: IntersectionScope): void => {
-    const pluginOptions = options.getOptions();
     options.setScope?.(nextScope);
-
-    if (pluginOptions) {
-      pluginOptions.scope = nextScope;
-    }
-
     refresh();
   };
 
