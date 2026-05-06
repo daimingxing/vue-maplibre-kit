@@ -14,3 +14,4 @@
 | [02-表达式工具](./02-表达式工具.md) | 按属性和状态生成表达式 |
 | [03-hover和selected](./03-hover和selected.md) | 交互状态如何驱动样式 |
 | [04-feature-state](./04-feature-state.md) | 主动写入和读取 feature-state |
+| [05-原生表达式](./05-原生表达式.md) | 表达式工具不够用时如何直接写 MapLibre 表达式 |

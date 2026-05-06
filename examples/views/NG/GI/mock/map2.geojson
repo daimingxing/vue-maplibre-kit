@@ -5,7 +5,7 @@
       "type": "Feature",
       "properties": {
         "id": "fill_1",
-        "color":"red"
+        "color": "red"
       },
       "geometry": {
         "coordinates": [
@@ -39,7 +39,8 @@
     {
       "type": "Feature",
       "properties": {
-        "id": "fill_2"
+        "id": "fill_2",
+        "color": "#79b8ff"
       },
       "geometry": {
         "coordinates": [

@@ -1,9 +1,24 @@
 import { createSSRApp, defineComponent, h } from 'vue';
 import { renderToString } from 'vue/server-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type UseMapEffectResult, useMapEffect } from './useMapEffect';
+import {
+  createFeatureStateExpression,
+  type UseMapEffectResult,
+  useMapEffect,
+} from './useMapEffect';
+import { getFeatureColor } from '../shared/map-feature-property-expression';
 
 type FeatureStateCall = [{ id?: string | number }, { isFlashing?: unknown }];
+
+/** 生成属性空字符串、缺失值和 null 时回退默认值的期望表达式。 */
+function createFallbackExpression(propertyKey: string, fallbackValue: unknown) {
+  return [
+    'case',
+    ['==', ['get', propertyKey], ''],
+    fallbackValue,
+    ['coalesce', ['get', propertyKey], fallbackValue],
+  ];
+}
 
 /** 创建测试用闪烁目标。 */
 function createFlashTarget(id: string | number) {
@@ -61,6 +76,26 @@ afterEach(() => {
 });
 
 describe('useMapEffect', () => {
+  it('feature-state 表达式允许嵌套 properties 取值表达式', () => {
+    expect(
+      createFeatureStateExpression({
+        default: getFeatureColor('color', '#79b8ff'),
+        hover: getFeatureColor('hoverColor', '#facc15'),
+        selected: '#2563eb',
+      })
+    ).toEqual([
+      'case',
+      ['boolean', ['feature-state', 'selected'], false],
+      '#2563eb',
+      [
+        'case',
+        ['boolean', ['feature-state', 'hover'], false],
+        ['to-color', createFallbackExpression('hoverColor', '#facc15')],
+        ['to-color', createFallbackExpression('color', '#79b8ff')],
+      ],
+    ]);
+  });
+
   it('允许不同目标按各自频率独立闪烁', async () => {
     vi.useFakeTimers();
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

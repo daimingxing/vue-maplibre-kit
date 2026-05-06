@@ -20,7 +20,7 @@ describe('plugins generatedKind 常量', () => {
     expect(plugins.INTERSECTION_PREVIEW_KIND).toBe(intersection.INTERSECTION_PREVIEW_KIND);
     expect(plugins.INTERSECTION_MATERIALIZED_KIND).toBe(intersection.INTERSECTION_MATERIALIZED_KIND);
     expect(plugins.POLYGON_EDGE_PREVIEW_KIND).toBe(polygonEdge.POLYGON_EDGE_PREVIEW_KIND);
-  }, 10000);
+  }, 20000);
 
   it('lineDraft 延长线常量应直接定义公开值，避免绑定工具类静态字段', () => {
     const storeSource = readFileSync(

@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { createMapBusinessSourceRegistry } from './createMapBusinessSource';
 import type * as BusinessPresetModule from './businessPreset';
+import { getFeatureColor, getFeatureNumber } from '../shared/map-feature-property-expression';
+
+/** 生成属性空字符串、缺失值和 null 时回退默认值的期望表达式。 */
+function createFallbackExpression(propertyKey: string, fallbackValue: unknown) {
+  return [
+    'case',
+    ['==', ['get', propertyKey], ''],
+    fallbackValue,
+    ['coalesce', ['get', propertyKey], fallbackValue],
+  ];
+}
 
 /**
  * 动态读取业务预设模块。
@@ -26,6 +37,69 @@ describe('businessPreset', () => {
     expect(circleStyle.paint!['circle-radius']).toBe(8);
     expect(fillStyle.paint!['fill-color']).toBe('#f97316');
     expect(fillStyle.paint!['fill-opacity']).toBe(0.2);
+  }, 20000);
+
+  it('简单样式工厂应支持表达式值', async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createSimpleCircleStyle, createSimpleFillStyle, createSimpleLineStyle } =
+      businessPreset;
+    const lineStyle = createSimpleLineStyle({
+      color: getFeatureColor('color', '#2563eb'),
+      width: getFeatureNumber('width', 3),
+      opacity: getFeatureNumber('opacity', 0.8),
+    });
+    const circleStyle = createSimpleCircleStyle({
+      color: getFeatureColor('color', '#16a34a'),
+      radius: getFeatureNumber('radius', 8),
+      strokeColor: getFeatureColor('strokeColor', '#ffffff'),
+      strokeWidth: getFeatureNumber('strokeWidth', 2),
+    });
+    const fillStyle = createSimpleFillStyle({
+      color: getFeatureColor('color', '#f97316'),
+      opacity: getFeatureNumber('opacity', 0.2),
+      outlineColor: getFeatureColor('outlineColor', '#ffffff'),
+    });
+
+    expect(lineStyle.paint!['line-color']).toEqual([
+      'to-color',
+      createFallbackExpression('color', '#2563eb'),
+    ]);
+    expect(lineStyle.paint!['line-width']).toEqual([
+      'to-number',
+      createFallbackExpression('width', 3),
+    ]);
+    expect(lineStyle.paint!['line-opacity']).toEqual([
+      'to-number',
+      createFallbackExpression('opacity', 0.8),
+    ]);
+    expect(circleStyle.paint!['circle-color']).toEqual([
+      'to-color',
+      createFallbackExpression('color', '#16a34a'),
+    ]);
+    expect(circleStyle.paint!['circle-radius']).toEqual([
+      'to-number',
+      createFallbackExpression('radius', 8),
+    ]);
+    expect(circleStyle.paint!['circle-stroke-color']).toEqual([
+      'to-color',
+      createFallbackExpression('strokeColor', '#ffffff'),
+    ]);
+    expect(circleStyle.paint!['circle-stroke-width']).toEqual([
+      'to-number',
+      createFallbackExpression('strokeWidth', 2),
+    ]);
+    expect(fillStyle.paint!['fill-color']).toEqual([
+      'to-color',
+      createFallbackExpression('color', '#f97316'),
+    ]);
+    expect(fillStyle.paint!['fill-opacity']).toEqual([
+      'to-number',
+      createFallbackExpression('opacity', 0.2),
+    ]);
+    expect(fillStyle.paint!['fill-outline-color']).toEqual([
+      'to-color',
+      createFallbackExpression('outlineColor', '#ffffff'),
+    ]);
   }, 10000);
 
   it('应把图层组简写转换为现有业务图层描述', async () => {

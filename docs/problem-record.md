@@ -1,3 +1,10 @@
+## 2026-05-06 样式表达式 helper 设计
+
+- 问题：业务层需要根据 GeoJSON `properties.color`、`properties.width` 等字段动态控制样式，但业务开发者不熟悉 MapLibre 原生表达式。
+- 确认：MapLibre 原生表达式支持 `get` 读取属性，支持 `coalesce` 提供默认值，支持 `to-color`、`to-number`、`to-string`、`to-boolean` 做类型转换。
+- 处理：新增 `getFeatureColor`、`getFeatureNumber`、`getFeatureString`、`getFeatureBoolean` 等业务 helper，并让 `createSimple*Style` 支持表达式值。
+- 边界：原生表达式仍作为逃生通道保留在知识库中；常见样式场景优先使用业务 helper，避免业务页直接堆复杂数组表达式。
+
 ## 2026-04-30 代码风险修复与契约边界记录
 
 - 状态：本轮确认边界并修复已确认风险

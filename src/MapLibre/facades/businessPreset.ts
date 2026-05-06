@@ -23,6 +23,7 @@ import {
   type MapLayerStyle,
 } from '../shared/map-layer-style-config';
 import type { MapFeaturePropertyPolicy } from '../shared/map-feature-data';
+import type { MapExpression } from '../shared/map-feature-property-expression';
 import {
   createCircleBusinessLayer,
   createFillBusinessLayer,
@@ -34,38 +35,47 @@ import {
 } from './mapBusinessLayer';
 import type { MapBusinessSourceRegistry } from './createMapBusinessSource';
 
+/** 可写入 MapLibre 样式字段的业务值。 */
+type MapStyleValue<T> = T | MapExpression;
+
+/** 样式颜色值。 */
+type MapStyleColor = MapStyleValue<string>;
+
+/** 样式数值。 */
+type MapStyleNumber = MapStyleValue<number>;
+
 /** 简单线样式配置。 */
 export interface SimpleLineStyleOptions {
   /** 线颜色。 */
-  color?: string;
+  color?: MapStyleColor;
   /** 线宽，单位像素。 */
-  width?: number;
+  width?: MapStyleNumber;
   /** 线透明度，范围 0 - 1。 */
-  opacity?: number;
+  opacity?: MapStyleNumber;
 }
 
 /** 简单点样式配置。 */
 export interface SimpleCircleStyleOptions {
   /** 点颜色。 */
-  color?: string;
+  color?: MapStyleColor;
   /** 点半径，单位像素。 */
-  radius?: number;
+  radius?: MapStyleNumber;
   /** 点透明度，范围 0 - 1。 */
-  opacity?: number;
+  opacity?: MapStyleNumber;
   /** 描边颜色。 */
-  strokeColor?: string;
+  strokeColor?: MapStyleColor;
   /** 描边宽度，单位像素。 */
-  strokeWidth?: number;
+  strokeWidth?: MapStyleNumber;
 }
 
 /** 简单面样式配置。 */
 export interface SimpleFillStyleOptions {
   /** 面颜色。 */
-  color?: string;
+  color?: MapStyleColor;
   /** 面透明度，范围 0 - 1。 */
-  opacity?: number;
+  opacity?: MapStyleNumber;
   /** 轮廓颜色。 */
-  outlineColor?: string;
+  outlineColor?: MapStyleColor;
 }
 
 /** 图层组子项输入。 */
@@ -149,9 +159,9 @@ export interface BusinessPluginsOptions {
 export function createSimpleLineStyle(options: SimpleLineStyleOptions = {}) {
   return createLineLayerStyle({
     paint: {
-      ...(options.color ? { 'line-color': options.color } : {}),
-      ...(options.width !== undefined ? { 'line-width': options.width } : {}),
-      ...(options.opacity !== undefined ? { 'line-opacity': options.opacity } : {}),
+      ...(options.color ? { 'line-color': options.color as any } : {}),
+      ...(options.width !== undefined ? { 'line-width': options.width as any } : {}),
+      ...(options.opacity !== undefined ? { 'line-opacity': options.opacity as any } : {}),
     },
   });
 }
@@ -164,12 +174,12 @@ export function createSimpleLineStyle(options: SimpleLineStyleOptions = {}) {
 export function createSimpleCircleStyle(options: SimpleCircleStyleOptions = {}) {
   return createCircleLayerStyle({
     paint: {
-      ...(options.color ? { 'circle-color': options.color } : {}),
-      ...(options.radius !== undefined ? { 'circle-radius': options.radius } : {}),
-      ...(options.opacity !== undefined ? { 'circle-opacity': options.opacity } : {}),
-      ...(options.strokeColor ? { 'circle-stroke-color': options.strokeColor } : {}),
+      ...(options.color ? { 'circle-color': options.color as any } : {}),
+      ...(options.radius !== undefined ? { 'circle-radius': options.radius as any } : {}),
+      ...(options.opacity !== undefined ? { 'circle-opacity': options.opacity as any } : {}),
+      ...(options.strokeColor ? { 'circle-stroke-color': options.strokeColor as any } : {}),
       ...(options.strokeWidth !== undefined
-        ? { 'circle-stroke-width': options.strokeWidth }
+        ? { 'circle-stroke-width': options.strokeWidth as any }
         : {}),
     },
   });
@@ -183,9 +193,9 @@ export function createSimpleCircleStyle(options: SimpleCircleStyleOptions = {}) 
 export function createSimpleFillStyle(options: SimpleFillStyleOptions = {}) {
   return createFillLayerStyle({
     paint: {
-      ...(options.color ? { 'fill-color': options.color } : {}),
-      ...(options.opacity !== undefined ? { 'fill-opacity': options.opacity } : {}),
-      ...(options.outlineColor ? { 'fill-outline-color': options.outlineColor } : {}),
+      ...(options.color ? { 'fill-color': options.color as any } : {}),
+      ...(options.opacity !== undefined ? { 'fill-opacity': options.opacity as any } : {}),
+      ...(options.outlineColor ? { 'fill-outline-color': options.outlineColor as any } : {}),
     },
   });
 }

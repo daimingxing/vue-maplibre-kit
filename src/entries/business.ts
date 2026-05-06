@@ -19,6 +19,11 @@ import {
   createSimpleLineStyle,
 } from '../MapLibre/facades/businessPreset';
 import {
+  getFeatureBoolean,
+  getFeatureColor,
+  getFeatureNumber,
+  getFeatureProperty,
+  getFeatureString,
   matchFeatureProperty,
   whenFeaturePropertyEquals,
   whenFeaturePropertyIn,
@@ -86,6 +91,21 @@ export { createSymbolLayerStyle } from '../MapLibre/shared/map-layer-style-confi
 /** feature-state 表达式工厂。 */
 export { createFeatureStateExpression } from '../MapLibre/composables/useMapEffect';
 
+/** 属性读取表达式工厂。 */
+export { getFeatureProperty } from '../MapLibre/shared/map-feature-property-expression';
+
+/** 属性颜色表达式工厂。 */
+export { getFeatureColor } from '../MapLibre/shared/map-feature-property-expression';
+
+/** 属性数值表达式工厂。 */
+export { getFeatureNumber } from '../MapLibre/shared/map-feature-property-expression';
+
+/** 属性字符串表达式工厂。 */
+export { getFeatureString } from '../MapLibre/shared/map-feature-property-expression';
+
+/** 属性布尔表达式工厂。 */
+export { getFeatureBoolean } from '../MapLibre/shared/map-feature-property-expression';
+
 /** 属性等值表达式工厂。 */
 export { whenFeaturePropertyEquals } from '../MapLibre/shared/map-feature-property-expression';
 
@@ -151,6 +171,11 @@ export const layerStyles = {
 /** 业务表达式工具分组。 */
 export const mapExpressions = {
   createFeatureStateExpression,
+  getFeatureProperty,
+  getFeatureColor,
+  getFeatureNumber,
+  getFeatureString,
+  getFeatureBoolean,
   whenFeaturePropertyEquals,
   whenFeaturePropertyIn,
   matchFeatureProperty,
