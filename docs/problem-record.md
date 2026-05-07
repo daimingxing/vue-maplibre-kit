@@ -1,3 +1,10 @@
+## 2026-05-07 snap 运行期开关记录
+
+- 状态：已解决
+- 问题：snap 插件新增预览图层和按钮两个不同 Vue 组件渲染项时，`getRenderItems()` 数组会被 TypeScript 按首个预览组件推断成窄类型，导致后续按钮组件的 `props` 被误判为预览图层参数。
+- 处理：把局部 `renderItems` 显式标注为 `MapPluginRenderItem[]`，让插件宿主按通用渲染项接收不同组件。
+- 经验：同一个插件如果返回多个不同组件，渲染项数组必须显式使用宿主通用类型，避免组件 props 推断相互污染。
+
 ## 2026-05-06 样式表达式 helper 设计
 
 - 问题：业务层需要根据 GeoJSON `properties.color`、`properties.width` 等字段动态控制样式，但业务开发者不熟悉 MapLibre 原生表达式。

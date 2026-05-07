@@ -1,6 +1,7 @@
 <template>
   <section class="nggi-page">
     <MapLibreInit
+      ref="mapRef"
       :map-options="kit.mapOptions"
       :controls="kit.controls"
       :map-interactive="interactive"
@@ -13,10 +14,10 @@
     <aside class="nggi-panel">
       <h3>NGGI07 snap</h3>
       <p>绘图与测量控件已开启业务图层吸附，并允许已绘制点、线、面跨模式互相吸附。</p>
+      <button type="button" @click="toggleSnap">切换吸附</button>
+      <p>吸附：{{ businessMap.plugins.snap.isActive.value ? "已开启" : "已关闭" }}</p>
       <ul>
-        <li v-for="rule in snapRules" :key="rule.name">
-          {{ rule.name }}：{{ rule.summary }}
-        </li>
+        <li v-for="rule in snapRules" :key="rule.name">{{ rule.name }}：{{ rule.summary }}</li>
       </ul>
       <p>先画点、线或面，再切换绘制模式，可吸附到刚刚绘制出的要素。</p>
     </aside>
@@ -24,7 +25,13 @@
 </template>
 
 <script setup lang="ts">
-import { MapBusinessSourceLayers, MapLibreInit } from "vue-maplibre-kit/business";
+import { shallowRef } from "vue";
+import {
+  MapBusinessSourceLayers,
+  MapLibreInit,
+  useBusinessMap,
+  type MapLibreInitExpose,
+} from "vue-maplibre-kit/business";
 import { createBusinessPlugins, type MapFeatureSnapRule } from "vue-maplibre-kit/plugins";
 import {
   EXAMPLE_FILL_LAYER_ID,
@@ -36,6 +43,8 @@ import {
 
 // 示例控件组合会开启测量控件；snap 插件会给测量绘制动作提供吸附能力。
 const kit = createExampleKit("measure");
+const mapRef = shallowRef<MapLibreInitExpose | null>(null);
+const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry: kit.registry });
 // 吸附本身不依赖普通点击回调，这里保留 interactive 是为了示例结构和其他页面一致。
 const interactive = createExampleInteractive(() => {});
 // snapRules 是业务层最重要的声明：告诉插件“哪些图层、哪些几何、用什么方式吸附”。
@@ -91,6 +100,8 @@ const plugins = createBusinessPlugins({
       // 5px 略粗于业务线宽，确保命中线段可见。
       lineWidth: 5,
     },
+    // 内置吸附按钮和面板按钮都会调用同一组运行期开关能力。
+    control: { enabled: true, position: "top-left" },
     businessLayers: {
       enabled: true,
       // businessLayers.rules 表示从业务图层中提取可吸附目标。
@@ -117,6 +128,13 @@ const plugins = createBusinessPlugins({
     },
   },
 });
+
+/**
+ * 切换吸附插件运行期状态。
+ */
+function toggleSnap(): void {
+  businessMap.plugins.snap.toggle();
+}
 </script>
 
 <style scoped>

@@ -141,6 +141,11 @@ describe('config', () => {
           },
         },
         snap: {
+          control: {
+            enabled: true,
+            position: 'top-left',
+            label: '吸附',
+          },
           polygonEdge: {
             enabled: true,
             snapTo: ['vertex', 'segment'],
@@ -176,6 +181,11 @@ describe('config', () => {
           },
         },
         snap: {
+          control: {
+            enabled: true,
+            position: 'top-left',
+            label: '吸附',
+          },
           polygonEdge: {
             enabled: true,
             snapTo: ['vertex', 'segment'],

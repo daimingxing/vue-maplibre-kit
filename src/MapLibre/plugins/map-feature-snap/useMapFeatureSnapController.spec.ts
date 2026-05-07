@@ -83,6 +83,35 @@ describe('useMapFeatureSnapController', () => {
     expect(linePaint['line-width']).toBe(6);
   });
 
+  it('应字段级合并全局 snap 控件默认值和实例局部配置', () => {
+    setMapGlobalConfig({
+      plugins: {
+        snap: {
+          control: {
+            enabled: false,
+            position: 'bottom-left',
+            label: '全局吸附',
+          },
+        },
+      },
+    });
+
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        control: {
+          enabled: true,
+        },
+      }),
+      getMap: () => null,
+    });
+
+    expect(controller.controlOptions.value).toEqual({
+      enabled: true,
+      position: 'bottom-left',
+      label: '全局吸附',
+    });
+  });
+
   it('resolveTerradrawSnapOptions 应按 全局默认 -> 控件默认 -> 实例局部 覆写合并', () => {
     setMapGlobalConfig({
       plugins: {
@@ -303,5 +332,74 @@ describe('useMapFeatureSnapController', () => {
 
     expect(map.off).toHaveBeenCalledTimes(4);
     expect(controller.binding.value).toBeNull();
+  });
+
+  it('运行期关闭后应立即停用普通图层吸附、控件吸附和吸附预览', async () => {
+    const map = createMapStub([
+      {
+        id: 'line-a',
+        source: 'business-source',
+        properties: {
+          id: 'line-a',
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [0, 0],
+            [10, 0],
+          ],
+        },
+        layer: {
+          id: 'business-line-layer',
+        },
+      },
+    ]);
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        enabled: true,
+        businessLayers: {
+          enabled: true,
+          rules: [
+            {
+              id: 'business-line',
+              layerIds: ['business-line-layer'],
+              snapTo: ['segment'],
+            },
+          ],
+        },
+        terradraw: {
+          draw: {
+            enabled: true,
+          },
+        },
+      }),
+      getMap: () => map as any,
+    });
+
+    expect(controller.isActive.value).toBe(true);
+    expect(controller.resolveMapEvent({
+      point: { x: 5, y: 1 },
+      lngLat: { lng: 5, lat: 1 },
+    }).matched).toBe(true);
+
+    controller.deactivate();
+
+    expect(controller.isActive.value).toBe(false);
+    expect(controller.previewEnabled.value).toBe(false);
+    expect(controller.resolveMapEvent({
+      point: { x: 5, y: 1 },
+      lngLat: { lng: 5, lat: 1 },
+    }).matched).toBe(false);
+    expect(controller.resolveTerradrawSnapOptions('draw', undefined).enabled).toBe(false);
+
+    await Promise.resolve();
+
+    controller.activate();
+    await Promise.resolve();
+
+    expect(controller.isActive.value).toBe(true);
+    expect(controller.resolveTerradrawSnapOptions('draw', undefined).enabled).toBe(true);
+
+    controller.destroy();
   });
 });

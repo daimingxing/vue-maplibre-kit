@@ -29,7 +29,7 @@
 
 | 分组 | 关键方法和状态 |
 | --- | --- |
-| `snap` | `clearPreview()`、`resolveMapEvent()`、`resolveTerradrawSnapOptions()` |
+| `snap` | `isActive`、`activate()`、`deactivate()`、`toggle()`、`clearPreview()`、`resolveMapEvent()`、`resolveTerradrawSnapOptions()` |
 | `lineDraft` | `state`、`previewLine()`、`replacePreviewRegion()`、`saveProperties()`、`removeProperties()`、`getFeatureById()`、`clear()` |
 | `intersection` | `state`、`refresh()`、`clear()`、`materialize()`、`removeMaterialized()`、`updateMaterializedProperties()`、`clearMaterialized()`、`getData()`、`getMaterializedData()` |
 | `polygonEdge` | `featureCount`、`selectedEdgeId`、`generateFromFeature()`、`generateFromSelected()`、`highlightPolygon()`、`highlightRing()`、`highlightEdge()`、`selectEdge()`、`clearHighlight()`、`getData()`、`clear()` |

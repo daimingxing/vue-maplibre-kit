@@ -14,6 +14,12 @@ plugins: {
   snap: {
     // defaultTolerancePx: 12, // 全局默认吸附容差像素
 
+    // control: {
+    //   enabled: true, // 是否渲染内置吸附按钮
+    //   position: 'top-left', // 按钮默认位置
+    //   label: '吸附', // 按钮无障碍提示文本
+    // },
+
     // preview: {
     //   enabled: true, // 是否启用吸附预览
     //   pointColor: '#1677ff', // 吸附点颜色

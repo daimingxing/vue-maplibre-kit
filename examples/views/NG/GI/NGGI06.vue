@@ -22,12 +22,14 @@
       <button type="button" @click="highlightPolygonEdge">高亮面边线</button>
       <button type="button" @click="clearPolygonEdge">清空面边线</button>
       <button type="button" @click="toggleMultiSelect">切换多选</button>
+      <button type="button" @click="toggleSnap">切换吸附</button>
       <button type="button" @click="clearSnapPreview">清理吸附预览</button>
       <button type="button" @click="exportDxf">导出 DXF 文本</button>
       <button type="button" @click="clearDraft">清空草稿</button>
       <p>交点数：{{ businessMap.plugins.intersection.count.value }}</p>
       <p>正式交点：{{ businessMap.plugins.intersection.materializedCount.value }}</p>
       <p>多选数：{{ businessMap.plugins.multiSelect.selectedCount.value }}</p>
+      <p>吸附：{{ businessMap.plugins.snap.isActive.value ? "已开启" : "已关闭" }}</p>
       <p>草稿数：{{ businessMap.plugins.lineDraft.featureCount.value }}</p>
       <p>面边线：{{ businessMap.plugins.polygonEdge.featureCount.value }}</p>
       <p>DXF 最近文件：{{ businessMap.plugins.dxfExport.lastFileName.value || "未导出" }}</p>
@@ -66,7 +68,11 @@ const interactive = createExampleInteractive((text) => {
 const plugins = createBusinessPlugins({
   // sourceRegistry 放在顶层，交点和 DXF 导出插件会复用同一份业务 source 注册表。
   sourceRegistry: kit.registry,
-  snap: { layerIds: [EXAMPLE_LINE_LAYER_ID] },
+  snap: {
+    layerIds: [EXAMPLE_LINE_LAYER_ID],
+    // 内置吸附按钮用于运行期开关整个吸附能力；右键配置面板后续再扩展。
+    control: { enabled: true, position: "top-left" },
+  },
   // lineDraft: true 使用线草稿插件默认配置，适合总览页快速注册能力。
   lineDraft: true,
   intersection: {
@@ -107,10 +113,10 @@ const overviewText = computed(() =>
       polygonEdgeCount: businessMap.plugins.polygonEdge.featureCount.value,
       polygonEdgeSelected: businessMap.plugins.polygonEdge.selectedEdgeId.value,
       multiSelectActive: businessMap.plugins.multiSelect.isActive.value,
+      snapActive: businessMap.plugins.snap.isActive.value,
       selectedFeatureIds: businessMap.plugins.multiSelect
         .getSelectedFeatures()
         .map((feature) => feature.featureId),
-      snapActive: "已通过 createBusinessPlugins 注册，绘制时会参与吸附",
       dxfExporting: businessMap.plugins.dxfExport.isExporting.value,
       dxfLastFileName: businessMap.plugins.dxfExport.lastFileName.value,
       dxfLastEntityCount: businessMap.plugins.dxfExport.lastEntityCount.value,
@@ -315,6 +321,16 @@ function toggleMultiSelect(): void {
   message.value = success
     ? `多选已${businessMap.plugins.multiSelect.getActive() ? "开启" : "关闭"}`
     : "切换多选失败";
+}
+
+/**
+ * 切换吸附插件运行期状态。
+ */
+function toggleSnap(): void {
+  const success = businessMap.plugins.snap.toggle();
+  message.value = success
+    ? `吸附已${businessMap.plugins.snap.isActive.value ? "开启" : "关闭"}`
+    : "切换吸附失败";
 }
 
 /**

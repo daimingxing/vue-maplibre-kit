@@ -3,7 +3,7 @@ import type {
   MapDxfExportPluginApi,
   MapDxfExportState,
 } from '../plugins/map-dxf-export';
-import type { MapFeatureSnapPluginApi } from '../plugins/map-feature-snap';
+import type { MapFeatureSnapPluginApi, MapFeatureSnapState } from '../plugins/map-feature-snap';
 import type {
   LineDraftPreviewPluginApi,
   LineDraftPreviewStateChangePayload,
@@ -279,6 +279,29 @@ export function resolveMapFeatureSnapApi(
   }
 
   return mapExpose?.plugins.getApi<MapFeatureSnapPluginApi>(pluginTarget.id) || null;
+}
+
+/**
+ * 读取要素吸附插件状态。
+ * @param mapExpose 地图公开实例
+ * @param pluginId 历史兼容参数；传入时会额外校验唯一插件 ID
+ * @returns 命中的要素吸附插件状态；找不到时返回 null
+ */
+export function resolveMapFeatureSnapState(
+  mapExpose: MapLibreInitExpose | null | undefined,
+  pluginId?: string
+): MapFeatureSnapState | null {
+  const pluginTarget = resolveMapPluginTargetByType(
+    mapExpose,
+    MAP_FEATURE_SNAP_PLUGIN_TYPE,
+    pluginId
+  );
+
+  if (!pluginTarget) {
+    return null;
+  }
+
+  return mapExpose?.plugins.getState<MapFeatureSnapState>(pluginTarget.id) || null;
 }
 
 /**

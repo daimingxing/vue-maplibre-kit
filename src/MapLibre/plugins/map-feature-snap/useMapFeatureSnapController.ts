@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
+import { computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import type { Map as MaplibreMap } from 'maplibre-gl';
 import { createCircleLayerStyle, createLineLayerStyle } from '../../shared/map-layer-style-config';
 import type { TerradrawControlType, TerradrawSnapSharedOptions } from '../../shared/mapLibre-controls-types';
@@ -180,6 +180,26 @@ function mergeSnapPreviewOptions(
 }
 
 /**
+ * 合并吸附开关控件配置。
+ * @param globalControl 全局控件默认值
+ * @param localControl 实例局部控件配置
+ * @returns 合并后的控件配置
+ */
+function mergeSnapControlOptions(
+  globalControl: MapFeatureSnapOptions['control'],
+  localControl: MapFeatureSnapOptions['control']
+): MapFeatureSnapOptions['control'] {
+  if (!globalControl && !localControl) {
+    return undefined;
+  }
+
+  return {
+    ...(globalControl || {}),
+    ...(localControl || {}),
+  };
+}
+
+/**
  * 合并插件内置吸附目标配置。
  * 布尔值表示整项开关；对象配置按字段合并，便于页面只覆写单个默认值。
  *
@@ -228,6 +248,7 @@ function resolveMapFeatureSnapOptions(
   return {
     ...(globalDefaults || {}),
     ...(localOptions || {}),
+    control: mergeSnapControlOptions(globalDefaults?.control, localOptions?.control),
     preview: mergeSnapPreviewOptions(globalDefaults?.preview, localOptions?.preview),
     intersection: mergeSnapTargetOptions(globalDefaults?.intersection, localOptions?.intersection),
     polygonEdge: mergeSnapTargetOptions(globalDefaults?.polygonEdge, localOptions?.polygonEdge),
@@ -262,22 +283,33 @@ function resolveMapFeatureSnapOptions(
  */
 export function useMapFeatureSnapController(options: UseMapFeatureSnapControllerOptions) {
   const { getOptions, getMap } = options;
+  const activeRef = ref(true);
   const bindingRef = shallowRef<MapFeatureSnapBinding | null>(null);
   const resolvedOptions = computed(() => resolveMapFeatureSnapOptions(getOptions()));
 
   /**
    * 当前吸附插件是否启用。
    */
-  const enabled = computed(() => {
+  const configuredEnabled = computed(() => {
     const snapOptions = resolvedOptions.value;
     return Boolean(snapOptions) && snapOptions?.enabled !== false;
   });
+
+  /** 当前吸附能力是否运行期开启。 */
+  const isActive = computed(() => configuredEnabled.value && activeRef.value);
+
+  /** 吸附开关控件配置。 */
+  const controlOptions = computed(() => ({
+    enabled: resolvedOptions.value?.control?.enabled !== false,
+    position: resolvedOptions.value?.control?.position ?? 'top-right',
+    label: resolvedOptions.value?.control?.label ?? '吸附',
+  }));
 
   /**
    * 普通图层吸附预览是否启用。
    */
   const previewEnabled = computed(() => {
-    return enabled.value && resolvedOptions.value?.preview?.enabled !== false;
+    return isActive.value && resolvedOptions.value?.preview?.enabled !== false;
   });
 
   /**
@@ -338,7 +370,7 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     destroyBinding();
 
     const map = getMap();
-    if (!map || !enabled.value) {
+    if (!map || !isActive.value) {
       return;
     }
 
@@ -350,7 +382,8 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
 
   const stopBindingWatch = watch(
     () => ({
-      enabled: enabled.value,
+      enabled: configuredEnabled.value,
+      active: isActive.value,
       map: getMap(),
       options: resolvedOptions.value,
     }),
@@ -369,9 +402,38 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     destroyBinding();
   }
 
-  onBeforeUnmount(() => {
-    destroy();
-  });
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      destroy();
+    });
+  }
+
+  /**
+   * 运行期开启吸附能力。
+   */
+  function activate(): void {
+    activeRef.value = true;
+  }
+
+  /**
+   * 运行期关闭吸附能力并清空现有预览。
+   */
+  function deactivate(): void {
+    activeRef.value = false;
+    destroyBinding();
+  }
+
+  /**
+   * 运行期切换吸附能力。
+   */
+  function toggle(): void {
+    if (isActive.value) {
+      deactivate();
+      return;
+    }
+
+    activate();
+  }
 
   /**
    * 读取当前控件最终生效的 TerraDraw / Measure 吸附配置。
@@ -402,23 +464,43 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     };
 
     const defaultTolerancePx = snapOptions?.defaultTolerancePx ?? DEFAULT_TOLERANCE_PX;
-    return {
+    const resolvedSnapOptions = {
       enabled: mergedConfig.enabled === true,
       tolerancePx: mergedConfig.tolerancePx ?? defaultTolerancePx,
       useNative: mergedConfig.useNative !== false,
       useMapTargets: mergedConfig.useMapTargets !== false,
       drawnTargets: normalizeDrawnTargets(mergedConfig.drawnTargets),
     };
+
+    if (!isActive.value) {
+      return {
+        ...resolvedSnapOptions,
+        enabled: false,
+        useNative: false,
+        useMapTargets: false,
+        drawnTargets: {
+          ...resolvedSnapOptions.drawnTargets,
+          enabled: false,
+        },
+      };
+    }
+
+    return resolvedSnapOptions;
   }
 
   return {
-    enabled,
+    enabled: configuredEnabled,
+    isActive,
+    controlOptions,
     previewEnabled,
     previewData,
     previewPointStyle,
     previewLineStyle,
     binding: bindingRef,
     destroy,
+    activate,
+    deactivate,
+    toggle,
     resolveTerradrawSnapOptions,
     resolveMapEvent: (event: any) =>
       bindingRef.value?.resolveMapEvent(event) || createEmptyMapFeatureSnapResult(),

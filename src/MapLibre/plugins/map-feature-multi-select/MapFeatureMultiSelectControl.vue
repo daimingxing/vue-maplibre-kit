@@ -10,13 +10,29 @@
       @click="handleToggle"
     >
       <svg
-        class="multi-select-control__icon"
+        v-if="isActive"
+        class="multi-select-control__icon multi-select-control__icon--open"
         aria-hidden="true"
         focusable="false"
         viewBox="0 0 1024 1024"
       >
         <path
           d="M128 128h85.312v85.312H128V128z m170.688 0H384v85.312H298.688V128z m170.624 0h85.376v85.312H469.312V128zM640 128h85.312v85.312H640V128z m170.688 0H896v85.312h-85.312V128z m0 170.688H896V384h-85.312V298.688zM128 810.688h85.312V896H128v-85.312zM128 640h85.312v85.312H128V640z m0-170.688h85.312v85.376H128V469.312z m0-170.624h85.312V384H128V298.688zM705.152 643.52l165.888 236.992-78.656 55.04-165.888-236.928-102.848 132.096-77.44-473.152 418.24 234.56z"
+        />
+      </svg>
+      <svg
+        v-else
+        class="multi-select-control__icon multi-select-control__icon--close"
+        aria-hidden="true"
+        focusable="false"
+        viewBox="0 0 1024 1024"
+      >
+        <path
+          opacity=".5"
+          d="M128 128h85.312v85.312H128V128z m170.688 0H384v85.312H298.688V128z m170.624 0h85.376v85.312H469.312V128zM640 128h85.312v85.312H640V128z m170.688 0H896v85.312h-85.312V128z m0 170.688H896V384h-85.312V298.688zM128 810.688h85.312V896H128v-85.312zM128 640h85.312v85.312H128V640z m0-170.688h85.312v85.376H128V469.312z m0-170.624h85.312V384H128V298.688zM705.152 643.52l165.888 236.992-78.656 55.04-165.888-236.928-102.848 132.096-77.44-473.152 418.24 234.56z"
+        />
+        <path
+          d="M874.666667 90.666667l58.666666 58.666666L149.333333 933.333333 90.666667 874.666667z"
         />
       </svg>
       <span class="multi-select-control__label">{{ isActive ? '关闭多选' : '开启多选' }}</span>
@@ -53,18 +69,15 @@ const handleToggle = (): void => {
 <style scoped lang="scss">
 .multi-select-control {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-width: 34px;
-  min-height: 34px;
-  padding: 4px 6px 4px 2px;
+  width: 29px;
+  height: 29px;
+  padding: 0;
   color: #1f2937;
-  background: #ffffff;
+  background-color: transparent;
   border: none;
-  border-radius: 4px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
   cursor: pointer;
   transition:
     background-color 0.2s ease,
@@ -72,12 +85,7 @@ const handleToggle = (): void => {
 }
 
 .multi-select-control:hover {
-  background: #eff6ff;
-}
-
-.multi-select-control.is-active {
-  color: #ffffff;
-  background: #2563eb;
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 .multi-select-control__icon {
@@ -87,6 +95,7 @@ const handleToggle = (): void => {
   stroke: currentColor;
   stroke-linejoin: round;
   stroke-width: 18;
+  transform: translate(-1px, -1px);
 }
 
 .multi-select-control__label {
@@ -103,13 +112,16 @@ const handleToggle = (): void => {
 
 .multi-select-control__count {
   position: absolute;
-  top: 14px;
-  right: -9px;
-  min-width: 18px;
-  padding: 2px 6px;
-  font-size: 12px;
+  right: -3px;
+  bottom: 3px;
+  min-width: 12px;
+  // padding: 1px 3px;
+  font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  color: inherit;
+  color: #1f2937;
+  // background-color: #ffffff;
+  // border: 1px solid currentColor;
+  // border-radius: 999px;
 }
 </style>

@@ -54,6 +54,8 @@ export interface ResolvedTerradrawSnapOptions {
 
 /** 地图吸附服务统一接口。 */
 export interface MapSnapService {
+  /** 读取当前吸附能力是否运行期开启。 */
+  isActive?: () => boolean;
   /** 读取当前吸附绑定。 */
   getBinding: () => MapSnapBinding | null;
   /** 解析控件最终吸附配置。 */

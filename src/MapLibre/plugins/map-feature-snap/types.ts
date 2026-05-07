@@ -1,4 +1,4 @@
-import type { Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
+import type { ControlPosition, Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
 import type {
   TerradrawControlType,
   TerradrawSnapSharedOptions,
@@ -96,6 +96,15 @@ export interface MapFeatureSnapTargetOptions {
 export interface MapFeatureSnapOptions {
   /** 是否启用整个吸附插件。 */
   enabled?: boolean;
+  /** 吸附运行期开关控件配置。 */
+  control?: {
+    /** 是否显示吸附开关控件。 */
+    enabled?: boolean;
+    /** 控件显示位置。 */
+    position?: ControlPosition;
+    /** 控件可访问文本。 */
+    label?: string;
+  };
   /** 全局默认吸附范围。 */
   defaultTolerancePx?: number;
   /** 吸附预览配置。 */
@@ -119,6 +128,14 @@ export interface MapFeatureSnapOptions {
 
 /** 地图吸附插件 API。 */
 export interface MapFeatureSnapPluginApi {
+  /** 运行期开启吸附能力。 */
+  activate: () => void;
+  /** 运行期关闭吸附能力。 */
+  deactivate: () => void;
+  /** 运行期切换吸附能力。 */
+  toggle: () => void;
+  /** 读取当前运行期吸附是否开启。 */
+  isActive: () => boolean;
   /** 主动清空当前吸附预览。 */
   clearPreview: () => void;
   /** 根据普通地图事件解析吸附结果。 */
@@ -128,4 +145,10 @@ export interface MapFeatureSnapPluginApi {
     controlType: TerradrawControlType,
     localConfig: TerradrawSnapSharedOptions | boolean | null | undefined
   ) => import('../types').ResolvedTerradrawSnapOptions;
+}
+
+/** 地图吸附插件状态。 */
+export interface MapFeatureSnapState {
+  /** 当前吸附能力是否运行期开启。 */
+  isActive: boolean;
 }

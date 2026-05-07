@@ -76,7 +76,7 @@ export const demoMapGlobalConfig = defineMapGlobalConfig({
         targetCrs: 'EPSG:3857',
       },
       control: {
-        label: '导出CAD',
+        // label: '导出CAD',
         position: 'top-right',
       },
     },

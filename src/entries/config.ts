@@ -13,6 +13,7 @@ import type {
   TerradrawSnapSharedOptions,
 } from '../MapLibre/shared/mapLibre-controls-types';
 import type {
+  MapFeatureSnapOptions,
   MapFeatureSnapPreviewOptions,
   MapFeatureSnapTargetOptions,
 } from '../MapLibre/plugins/map-feature-snap/types';
@@ -71,6 +72,8 @@ export type MapRasterLayerStyleDefaults = MapLayerStyleOverrides<
 export interface MapFeatureSnapGlobalDefaults {
   /** 全局默认吸附范围。 */
   defaultTolerancePx?: number;
+  /** 全局吸附开关控件默认配置。 */
+  control?: MapFeatureSnapOptions['control'];
   /** 全局吸附预览样式。 */
   preview?: MapFeatureSnapPreviewOptions;
   /** 交点插件内置吸附目标默认配置。 */

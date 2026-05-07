@@ -5,6 +5,10 @@
 ## snap
 
 ```ts
+businessMap.plugins.snap.isActive.value;
+businessMap.plugins.snap.activate();
+businessMap.plugins.snap.deactivate();
+businessMap.plugins.snap.toggle();
 businessMap.plugins.snap.clearPreview();
 businessMap.plugins.snap.resolveMapEvent(event);
 businessMap.plugins.snap.resolveTerradrawSnapOptions('draw', {
@@ -13,7 +17,7 @@ businessMap.plugins.snap.resolveTerradrawSnapOptions('draw', {
 });
 ```
 
-适合高级页面主动解析吸附结果。普通绘制流程通常只需要注册插件和配置吸附。
+`activate()`、`deactivate()` 和 `toggle()` 控制运行期吸附总开关。关闭后普通地图事件吸附、绘图/测量吸附和吸附预览都会停用。`resolveMapEvent()` 适合高级页面主动解析吸附结果。普通绘制流程通常只需要注册插件和配置吸附。
 
 ## lineDraft
 

@@ -22,7 +22,7 @@ import type {
   MapFeatureMultiSelectPluginApi,
   MapFeatureMultiSelectState,
 } from '../plugins/map-feature-multi-select';
-import type { MapFeatureSnapPluginApi } from '../plugins/map-feature-snap';
+import type { MapFeatureSnapPluginApi, MapFeatureSnapState } from '../plugins/map-feature-snap';
 import type { MapDxfExportPluginApi, MapDxfExportState } from '../plugins/map-dxf-export';
 import type { MapPluginHostExpose, MapSelectionService } from '../plugins/types';
 import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
@@ -437,8 +437,31 @@ function createMultiSelectPluginHarness(): {
  */
 function createSnapPluginHarness(): {
   api: MapFeatureSnapPluginApi;
+  state: { value: MapFeatureSnapState };
 } {
+  const state = ref<MapFeatureSnapState>({
+    isActive: true,
+  });
   const api: MapFeatureSnapPluginApi = {
+    activate: vi.fn(() => {
+      state.value = {
+        ...state.value,
+        isActive: true,
+      };
+    }),
+    deactivate: vi.fn(() => {
+      state.value = {
+        ...state.value,
+        isActive: false,
+      };
+    }),
+    toggle: vi.fn(() => {
+      state.value = {
+        ...state.value,
+        isActive: !state.value.isActive,
+      };
+    }),
+    isActive: vi.fn(() => state.value.isActive),
     clearPreview: vi.fn(),
     resolveMapEvent: vi.fn(() => ({
       snapped: false,
@@ -462,6 +485,7 @@ function createSnapPluginHarness(): {
 
   return {
     api,
+    state,
   };
 }
 
@@ -529,6 +553,7 @@ function createMapExpose(options: {
   multiSelectApi?: MapFeatureMultiSelectPluginApi | null;
   multiSelectState?: MapFeatureMultiSelectState | null;
   snapApi?: MapFeatureSnapPluginApi | null;
+  snapState?: { value: MapFeatureSnapState } | MapFeatureSnapState | null;
   dxfApi?: MapDxfExportPluginApi | null;
   dxfState?: MapDxfExportState | null;
   selectionService?: MapSelectionService | null;
@@ -544,6 +569,7 @@ function createMapExpose(options: {
     multiSelectApi = null,
     multiSelectState = null,
     snapApi = null,
+    snapState = null,
     dxfApi = null,
     dxfState = null,
     selectionService = null,
@@ -630,6 +656,10 @@ function createMapExpose(options: {
 
       if (pluginId === 'mapDxfExport') {
         return (dxfState as TState | null) || null;
+      }
+
+      if (pluginId === 'mapFeatureSnap') {
+        return (((snapState as any)?.value ?? snapState) as TState | null) || null;
       }
 
       return null;
@@ -813,6 +843,8 @@ describe('useBusinessMap', () => {
     expect(businessMap.plugins.polygonEdge.clear()).toBe(false);
     expect(businessMap.plugins.multiSelect.selectedCount.value).toBe(0);
     expect(businessMap.plugins.snap.clearPreview()).toBe(false);
+    expect(businessMap.plugins.snap.toggle()).toBe(false);
+    expect(businessMap.plugins.snap.isActive.value).toBe(false);
     expect(businessMap.plugins.dxfExport.isExporting.value).toBe(false);
     expect(businessMap.plugins.intersection.materialize()).toBe(false);
     const flashStartResult = businessMap.effect.startFlash({
@@ -857,6 +889,7 @@ describe('useBusinessMap', () => {
           multiSelectApi: multiSelectHarness.api,
           multiSelectState: multiSelectHarness.state,
           snapApi: snapHarness.api,
+          snapState: snapHarness.state,
           dxfApi: dxfHarness.api,
           dxfState: dxfHarness.state,
         })
@@ -889,6 +922,9 @@ describe('useBusinessMap', () => {
     expect(businessMap.plugins.polygonEdge.selectedEdgeId.value).toBe('edge-1');
     businessMap.plugins.multiSelect.activate();
     expect(businessMap.plugins.multiSelect.isActive.value).toBe(true);
+    expect(businessMap.plugins.snap.isActive.value).toBe(true);
+    expect(businessMap.plugins.snap.toggle()).toBe(true);
+    expect(businessMap.plugins.snap.isActive.value).toBe(false);
     expect(businessMap.plugins.snap.clearPreview()).toBe(true);
     expect(snapHarness.api.clearPreview).toHaveBeenCalledTimes(1);
     expect(businessMap.plugins.dxfExport.isExporting.value).toBe(false);
@@ -907,6 +943,28 @@ describe('useBusinessMap', () => {
     } else {
       globalWithWindow.window = previousWindow;
     }
+    warnSpy.mockRestore();
+  });
+
+  it('吸附门面 isActive 应订阅插件状态，响应内置控件直接切换', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { sourceRegistry } = createBusinessSourceHarness();
+    const snapHarness = createSnapPluginHarness();
+    const businessMap = useBusinessMap({
+      mapRef: shallowRef(
+        createMapExpose({
+          snapApi: snapHarness.api,
+          snapState: snapHarness.state,
+        })
+      ),
+      sourceRegistry,
+    });
+
+    expect(businessMap.plugins.snap.isActive.value).toBe(true);
+
+    snapHarness.api.toggle();
+
+    expect(businessMap.plugins.snap.isActive.value).toBe(false);
     warnSpy.mockRestore();
   });
 

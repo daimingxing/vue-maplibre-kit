@@ -64,5 +64,6 @@ export type {
   MapFeatureSnapRule,
   MapFeatureSnapRuleFilterContext,
   MapFeatureSnapSegmentInfo,
+  MapFeatureSnapState,
   MapFeatureSnapTargetOptions,
 } from './types';

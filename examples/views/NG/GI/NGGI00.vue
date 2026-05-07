@@ -1287,6 +1287,9 @@ const mapFeatureSnapOptions = {
   // 启用统一吸附扩展。
   enabled: true,
 
+  // 内置吸附按钮用于运行期开关整个吸附能力，label 用作无障碍提示文本。
+  control: { enabled: true, position: "top-left"},
+
   // 全局默认吸附范围（像素）。
   // 业务层大多数规则不需要重复传，只有个别规则需要更大或更小的吸附范围时再局部覆写。
   defaultTolerancePx: 16,
@@ -1535,7 +1538,7 @@ const mapDxfExportOptions = {
   control: {
     enabled: true,
     position: "top-right",
-    label: "导出DXF",
+    // label: "导出DXF",
   },
 } satisfies MapDxfExportOptions;
 
