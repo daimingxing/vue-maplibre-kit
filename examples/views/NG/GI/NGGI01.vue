@@ -33,6 +33,7 @@ import {
   createSimpleCircleStyle,
   createSimpleFillStyle,
   createSimpleLineStyle,
+  getFeatureColor,
   MapBusinessSourceLayers,
   MapLibreInit,
   type MapCommonFeatureCollection,
@@ -87,6 +88,7 @@ function createGroupData(): MapCommonFeatureCollection {
           id: "group-area-a",
           name: "作业面 A",
           status: "normal",
+          color: "#79b8ff",
         },
         geometry: {
           type: "Polygon",
@@ -157,7 +159,8 @@ const layers = createLayerGroup({
       id: FILL_LAYER_ID,
       geometryTypes: ["Polygon", "MultiPolygon"],
       style: createSimpleFillStyle({
-        color: "#79b8ff",
+        // 简单样式也可以接收表达式；这里按 properties.color 动态取面颜色。
+        color: getFeatureColor("color", "#79b8ff"),
         opacity: 0.35,
         outlineColor: "#1f6feb",
       }),
