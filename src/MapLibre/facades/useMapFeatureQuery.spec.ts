@@ -1,25 +1,31 @@
-import { ref, shallowRef } from 'vue';
-import { describe, expect, it } from 'vitest';
+import { ref, shallowRef } from "vue";
+import { describe, expect, it } from "vitest";
 import {
   createMapLibreRawHandles,
   type MapLibreInitExpose,
-} from '../core/mapLibre-init.types';
-import type { MapPluginHostExpose } from '../plugins/types';
+} from "../core/mapLibre-init.types";
+import type { MapPluginHostExpose } from "../plugins/types";
 import type {
   MapLayerInteractiveContext,
   MapLayerSelectedFeature,
   MapLayerSelectionChangeContext,
   TerradrawFeature,
-} from '../shared/mapLibre-controls-types';
-import type { MapCommonFeature, MapCommonFeatureCollection } from '../shared/map-common-tools';
-import type { MapInstance } from 'vue-maplibre-gl';
+} from "../shared/mapLibre-controls-types";
+import type {
+  MapCommonFeature,
+  MapCommonFeatureCollection,
+} from "../shared/map-common-tools";
+import type { MapInstance } from "vue-maplibre-gl";
 import {
   createMapBusinessSource,
   createMapBusinessSourceRegistry,
   type MapBusinessSource,
-} from './createMapBusinessSource';
-import { createCircleBusinessLayer, createFillBusinessLayer } from './mapBusinessLayer';
-import { useMapFeatureQuery } from './useMapFeatureQuery';
+} from "./createMapBusinessSource";
+import {
+  createCircleBusinessLayer,
+  createFillBusinessLayer,
+} from "./mapBusinessLayer";
+import { useMapFeatureQuery } from "./useMapFeatureQuery";
 
 /**
  * 创建测试用点要素。
@@ -29,17 +35,17 @@ import { useMapFeatureQuery } from './useMapFeatureQuery';
  */
 function createPointFeature(
   id: string,
-  properties: Record<string, unknown> = {}
+  properties: Record<string, unknown> = {},
 ): MapCommonFeature {
   return {
-    type: 'Feature',
+    type: "Feature",
     id,
     properties: {
       id,
       ...properties,
     },
     geometry: {
-      type: 'Point',
+      type: "Point",
       coordinates: [120, 30],
     },
   };
@@ -53,17 +59,17 @@ function createPointFeature(
  */
 function createLineFeature(
   id: string,
-  properties: Record<string, unknown> = {}
+  properties: Record<string, unknown> = {},
 ): MapCommonFeature {
   return {
-    type: 'Feature',
+    type: "Feature",
     id,
     properties: {
       id,
       ...properties,
     },
     geometry: {
-      type: 'LineString',
+      type: "LineString",
       coordinates: [
         [120, 30],
         [121, 31],
@@ -80,17 +86,17 @@ function createLineFeature(
  */
 function createPolygonFeature(
   id: string,
-  properties: Record<string, unknown> = {}
+  properties: Record<string, unknown> = {},
 ): MapCommonFeature {
   return {
-    type: 'Feature',
+    type: "Feature",
     id,
     properties: {
       id,
       ...properties,
     },
     geometry: {
-      type: 'Polygon',
+      type: "Polygon",
       coordinates: [
         [
           [120, 30],
@@ -109,9 +115,11 @@ function createPolygonFeature(
  * @param features 要素列表
  * @returns 标准要素集合
  */
-function createFeatureCollection(features: MapCommonFeature[]): MapCommonFeatureCollection {
+function createFeatureCollection(
+  features: MapCommonFeature[],
+): MapCommonFeatureCollection {
   return {
-    type: 'FeatureCollection',
+    type: "FeatureCollection",
     features,
   };
 }
@@ -125,31 +133,35 @@ function createBusinessSourceHarness(): {
   sourceRegistry: ReturnType<typeof createMapBusinessSourceRegistry>;
 } {
   const source = createMapBusinessSource({
-    sourceId: 'business-source',
+    sourceId: "business-source",
     data: ref(
       createFeatureCollection([
-        createPointFeature('feature-1', {
-          name: '最新业务名称',
+        createPointFeature("feature-1", {
+          name: "最新业务名称",
         }),
-        createPolygonFeature('polygon-1', {
-          name: '最新面要素',
+        createPolygonFeature("polygon-1", {
+          name: "最新面要素",
         }),
-      ])
+      ]),
     ),
-    promoteId: 'id',
+    promoteId: "id",
     layers: [
       createCircleBusinessLayer({
-        layerId: 'circleLayer',
+        layerId: "circleLayer",
       }),
       createFillBusinessLayer({
-        layerId: 'fillLayer',
+        layerId: "fillLayer",
       }),
     ],
   });
 
   return {
     source,
-    sourceRegistry: createMapBusinessSourceRegistry([source]),
+    sourceRegistry: (() => {
+      const sourceRegistry = createMapBusinessSourceRegistry();
+      sourceRegistry.addSource(source);
+      return sourceRegistry;
+    })(),
   };
 }
 
@@ -176,7 +188,7 @@ function createSelectedFeatureRecord(options: {
   } = options;
 
   return {
-    key: `${sourceId || 'unknown'}::${layerId}::${featureId}`,
+    key: `${sourceId || "unknown"}::${layerId}::${featureId}`,
     featureId,
     layerId,
     sourceId,
@@ -190,10 +202,14 @@ function createSelectedFeatureRecord(options: {
  * 创建测试用地图公开实例。
  * @returns 可供 useMapFeatureQuery 直接消费的公开实例
  */
-function createMapExpose(options: {
-  selectedMapFeatureContext?: (() => MapLayerInteractiveContext | null) | null;
-  selectedMapFeatureSnapshot?: (() => MapCommonFeature | null) | null;
-} = {}): MapLibreInitExpose {
+function createMapExpose(
+  options: {
+    selectedMapFeatureContext?:
+      | (() => MapLayerInteractiveContext | null)
+      | null;
+    selectedMapFeatureSnapshot?: (() => MapCommonFeature | null) | null;
+  } = {},
+): MapLibreInitExpose {
   const {
     selectedMapFeatureContext = null,
     selectedMapFeatureSnapshot = null,
@@ -233,38 +249,38 @@ function createMapExpose(options: {
   };
 }
 
-describe('useMapFeatureQuery', () => {
-  it('toBusinessContext 会优先解析最新业务要素并保留选择态信息', () => {
+describe("useMapFeatureQuery", () => {
+  it("toBusinessContext 会优先解析最新业务要素并保留选择态信息", () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const featureQuery = useMapFeatureQuery({
       mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
-    const staleFeature = createPointFeature('feature-1', {
-      name: '旧快照名称',
+    const staleFeature = createPointFeature("feature-1", {
+      name: "旧快照名称",
     });
     const context = {
       feature: staleFeature as any,
       hitFeature: staleFeature as any,
-      featureId: 'feature-1',
+      featureId: "feature-1",
       properties: staleFeature.properties || null,
-      eventType: 'click',
-      layerId: 'circleLayer',
-      sourceId: 'business-source',
+      eventType: "click",
+      layerId: "circleLayer",
+      sourceId: "business-source",
       sourceLayer: null,
       map: {} as any,
       lngLat: {
         lng: 120,
         lat: 30,
       },
-      selectionMode: 'multiple',
+      selectionMode: "multiple",
       isMultiSelectActive: true,
       selectedCount: 1,
       selectedFeatures: [
         createSelectedFeatureRecord({
-          featureId: 'feature-1',
-          layerId: 'circleLayer',
-          sourceId: 'business-source',
+          featureId: "feature-1",
+          layerId: "circleLayer",
+          sourceId: "business-source",
           properties: staleFeature.properties || null,
           snapshot: staleFeature,
         }),
@@ -274,13 +290,13 @@ describe('useMapFeatureQuery', () => {
     const businessContext = featureQuery.toBusinessContext(context);
 
     expect(businessContext.featureRef).toEqual({
-      sourceId: 'business-source',
-      featureId: 'feature-1',
-      layerId: 'circleLayer',
+      sourceId: "business-source",
+      featureId: "feature-1",
+      layerId: "circleLayer",
     });
-    expect(businessContext.feature?.properties?.name).toBe('最新业务名称');
-    expect(businessContext.properties?.name).toBe('最新业务名称');
-    expect(businessContext.featureId).toBe('feature-1');
+    expect(businessContext.feature?.properties?.name).toBe("最新业务名称");
+    expect(businessContext.properties?.name).toBe("最新业务名称");
+    expect(businessContext.featureId).toBe("feature-1");
     expect(businessContext.isPoint).toBe(true);
     expect(businessContext.isLine).toBe(false);
     expect(businessContext.selectedCount).toBe(1);
@@ -290,22 +306,22 @@ describe('useMapFeatureQuery', () => {
     });
   });
 
-  it('toBusinessContext 在无法解析最新要素时会回退到原始上下文快照', () => {
+  it("toBusinessContext 在无法解析最新要素时会回退到原始上下文快照", () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const featureQuery = useMapFeatureQuery({
       mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
-    const rawFeature = createLineFeature('temp-line', {
-      name: '临时线要素',
+    const rawFeature = createLineFeature("temp-line", {
+      name: "临时线要素",
     });
     const context = {
       feature: rawFeature as any,
       hitFeature: rawFeature as any,
-      featureId: 'temp-line',
+      featureId: "temp-line",
       properties: rawFeature.properties || null,
-      eventType: 'click',
-      layerId: 'lineLayer',
+      eventType: "click",
+      layerId: "lineLayer",
       sourceId: null,
       sourceLayer: null,
       map: {} as any,
@@ -318,31 +334,31 @@ describe('useMapFeatureQuery', () => {
     const businessContext = featureQuery.toBusinessContext(context);
 
     expect(businessContext.featureRef).toBeNull();
-    expect(businessContext.feature?.properties?.name).toBe('临时线要素');
-    expect(businessContext.properties?.name).toBe('临时线要素');
-    expect(businessContext.geometryType).toBe('LineString');
+    expect(businessContext.feature?.properties?.name).toBe("临时线要素");
+    expect(businessContext.properties?.name).toBe("临时线要素");
+    expect(businessContext.geometryType).toBe("LineString");
     expect(businessContext.isLine).toBe(true);
     expect(businessContext.isPoint).toBe(false);
     expect(businessContext.selectedCount).toBe(0);
   });
 
-  it('toBusinessContext 在命中面要素时会正确标记 geometryType 与 isPolygon', () => {
+  it("toBusinessContext 在命中面要素时会正确标记 geometryType 与 isPolygon", () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const featureQuery = useMapFeatureQuery({
       mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
-    const staleFeature = createPolygonFeature('polygon-1', {
-      name: '旧面快照',
+    const staleFeature = createPolygonFeature("polygon-1", {
+      name: "旧面快照",
     });
     const context = {
       feature: staleFeature as any,
       hitFeature: staleFeature as any,
-      featureId: 'polygon-1',
+      featureId: "polygon-1",
       properties: staleFeature.properties || null,
-      eventType: 'click',
-      layerId: 'fillLayer',
-      sourceId: 'business-source',
+      eventType: "click",
+      layerId: "fillLayer",
+      sourceId: "business-source",
       sourceLayer: null,
       map: {} as any,
       lngLat: {
@@ -353,14 +369,14 @@ describe('useMapFeatureQuery', () => {
 
     const businessContext = featureQuery.toBusinessContext(context);
 
-    expect(businessContext.feature?.properties?.name).toBe('最新面要素');
-    expect(businessContext.geometryType).toBe('Polygon');
+    expect(businessContext.feature?.properties?.name).toBe("最新面要素");
+    expect(businessContext.geometryType).toBe("Polygon");
     expect(businessContext.isPolygon).toBe(true);
     expect(businessContext.isPoint).toBe(false);
     expect(businessContext.isLine).toBe(false);
   });
 
-  it('toBusinessContext 在空白点击时会返回结构化空结果', () => {
+  it("toBusinessContext 在空白点击时会返回结构化空结果", () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const featureQuery = useMapFeatureQuery({
       mapRef: shallowRef(createMapExpose()),
@@ -385,29 +401,29 @@ describe('useMapFeatureQuery', () => {
     expect(businessContext.selectedFeatures).toEqual([]);
   });
 
-  it('toSelectionBusinessContext 会优先解析最新业务要素并在失败时回退到选中快照', () => {
+  it("toSelectionBusinessContext 会优先解析最新业务要素并在失败时回退到选中快照", () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const featureQuery = useMapFeatureQuery({
       mapRef: shallowRef(createMapExpose()),
       sourceRegistry,
     });
-    const resolvedSnapshot = createPointFeature('feature-1', {
-      name: '旧点快照',
+    const resolvedSnapshot = createPointFeature("feature-1", {
+      name: "旧点快照",
     });
-    const fallbackSnapshot = createLineFeature('fallback-line', {
-      name: '线快照回退',
+    const fallbackSnapshot = createLineFeature("fallback-line", {
+      name: "线快照回退",
     });
     const selectedFeatures = [
       createSelectedFeatureRecord({
-        featureId: 'feature-1',
-        layerId: 'circleLayer',
-        sourceId: 'business-source',
+        featureId: "feature-1",
+        layerId: "circleLayer",
+        sourceId: "business-source",
         properties: resolvedSnapshot.properties || null,
         snapshot: resolvedSnapshot,
       }),
       createSelectedFeatureRecord({
-        featureId: 'fallback-line',
-        layerId: 'lineLayer',
+        featureId: "fallback-line",
+        layerId: "lineLayer",
         sourceId: null,
         properties: fallbackSnapshot.properties || null,
         snapshot: fallbackSnapshot,
@@ -416,23 +432,23 @@ describe('useMapFeatureQuery', () => {
     const context = {
       feature: resolvedSnapshot as any,
       hitFeature: resolvedSnapshot as any,
-      featureId: 'feature-1',
+      featureId: "feature-1",
       properties: resolvedSnapshot.properties || null,
-      eventType: 'selectionchange',
-      layerId: 'circleLayer',
-      sourceId: 'business-source',
+      eventType: "selectionchange",
+      layerId: "circleLayer",
+      sourceId: "business-source",
       sourceLayer: null,
       map: {} as any,
-      selectionMode: 'multiple',
+      selectionMode: "multiple",
       isMultiSelectActive: true,
       selectedFeatures,
       selectedCount: selectedFeatures.length,
       addedFeatures: [selectedFeatures[1]],
       removedFeatures: [selectedFeatures[0]],
-      reason: 'click',
-      getSelectedFeatureIds: () => ['feature-1', 'fallback-line'],
-      getAddedFeatureIds: () => ['fallback-line'],
-      getRemovedFeatureIds: () => ['feature-1'],
+      reason: "click",
+      getSelectedFeatureIds: () => ["feature-1", "fallback-line"],
+      getAddedFeatureIds: () => ["fallback-line"],
+      getRemovedFeatureIds: () => ["feature-1"],
       getSelectedPropertyValues: () => [],
       getAddedPropertyValues: () => [],
       getRemovedPropertyValues: () => [],
@@ -440,48 +456,56 @@ describe('useMapFeatureQuery', () => {
 
     const businessContext = featureQuery.toSelectionBusinessContext(context);
 
-    expect(businessContext.reason).toBe('click');
-    expect(businessContext.trigger.featureId).toBe('feature-1');
-    expect(businessContext.trigger.layerId).toBe('circleLayer');
-    expect(businessContext.trigger.feature?.properties?.name).toBe('最新业务名称');
+    expect(businessContext.reason).toBe("click");
+    expect(businessContext.trigger.featureId).toBe("feature-1");
+    expect(businessContext.trigger.layerId).toBe("circleLayer");
+    expect(businessContext.trigger.feature?.properties?.name).toBe(
+      "最新业务名称",
+    );
     expect(businessContext.trigger.isPoint).toBe(true);
     expect(businessContext.selectedCount).toBe(2);
     expect(businessContext.selectedFeatures).toHaveLength(2);
     expect(businessContext.selected).toHaveLength(2);
     expect(businessContext.added).toHaveLength(1);
     expect(businessContext.removed).toHaveLength(1);
-    expect(businessContext.selected[0].feature?.properties?.name).toBe('最新业务名称');
+    expect(businessContext.selected[0].feature?.properties?.name).toBe(
+      "最新业务名称",
+    );
     expect(businessContext.selected[0].isPoint).toBe(true);
-    expect(businessContext.added[0].feature?.properties?.name).toBe('线快照回退');
+    expect(businessContext.added[0].feature?.properties?.name).toBe(
+      "线快照回退",
+    );
     expect(businessContext.added[0].isLine).toBe(true);
     expect(businessContext.added[0].featureRef).toBeNull();
-    expect(businessContext.removed[0].featureId).toBe('feature-1');
+    expect(businessContext.removed[0].featureId).toBe("feature-1");
   });
 
-  it('resolveSelectedFeature 在插件要素被选中时应优先返回插件快照，而不是旧的业务图层选中引用', () => {
+  it("resolveSelectedFeature 在插件要素被选中时应优先返回插件快照，而不是旧的业务图层选中引用", () => {
     const { sourceRegistry } = createBusinessSourceHarness();
-    const pluginSelectedFeature = createPointFeature('intersection-1', {
-      name: '正式交点',
-      generatedKind: 'intersection-materialized',
+    const pluginSelectedFeature = createPointFeature("intersection-1", {
+      name: "正式交点",
+      generatedKind: "intersection-materialized",
     });
     const featureQuery = useMapFeatureQuery({
       mapRef: shallowRef(
         createMapExpose({
           selectedMapFeatureContext: () =>
             ({
-              featureId: 'feature-1',
-              layerId: 'circleLayer',
-              sourceId: 'business-source',
+              featureId: "feature-1",
+              layerId: "circleLayer",
+              sourceId: "business-source",
             }) as MapLayerInteractiveContext,
           selectedMapFeatureSnapshot: () => pluginSelectedFeature,
-        })
+        }),
       ),
       sourceRegistry,
     });
 
     const selectedFeature = featureQuery.resolveSelectedFeature();
 
-    expect(selectedFeature?.id).toBe('intersection-1');
-    expect(selectedFeature?.properties?.generatedKind).toBe('intersection-materialized');
+    expect(selectedFeature?.id).toBe("intersection-1");
+    expect(selectedFeature?.properties?.generatedKind).toBe(
+      "intersection-materialized",
+    );
   });
 });

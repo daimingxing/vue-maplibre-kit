@@ -1,34 +1,34 @@
-import type { FilterSpecification } from 'maplibre-gl';
+import type { FilterSpecification } from "maplibre-gl";
 import {
   createMapDxfExportPlugin,
   type MapDxfExportOptions,
   type MapDxfExportTaskOptions,
-} from '../plugins/map-dxf-export';
-import { createLineDraftPreviewPlugin } from '../plugins/line-draft-preview';
-import { createMapFeatureMultiSelectPlugin } from '../plugins/map-feature-multi-select';
+} from "../plugins/map-dxf-export";
+import { createLineDraftPreviewPlugin } from "../plugins/line-draft-preview";
+import { createMapFeatureMultiSelectPlugin } from "../plugins/map-feature-multi-select";
 import {
   createMapFeatureSnapPlugin,
   type MapFeatureSnapBusinessLayerOptions,
   type MapFeatureSnapOptions,
   type MapFeatureSnapRule,
-} from '../plugins/map-feature-snap';
+} from "../plugins/map-feature-snap";
 import {
   createIntersectionPreviewPlugin,
   type IntersectionPreviewOptions,
-} from '../plugins/intersection-preview';
+} from "../plugins/intersection-preview";
 import {
   createPolygonEdgePreviewPlugin,
   type PolygonEdgePreviewOptions,
-} from '../plugins/polygon-edge-preview';
-import type { MapPluginDescriptor } from '../plugins/types';
+} from "../plugins/polygon-edge-preview";
+import type { MapPluginDescriptor } from "../plugins/types";
 import {
   createCircleLayerStyle,
   createFillLayerStyle,
   createLineLayerStyle,
   type MapLayerStyle,
-} from '../shared/map-layer-style-config';
-import type { MapFeaturePropertyPolicy } from '../shared/map-feature-data';
-import type { MapExpression } from '../shared/map-feature-property-expression';
+} from "../shared/map-layer-style-config";
+import type { MapFeaturePropertyPolicy } from "../shared/map-feature-data";
+import type { MapExpression } from "../shared/map-feature-property-expression";
 import {
   createCircleBusinessLayer,
   createFillBusinessLayer,
@@ -37,8 +37,8 @@ import {
   type MapBusinessLayerDescriptor,
   type MapBusinessLayerGeometryType,
   type MapBusinessLayerWhere,
-} from './mapBusinessLayer';
-import type { MapBusinessSourceRegistry } from './createMapBusinessSource';
+} from "./mapBusinessLayer";
+import type { MapBusinessSourceRegistry } from "./createMapBusinessSource";
 
 /** 可写入 MapLibre 样式字段的业务值。 */
 type MapStyleValue<T> = T | MapExpression;
@@ -86,11 +86,11 @@ export interface SimpleFillStyleOptions {
 /** 图层组子项输入。 */
 export interface LayerGroupItem {
   /** 图层类型。 */
-  type: MapBusinessLayerDescriptor['type'];
+  type: MapBusinessLayerDescriptor["type"];
   /** 简写图层 ID，会映射为 layerId。 */
   id: string;
   /** 当前图层样式。 */
-  style?: MapBusinessLayerDescriptor['style'];
+  style?: MapBusinessLayerDescriptor["style"];
   /** 当前图层属性治理规则。 */
   policy?: MapFeaturePropertyPolicy;
   /** 当前图层允许渲染的几何类型。 */
@@ -105,10 +105,12 @@ export interface LayerGroupItem {
 
 /** 图层组创建配置。 */
 export interface LayerGroupOptions {
+  /** 当前图层组所属 source ID，会作为最终全局唯一 layerId 的前缀，格式为 `${sourceId}-${id}`。 */
+  sourceId: string;
   /** 子图层默认属性治理规则。 */
   defaultPolicy?: MapFeaturePropertyPolicy;
   /** 子图层默认样式。 */
-  defaultStyle?: MapBusinessLayerDescriptor['style'];
+  defaultStyle?: MapBusinessLayerDescriptor["style"];
   /** 子图层声明列表。 */
   layers: LayerGroupItem[];
 }
@@ -117,7 +119,7 @@ export interface LayerGroupOptions {
 export type BusinessSnapLayerRuleValue =
   | string
   | string[]
-  | (Omit<MapFeatureSnapRule, 'id'> & {
+  | (Omit<MapFeatureSnapRule, "id"> & {
       /** 参与当前规则候选查询的图层 ID 集合。 */
       layerIds: string[];
     });
@@ -126,8 +128,10 @@ export type BusinessSnapLayerRuleValue =
 export type BusinessSnapLayerRules = Record<string, BusinessSnapLayerRuleValue>;
 
 /** 吸附插件简写配置。 */
-export interface BusinessSnapPresetOptions
-  extends Omit<Partial<MapFeatureSnapOptions>, 'businessLayers'> {
+export interface BusinessSnapPresetOptions extends Omit<
+  Partial<MapFeatureSnapOptions>,
+  "businessLayers"
+> {
   /** 旧版业务图层吸附简写；推荐改用 businessLayers 命名规则写法。 */
   layerIds?: string[];
   /**
@@ -136,12 +140,14 @@ export interface BusinessSnapPresetOptions
    */
   businessLayers?: MapFeatureSnapBusinessLayerOptions | BusinessSnapLayerRules;
   /** 简便 businessLayers 写法展开单条规则时使用的默认值。 */
-  ruleDefaults?: Partial<Omit<MapFeatureSnapRule, 'id' | 'label' | 'layerIds'>>;
+  ruleDefaults?: Partial<Omit<MapFeatureSnapRule, "id" | "label" | "layerIds">>;
 }
 
 /** 交点插件业务预设配置。 */
-export interface BusinessIntersectionPresetOptions
-  extends Omit<IntersectionPreviewOptions, 'targetSourceIds' | 'sourceRegistry'> {
+export interface BusinessIntersectionPresetOptions extends Omit<
+  IntersectionPreviewOptions,
+  "targetSourceIds" | "sourceRegistry"
+> {
   /** 参与求交的来源 source 列表；未传时可仅按 targetLayerIds 限定。 */
   targetSourceIds?: string[];
   /** 当前页面业务 source 注册表；未提供时默认使用 createBusinessPlugins 的顶层 sourceRegistry 配置。 */
@@ -150,7 +156,8 @@ export interface BusinessIntersectionPresetOptions
 
 /** DXF 导出插件业务预设配置。 */
 export interface BusinessDxfExportPresetOptions
-  extends Omit<MapDxfExportOptions, 'sourceRegistry' | 'defaults'>,
+  extends
+    Omit<MapDxfExportOptions, "sourceRegistry" | "defaults">,
     MapDxfExportTaskOptions {
   /** 当前页面业务 source 注册表；未提供时默认使用 createBusinessPlugins 的顶层 sourceRegistry 配置。 */
   sourceRegistry?: MapBusinessSourceRegistry;
@@ -171,7 +178,9 @@ export interface BusinessPluginsOptions {
   /** 面边线预览插件配置；传 true 时启用默认配置。 */
   polygonEdge?: boolean | PolygonEdgePreviewOptions;
   /** 多选插件配置；传 true 时启用默认配置。 */
-  multiSelect?: boolean | Parameters<typeof createMapFeatureMultiSelectPlugin>[0];
+  multiSelect?:
+    | boolean
+    | Parameters<typeof createMapFeatureMultiSelectPlugin>[0];
   /** DXF 导出插件配置；传 true 时使用顶层 sourceRegistry 和全局默认值。 */
   dxfExport?: boolean | BusinessDxfExportPresetOptions;
 }
@@ -184,9 +193,13 @@ export interface BusinessPluginsOptions {
 export function createSimpleLineStyle(options: SimpleLineStyleOptions = {}) {
   return createLineLayerStyle({
     paint: {
-      ...(options.color ? { 'line-color': options.color as any } : {}),
-      ...(options.width !== undefined ? { 'line-width': options.width as any } : {}),
-      ...(options.opacity !== undefined ? { 'line-opacity': options.opacity as any } : {}),
+      ...(options.color ? { "line-color": options.color as any } : {}),
+      ...(options.width !== undefined
+        ? { "line-width": options.width as any }
+        : {}),
+      ...(options.opacity !== undefined
+        ? { "line-opacity": options.opacity as any }
+        : {}),
     },
   });
 }
@@ -196,15 +209,23 @@ export function createSimpleLineStyle(options: SimpleLineStyleOptions = {}) {
  * @param options 简单点样式配置
  * @returns 现有点图层样式对象
  */
-export function createSimpleCircleStyle(options: SimpleCircleStyleOptions = {}) {
+export function createSimpleCircleStyle(
+  options: SimpleCircleStyleOptions = {},
+) {
   return createCircleLayerStyle({
     paint: {
-      ...(options.color ? { 'circle-color': options.color as any } : {}),
-      ...(options.radius !== undefined ? { 'circle-radius': options.radius as any } : {}),
-      ...(options.opacity !== undefined ? { 'circle-opacity': options.opacity as any } : {}),
-      ...(options.strokeColor ? { 'circle-stroke-color': options.strokeColor as any } : {}),
+      ...(options.color ? { "circle-color": options.color as any } : {}),
+      ...(options.radius !== undefined
+        ? { "circle-radius": options.radius as any }
+        : {}),
+      ...(options.opacity !== undefined
+        ? { "circle-opacity": options.opacity as any }
+        : {}),
+      ...(options.strokeColor
+        ? { "circle-stroke-color": options.strokeColor as any }
+        : {}),
       ...(options.strokeWidth !== undefined
-        ? { 'circle-stroke-width': options.strokeWidth as any }
+        ? { "circle-stroke-width": options.strokeWidth as any }
         : {}),
     },
   });
@@ -218,22 +239,73 @@ export function createSimpleCircleStyle(options: SimpleCircleStyleOptions = {}) 
 export function createSimpleFillStyle(options: SimpleFillStyleOptions = {}) {
   return createFillLayerStyle({
     paint: {
-      ...(options.color ? { 'fill-color': options.color as any } : {}),
-      ...(options.opacity !== undefined ? { 'fill-opacity': options.opacity as any } : {}),
-      ...(options.outlineColor ? { 'fill-outline-color': options.outlineColor as any } : {}),
+      ...(options.color ? { "fill-color": options.color as any } : {}),
+      ...(options.opacity !== undefined
+        ? { "fill-opacity": options.opacity as any }
+        : {}),
+      ...(options.outlineColor
+        ? { "fill-outline-color": options.outlineColor as any }
+        : {}),
     },
   });
+}
+
+/**
+ * 归一化图层组 source ID。
+ * @param sourceId 原始 source ID
+ * @returns 去除两侧空白后的 source ID
+ */
+function normalizeLayerGroupSourceId(sourceId: string): string {
+  const nextSourceId = sourceId.trim();
+
+  if (!nextSourceId) {
+    throw new Error("[createLayerGroup] sourceId 不能为空");
+  }
+
+  return nextSourceId;
+}
+
+/**
+ * 归一化图层组内的逻辑图层 ID。
+ * @param layerId 原始逻辑图层 ID
+ * @returns 去除两侧空白后的逻辑图层 ID
+ */
+function normalizeLayerGroupItemId(layerId: string): string {
+  const nextLayerId = layerId.trim();
+
+  if (!nextLayerId) {
+    throw new Error("[createLayerGroup] layer id 不能为空");
+  }
+
+  return nextLayerId;
+}
+
+/**
+ * 拼接最终 MapLibre 图层 ID。
+ * @param sourceId 当前 source ID
+ * @param itemId source 内逻辑图层 ID
+ * @returns 全局唯一图层 ID
+ */
+function createLayerGroupLayerId(sourceId: string, itemId: string): string {
+  return `${sourceId}-${itemId}`;
 }
 
 /**
  * 合并图层组中的默认配置与子图层配置。
  * @param options 图层组配置
  * @param item 子图层配置
+ * @param sourceId 标准 source ID
  * @returns 标准业务图层描述对象公共字段
  */
-function createLayerBase(options: LayerGroupOptions, item: LayerGroupItem) {
+function createLayerBase(
+  options: LayerGroupOptions,
+  item: LayerGroupItem,
+  sourceId: string,
+) {
+  const itemId = normalizeLayerGroupItemId(item.id);
+
   return {
-    layerId: item.id,
+    layerId: createLayerGroupLayerId(sourceId, itemId),
     propertyPolicy: item.policy || options.defaultPolicy,
     style: item.style || options.defaultStyle,
     geometryTypes: item.geometryTypes,
@@ -249,13 +321,13 @@ function createLayerBase(options: LayerGroupOptions, item: LayerGroupItem) {
  * @returns 是否为完整 businessLayers 配置
  */
 function isFullSnapBusinessLayersConfig(
-  businessLayers: BusinessSnapPresetOptions['businessLayers']
+  businessLayers: BusinessSnapPresetOptions["businessLayers"],
 ): businessLayers is MapFeatureSnapBusinessLayerOptions {
   return Boolean(
     businessLayers &&
-      typeof businessLayers === 'object' &&
-      !Array.isArray(businessLayers) &&
-      Array.isArray((businessLayers as MapFeatureSnapBusinessLayerOptions).rules)
+    typeof businessLayers === "object" &&
+    !Array.isArray(businessLayers) &&
+    Array.isArray((businessLayers as MapFeatureSnapBusinessLayerOptions).rules),
   );
 }
 
@@ -278,9 +350,9 @@ function normalizeBusinessSnapLayerIds(layerIds: string | string[]): string[] {
 function resolveBusinessSnapRuleValue(
   id: string,
   value: BusinessSnapLayerRuleValue,
-  ruleDefaults: BusinessSnapPresetOptions['ruleDefaults']
+  ruleDefaults: BusinessSnapPresetOptions["ruleDefaults"],
 ): MapFeatureSnapRule {
-  if (typeof value === 'string' || Array.isArray(value)) {
+  if (typeof value === "string" || Array.isArray(value)) {
     return {
       id,
       label: id,
@@ -306,9 +378,9 @@ function resolveBusinessSnapRuleValue(
  * @returns 标准业务图层吸附配置
  */
 function resolveBusinessSnapLayers(
-  businessLayers: BusinessSnapPresetOptions['businessLayers'],
-  layerIds: BusinessSnapPresetOptions['layerIds'],
-  ruleDefaults: BusinessSnapPresetOptions['ruleDefaults']
+  businessLayers: BusinessSnapPresetOptions["businessLayers"],
+  layerIds: BusinessSnapPresetOptions["layerIds"],
+  ruleDefaults: BusinessSnapPresetOptions["ruleDefaults"],
 ): MapFeatureSnapBusinessLayerOptions | undefined {
   if (!businessLayers) {
     if (!layerIds?.length) {
@@ -319,8 +391,8 @@ function resolveBusinessSnapLayers(
       enabled: true,
       rules: [
         {
-          id: 'business-layer-snap',
-          label: '业务图层',
+          id: "business-layer-snap",
+          label: "业务图层",
           ...(ruleDefaults || {}),
           layerIds,
         },
@@ -335,7 +407,7 @@ function resolveBusinessSnapLayers(
   return {
     enabled: true,
     rules: Object.entries(businessLayers).map(([id, value]) =>
-      resolveBusinessSnapRuleValue(id, value, ruleDefaults)
+      resolveBusinessSnapRuleValue(id, value, ruleDefaults),
     ),
   };
 }
@@ -345,20 +417,32 @@ function resolveBusinessSnapLayers(
  * @param options 图层组配置
  * @returns 标准业务图层描述数组
  */
-export function createLayerGroup(options: LayerGroupOptions): MapBusinessLayerDescriptor[] {
+export function createLayerGroup(
+  options: LayerGroupOptions,
+): MapBusinessLayerDescriptor[] {
+  const sourceId = normalizeLayerGroupSourceId(options.sourceId);
+
   return options.layers.map((item) => {
-    const base = createLayerBase(options, item);
+    const base = createLayerBase(options, item, sourceId);
 
     switch (item.type) {
-      case 'line':
-        return createLineBusinessLayer(base as Parameters<typeof createLineBusinessLayer>[0]);
-      case 'fill':
-        return createFillBusinessLayer(base as Parameters<typeof createFillBusinessLayer>[0]);
-      case 'symbol':
-        return createSymbolBusinessLayer(base as Parameters<typeof createSymbolBusinessLayer>[0]);
-      case 'circle':
+      case "line":
+        return createLineBusinessLayer(
+          base as Parameters<typeof createLineBusinessLayer>[0],
+        );
+      case "fill":
+        return createFillBusinessLayer(
+          base as Parameters<typeof createFillBusinessLayer>[0],
+        );
+      case "symbol":
+        return createSymbolBusinessLayer(
+          base as Parameters<typeof createSymbolBusinessLayer>[0],
+        );
+      case "circle":
       default:
-        return createCircleBusinessLayer(base as Parameters<typeof createCircleBusinessLayer>[0]);
+        return createCircleBusinessLayer(
+          base as Parameters<typeof createCircleBusinessLayer>[0],
+        );
     }
   });
 }
@@ -368,15 +452,26 @@ export function createLayerGroup(options: LayerGroupOptions): MapBusinessLayerDe
  * @param options 吸附插件预设配置
  * @returns 标准吸附插件配置
  */
-function resolveSnapOptions(options: true | BusinessSnapPresetOptions): MapFeatureSnapOptions {
+function resolveSnapOptions(
+  options: true | BusinessSnapPresetOptions,
+): MapFeatureSnapOptions {
   if (options === true) {
     return {
       enabled: true,
     };
   }
 
-  const { ruleDefaults, businessLayers: rawBusinessLayers, layerIds, ...restOptions } = options;
-  const businessLayers = resolveBusinessSnapLayers(rawBusinessLayers, layerIds, ruleDefaults);
+  const {
+    ruleDefaults,
+    businessLayers: rawBusinessLayers,
+    layerIds,
+    ...restOptions
+  } = options;
+  const businessLayers = resolveBusinessSnapLayers(
+    rawBusinessLayers,
+    layerIds,
+    ruleDefaults,
+  );
 
   return {
     enabled: true,
@@ -393,21 +488,23 @@ function resolveSnapOptions(options: true | BusinessSnapPresetOptions): MapFeatu
  */
 function resolveIntersectionOptions(
   context: BusinessPluginsOptions,
-  options: BusinessIntersectionPresetOptions
+  options: BusinessIntersectionPresetOptions,
 ): IntersectionPreviewOptions {
-  const hasTargetScope = Boolean(options.targetSourceIds?.length || options.targetLayerIds?.length);
-  const hasCustomCandidates = typeof options.getCandidates === 'function';
+  const hasTargetScope = Boolean(
+    options.targetSourceIds?.length || options.targetLayerIds?.length,
+  );
+  const hasCustomCandidates = typeof options.getCandidates === "function";
   const sourceRegistry = options.sourceRegistry || context.sourceRegistry;
 
   if (!hasTargetScope && !hasCustomCandidates) {
     throw new Error(
-      'createBusinessPlugins({ intersection }) 自动模式需要 targetSourceIds 或 targetLayerIds'
+      "createBusinessPlugins({ intersection }) 自动模式需要 targetSourceIds 或 targetLayerIds",
     );
   }
 
   if (!hasCustomCandidates && !sourceRegistry) {
     throw new Error(
-      'createBusinessPlugins({ intersection }) 自动模式需要 sourceRegistry；高级模式请改用 getCandidates'
+      "createBusinessPlugins({ intersection }) 自动模式需要 sourceRegistry；高级模式请改用 getCandidates",
     );
   }
 
@@ -426,12 +523,14 @@ function resolveIntersectionOptions(
  */
 function resolveDxfOptions(
   context: BusinessPluginsOptions,
-  options: true | BusinessDxfExportPresetOptions
+  options: true | BusinessDxfExportPresetOptions,
 ): MapDxfExportOptions {
   const sourceRegistry =
-    options === true ? context.sourceRegistry : options.sourceRegistry || context.sourceRegistry;
+    options === true
+      ? context.sourceRegistry
+      : options.sourceRegistry || context.sourceRegistry;
   if (!sourceRegistry) {
-    throw new Error('createBusinessPlugins({ dxfExport }) 需要 sourceRegistry');
+    throw new Error("createBusinessPlugins({ dxfExport }) 需要 sourceRegistry");
   }
 
   if (options === true) {
@@ -441,7 +540,13 @@ function resolveDxfOptions(
     };
   }
 
-  const { control, defaults, enabled, sourceRegistry: localRegistry, ...flatDefaults } = options;
+  const {
+    control,
+    defaults,
+    enabled,
+    sourceRegistry: localRegistry,
+    ...flatDefaults
+  } = options;
   void localRegistry;
 
   return {
@@ -460,7 +565,9 @@ function resolveDxfOptions(
  * @param options 插件预设配置
  * @returns 标准插件描述对象数组
  */
-export function createBusinessPlugins(options: BusinessPluginsOptions): MapPluginDescriptor[] {
+export function createBusinessPlugins(
+  options: BusinessPluginsOptions,
+): MapPluginDescriptor[] {
   const plugins: MapPluginDescriptor[] = [];
 
   if (options.snap) {
@@ -469,32 +576,40 @@ export function createBusinessPlugins(options: BusinessPluginsOptions): MapPlugi
 
   if (options.lineDraft) {
     plugins.push(
-      createLineDraftPreviewPlugin(options.lineDraft === true ? { enabled: true } : options.lineDraft)
+      createLineDraftPreviewPlugin(
+        options.lineDraft === true ? { enabled: true } : options.lineDraft,
+      ),
     );
   }
 
   if (options.intersection) {
-    plugins.push(createIntersectionPreviewPlugin(resolveIntersectionOptions(options, options.intersection)));
+    plugins.push(
+      createIntersectionPreviewPlugin(
+        resolveIntersectionOptions(options, options.intersection),
+      ),
+    );
   }
 
   if (options.polygonEdge) {
     plugins.push(
       createPolygonEdgePreviewPlugin(
-        options.polygonEdge === true ? { enabled: true } : options.polygonEdge
-      )
+        options.polygonEdge === true ? { enabled: true } : options.polygonEdge,
+      ),
     );
   }
 
   if (options.multiSelect) {
     plugins.push(
       createMapFeatureMultiSelectPlugin(
-        options.multiSelect === true ? { enabled: true } : options.multiSelect
-      )
+        options.multiSelect === true ? { enabled: true } : options.multiSelect,
+      ),
     );
   }
 
   if (options.dxfExport) {
-    plugins.push(createMapDxfExportPlugin(resolveDxfOptions(options, options.dxfExport)));
+    plugins.push(
+      createMapDxfExportPlugin(resolveDxfOptions(options, options.dxfExport)),
+    );
   }
 
   return plugins;

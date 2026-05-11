@@ -17,6 +17,7 @@ import {
 } from "vue-maplibre-kit/business";
 
 const layers = createLayerGroup({
+  sourceId: "pipe-source",
   defaultPolicy: {
     readonlyKeys: ["id"],
     fixedKeys: ["name", "status"],
@@ -25,25 +26,27 @@ const layers = createLayerGroup({
   layers: [
     {
       type: "fill",
-      id: "asset-area-layer",
+      id: "area",
       geometryTypes: ["Polygon", "MultiPolygon"],
       style: createSimpleFillStyle({ color: "#79b8ff", opacity: 0.35 }),
     },
     {
       type: "line",
-      id: "asset-line-layer",
+      id: "line",
       geometryTypes: ["LineString", "MultiLineString"],
       style: createSimpleLineStyle({ color: "#0f766e", width: 4 }),
     },
     {
       type: "circle",
-      id: "asset-point-layer",
+      id: "point",
       geometryTypes: ["Point", "MultiPoint"],
       style: createSimpleCircleStyle({ color: "#f97316", radius: 7 }),
     },
   ],
 });
 ```
+
+`sourceId` 是这一组图层所属的业务 source id，必填。每个 `LayerGroupItem.id` 是 source 内部的逻辑图层名，最终 MapLibre 图层 id 会拼成 `${sourceId}-${id}`。例如 `sourceId: "pipe-source"` 和 `id: "line"` 会生成完整图层 id `pipe-source-line`。
 
 ## 配置继承
 

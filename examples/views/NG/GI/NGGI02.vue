@@ -1,8 +1,13 @@
 <template>
   <section class="nggi-page">
-    <MapLibreInit ref="mapRef" :map-options="kit.mapOptions" :controls="kit.controls">
+    <MapLibreInit :map-options="kit.mapOptions" :controls="kit.controls">
       <template #dataSource>
-        <MapBusinessSourceLayers :source="kit.source" :layers="kit.layers" />
+        <MapBusinessSourceLayers
+          v-for="source in kit.registry.listSources()"
+          :key="source.sourceId"
+          :source="source"
+          :layers="source.getLayers()"
+        />
       </template>
     </MapLibreInit>
     <aside class="nggi-panel">
@@ -10,10 +15,11 @@
       <button type="button" @click="addPoint">新增点</button>
       <button type="button" @click="renameFirst">改名</button>
       <button type="button" @click="removeLast">删除末尾</button>
-      <button type="button" @click="addRuntimeLayer">命令式添加图层</button>
-      <button type="button" @click="removeRuntimeLayer">命令式移除图层</button>
+      <button type="button" @click="addRuntimeSource">动态新增 source</button>
+      <button type="button" @click="addRuntimeLayer">动态新增 layer</button>
       <p>当前要素数：{{ kit.sourceData.value.features.length }}</p>
-      <p>运行时图层：{{ runtimeMessage }}</p>
+      <p>动态 source：{{ sourceMessage }}</p>
+      <p>动态 layer：{{ layerMessage }}</p>
       <div class="property-list">
         <h4>要素属性</h4>
         <dl v-for="feature in featureItems" :key="feature.id">
@@ -30,27 +36,62 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef } from "vue";
 import {
+  createLayerGroup,
+  createMapBusinessSource,
+  createMapBusinessSourceRegistry,
+  createSimpleCircleStyle,
   MapBusinessSourceLayers,
   MapLibreInit,
-  useBusinessMap,
+  type MapBusinessLayerDescriptor,
+  type MapBusinessSource,
   type MapCommonFeatureCollection,
-  type MapLibreInitExpose,
 } from "vue-maplibre-kit/business";
-import { createExampleKit, createPointFeature } from "./nggi-example.shared";
+import {
+  EXAMPLE_SOURCE_ID,
+  createExampleControls,
+  createExampleLayers,
+  createExampleMapOptions,
+  createMixedData,
+  createPointFeature,
+} from "./nggi-example.shared";
 
-// createExampleKit 会一次性创建 mapOptions、controls、source、layers、registry。
-// 业务页通常可以把这些内容拆到自己的 composable 中，这里放一起便于阅读。
-const kit = createExampleKit("basic");
-const mapRef = shallowRef<MapLibreInitExpose | null>(null);
-// useBusinessMap 是业务层推荐入口，运行时图层动作、要素查询、属性编辑都从这里取。
-const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry: kit.registry });
-const runtimeMessage = ref("尚未添加");
-
-// 运行时 source/layer 用固定 ID，方便重复点击时门面能判断“已存在”并返回提示。
 const RUNTIME_SOURCE_ID = "nggi02-runtime-source";
-const RUNTIME_LAYER_ID = "nggi02-runtime-point-layer";
+const RUNTIME_LAYER_ID = `${EXAMPLE_SOURCE_ID}-runtime-point`;
 
-// 这是命令式添加 source 的数据；它不进入正式业务 source 的响应式数据流。
+/**
+ * 创建支持动态 source 和动态 layer 的示例组合。
+ * @returns 示例页面可直接使用的 source、注册表与响应式图层状态
+ */
+function createDynamicKit() {
+  const sourceData = ref(createMixedData());
+  const layers = shallowRef<MapBusinessLayerDescriptor[]>(
+    createExampleLayers(),
+  );
+  const source = createMapBusinessSource({
+    sourceId: EXAMPLE_SOURCE_ID,
+    data: sourceData,
+    promoteId: "id",
+    // 这里必须传入 shallowRef 本身，source.getLayers() 才能读到后续替换后的图层数组。
+    layers,
+  });
+  const registry = createMapBusinessSourceRegistry();
+  registry.addSource(source);
+
+  return {
+    mapOptions: createExampleMapOptions(),
+    controls: createExampleControls("basic"),
+    layers,
+    sourceData,
+    source,
+    registry,
+  };
+}
+
+const kit = createDynamicKit();
+const sourceMessage = ref("尚未添加");
+const layerMessage = ref("尚未添加");
+
+// 这是动态 source 使用的数据；它独立于主业务 source，便于观察 registry.addSource 后的渲染结果。
 const runtimeData: MapCommonFeatureCollection = {
   type: "FeatureCollection",
   features: [createPointFeature("runtime-point-a", "命令式点 A", 1.6, -1.35)],
@@ -63,7 +104,7 @@ const featureItems = computed(() =>
     name: String(feature.properties?.name || "未命名"),
     kind: String(feature.properties?.kind || "未知"),
     status: String(feature.properties?.status || "未知"),
-  }))
+  })),
 );
 
 /**
@@ -71,7 +112,12 @@ const featureItems = computed(() =>
  */
 function addPoint(): void {
   const count = kit.sourceData.value.features.length;
-  const nextFeature = createPointFeature(`point-new-${count}`, `新增点 ${count}`, 0.6, -1.4);
+  const nextFeature = createPointFeature(
+    `point-new-${count}`,
+    `新增点 ${count}`,
+    0.6,
+    -1.4,
+  );
   // 正式业务数据推荐由业务层维护响应式数组，而不是让地图组件偷偷接管数据。
   kit.sourceData.value = {
     ...kit.sourceData.value,
@@ -103,37 +149,81 @@ function removeLast(): void {
 }
 
 /**
- * 使用业务图层门面命令式添加 GeoJSON source 与点图层。
+ * 创建动态新增 source 使用的业务 source。
+ * @returns 可注册到当前 registry 的业务 source
  */
-function addRuntimeLayer(): void {
-  const sourceResult = businessMap.layers.addGeoJsonSource(RUNTIME_SOURCE_ID, runtimeData);
-  if (!sourceResult.success) {
-    runtimeMessage.value = sourceResult.message;
-    return;
-  }
-
-  const layerResult = businessMap.layers.addLayer({
-    id: RUNTIME_LAYER_ID,
-    type: "circle",
-    source: RUNTIME_SOURCE_ID,
-    paint: {
-      // 运行时图层直接使用 MapLibre paint 写法，适合临时高亮、定位点等轻量需求。
-      "circle-color": "#0ea5e9",
-      "circle-radius": 10,
-      "circle-stroke-color": "#0f172a",
-      "circle-stroke-width": 2,
-    },
+function createRuntimeSource(): MapBusinessSource {
+  const data = ref(runtimeData);
+  const layers = createLayerGroup({
+    sourceId: RUNTIME_SOURCE_ID,
+    layers: [
+      {
+        type: "circle",
+        id: "point",
+        geometryTypes: ["Point", "MultiPoint"],
+        style: createSimpleCircleStyle({
+          color: "#0ea5e9",
+          radius: 10,
+          strokeColor: "#0f172a",
+          strokeWidth: 2,
+        }),
+      },
+    ],
   });
-  runtimeMessage.value = `${sourceResult.message}；${layerResult.message}`;
+
+  return createMapBusinessSource({
+    sourceId: RUNTIME_SOURCE_ID,
+    data,
+    promoteId: "id",
+    layers,
+  });
 }
 
 /**
- * 使用业务图层门面命令式移除运行时图层与 GeoJSON source。
+ * 通过 registry 动态新增一个业务 source。
  */
-function removeRuntimeLayer(): void {
-  const layerResult = businessMap.layers.removeLayer(RUNTIME_LAYER_ID);
-  const sourceResult = businessMap.layers.removeSource(RUNTIME_SOURCE_ID);
-  runtimeMessage.value = `${layerResult.message}；${sourceResult.message}`;
+function addRuntimeSource(): void {
+  if (kit.registry.getSource(RUNTIME_SOURCE_ID)) {
+    sourceMessage.value = "动态 source 已存在";
+    return;
+  }
+
+  kit.registry.addSource(createRuntimeSource());
+  sourceMessage.value = "动态 source 已添加";
+}
+
+/**
+ * 通过替换主 source 的 layers 数组动态新增图层。
+ */
+function addRuntimeLayer(): void {
+  if (kit.layers.value.some((layer) => layer.layerId === RUNTIME_LAYER_ID)) {
+    layerMessage.value = "动态 layer 已存在";
+    return;
+  }
+
+  const nextLayers = createLayerGroup({
+    sourceId: EXAMPLE_SOURCE_ID,
+    layers: [
+      {
+        type: "circle",
+        id: "runtime-point",
+        geometryTypes: ["Point", "MultiPoint"],
+        where: {
+          kind: "point",
+        },
+        style: createSimpleCircleStyle({
+          color: "#22c55e",
+          radius: 12,
+          opacity: 0.55,
+          strokeColor: "#14532d",
+          strokeWidth: 2,
+        }),
+      },
+    ],
+  });
+
+  kit.layers.value = [...kit.layers.value, ...nextLayers];
+  layerMessage.value = "动态 layer 已添加";
 }
 </script>
 

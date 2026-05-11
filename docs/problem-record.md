@@ -1,3 +1,11 @@
+## 2026-05-11 动态业务 source 与 layer 声明边界记录
+
+- 状态：设计确认并同步知识库
+- 问题：业务文档里曾把 `createMapBusinessSourceRegistry([source])` 或空数组初始化当成常规写法，容易让动态 source 管理和动态 layer 管理混在一起。
+- 处理：知识库统一改为 `createMapBusinessSourceRegistry()` 无参创建注册表，再通过 `addSource(source)`、`setSources(sources)`、`removeSource(sourceId)`、`clearSources()` 管理动态 source。
+- 边界：动态 source 由 registry 管理；动态 layer 由 `createMapBusinessSource({ layers })` 管理，`layers` 可使用 `ref`、`computed` 或 getter，不新增 layer registry。
+- 经验：`createLayerGroup({ sourceId, layers })` 的 `sourceId` 是完整图层 id 的前缀，`LayerGroupItem.id` 只表示 source 内逻辑图层名，最终 layerId 形如 `pipe-source-line`。
+
 ## 2026-05-07 snap 运行期开关记录
 
 - 状态：已解决

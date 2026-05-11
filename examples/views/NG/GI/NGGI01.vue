@@ -17,6 +17,7 @@
       <p>mapRef：{{ hasMapRef ? "已绑定" : "等待绑定" }}</p>
       <p>地图加载：{{ isMapReady ? "已就绪" : "加载中" }}</p>
       <p>createLayerGroup 图层：{{ layers.length }} 个</p>
+      <p>注册 source：{{ registry.listSources().length }} 个</p>
       <p>交互状态：{{ message }}</p>
       <button type="button" @click="toggleInteractive">
         {{ mapInteractive.enabled === false ? "启用交互" : "停用交互" }}
@@ -26,10 +27,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  shallowRef,
+} from "vue";
 import {
   createLayerGroup,
   createMapBusinessSource,
+  createMapBusinessSourceRegistry,
   createSimpleCircleStyle,
   createSimpleFillStyle,
   createSimpleLineStyle,
@@ -47,11 +56,11 @@ import {
 const mapKey = "nggi01-basic-map";
 // 轮询间隔仅用于示例面板显示宿主加载态，不参与真实业务逻辑。
 const MAP_READY_INTERVAL_MS = 200;
-// 这些 ID 直接写在页面里，便于观察 createLayerGroup 如何绑定 source 与图层。
+// 这些 ID 直接写在页面里，便于观察 createLayerGroup 如何按 source 生成最终图层 ID。
 const SOURCE_ID = "nggi01-layer-group-source";
-const FILL_LAYER_ID = "nggi01-layer-group-fill";
-const LINE_LAYER_ID = "nggi01-layer-group-line";
-const POINT_LAYER_ID = "nggi01-layer-group-point";
+const FILL_LAYER_ID = `${SOURCE_ID}-fill`;
+const LINE_LAYER_ID = `${SOURCE_ID}-line`;
+const POINT_LAYER_ID = `${SOURCE_ID}-point`;
 
 /**
  * 创建无外部瓦片依赖的空白地图样式。
@@ -149,6 +158,7 @@ const controls: MapControlsConfig = {
 };
 const data = ref(createGroupData());
 const layers = createLayerGroup({
+  sourceId: SOURCE_ID,
   defaultPolicy: {
     readonlyKeys: ["id"],
     fixedKeys: ["name", "status"],
@@ -156,7 +166,7 @@ const layers = createLayerGroup({
   layers: [
     {
       type: "fill",
-      id: FILL_LAYER_ID,
+      id: "fill",
       geometryTypes: ["Polygon", "MultiPolygon"],
       style: createSimpleFillStyle({
         // 简单样式也可以接收表达式；这里按 properties.color 动态取面颜色。
@@ -167,7 +177,7 @@ const layers = createLayerGroup({
     },
     {
       type: "line",
-      id: LINE_LAYER_ID,
+      id: "line",
       geometryTypes: ["LineString", "MultiLineString"],
       style: createSimpleLineStyle({
         color: "#0f766e",
@@ -177,7 +187,7 @@ const layers = createLayerGroup({
     },
     {
       type: "circle",
-      id: POINT_LAYER_ID,
+      id: "point",
       geometryTypes: ["Point", "MultiPoint"],
       style: createSimpleCircleStyle({
         color: "#f97316",
@@ -195,6 +205,8 @@ const source = createMapBusinessSource({
   promoteId: "id",
   layers,
 });
+const registry = createMapBusinessSourceRegistry();
+registry.addSource(source);
 // mapRef 是所有业务门面读取地图实例的起点，后续示例都会围绕它继续扩展。
 const mapRef = shallowRef<MapLibreInitExpose | null>(null);
 // message 只负责把交互结果显示到右侧面板，方便观察回调是否触发。
@@ -213,7 +225,9 @@ const mapInteractive = reactive<MapLayerInteractiveOptions>({
     message.value = "mapInteractive 已就绪";
   },
   onClick: (context) => {
-    const featureName = context.properties?.name ? `，命中：${context.properties.name}` : "";
+    const featureName = context.properties?.name
+      ? `，命中：${context.properties.name}`
+      : "";
     // toFixed(5) 只是为了让面板里经纬度更短；真实业务可按需要保留更多位。
     const lng = context.lngLat?.lng.toFixed(5) || "未知经度";
     const lat = context.lngLat?.lat.toFixed(5) || "未知纬度";
@@ -239,7 +253,10 @@ function syncReadyState(): void {
  */
 function toggleInteractive(): void {
   mapInteractive.enabled = mapInteractive.enabled === false;
-  message.value = mapInteractive.enabled === false ? "mapInteractive 已停用" : "mapInteractive 已启用";
+  message.value =
+    mapInteractive.enabled === false
+      ? "mapInteractive 已停用"
+      : "mapInteractive 已启用";
 }
 
 onMounted(() => {

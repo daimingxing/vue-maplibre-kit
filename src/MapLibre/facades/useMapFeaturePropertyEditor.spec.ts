@@ -1,47 +1,53 @@
-import { ref, shallowRef } from 'vue';
-import { describe, expect, it } from 'vitest';
+import { ref, shallowRef } from "vue";
+import { describe, expect, it } from "vitest";
 import type {
   MaplibreMeasureControl,
   MaplibreTerradrawControl,
-} from '@watergis/maplibre-gl-terradraw';
-import type { FeatureProperties, MapFeatureId } from '../composables/useMapDataUpdate';
+} from "@watergis/maplibre-gl-terradraw";
+import type {
+  FeatureProperties,
+  MapFeatureId,
+} from "../composables/useMapDataUpdate";
 import {
   createMapLibreRawHandles,
   type MapLibreInitExpose,
-} from '../core/mapLibre-init.types';
-import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/useLineDraftPreviewController';
+} from "../core/mapLibre-init.types";
+import type { LineDraftPreviewPluginApi } from "../plugins/line-draft-preview/useLineDraftPreviewController";
 import {
   LINE_DRAFT_PREVIEW_HIDDEN_PROPERTY_KEYS,
   LINE_DRAFT_PREVIEW_SOURCE_ID,
-} from '../plugins/line-draft-preview/useLineDraftPreviewStore';
-import type { MapPluginHostExpose } from '../plugins/types';
+} from "../plugins/line-draft-preview/useLineDraftPreviewStore";
+import type { MapPluginHostExpose } from "../plugins/types";
 import {
   createMapSourceFeatureRef,
   type MapCommonFeature,
   type MapCommonFeatureCollection,
-} from '../shared/map-common-tools';
+} from "../shared/map-common-tools";
 import {
   removeFeaturePropertiesInCollection,
   saveFeaturePropertiesInCollection,
-} from '../shared/map-feature-data';
-import type { TerradrawFeature } from '../shared/mapLibre-controls-types';
-import type { MapInstance } from 'vue-maplibre-gl';
+} from "../shared/map-feature-data";
+import type { TerradrawFeature } from "../shared/mapLibre-controls-types";
+import type { MapInstance } from "vue-maplibre-gl";
 import {
   createMapBusinessSource,
   createMapBusinessSourceRegistry,
   type MapBusinessSource,
-} from './createMapBusinessSource';
-import { createCircleBusinessLayer } from './mapBusinessLayer';
-import { useMapFeaturePropertyEditor } from './useMapFeaturePropertyEditor';
+} from "./createMapBusinessSource";
+import { createCircleBusinessLayer } from "./mapBusinessLayer";
+import { useMapFeaturePropertyEditor } from "./useMapFeaturePropertyEditor";
 
 /** 线草稿插件类型常量。 */
-const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = 'lineDraftPreview';
+const LINE_DRAFT_PREVIEW_PLUGIN_TYPE = "lineDraftPreview";
 
 /** TerraDraw 测试替身统一使用的最小实例形状。 */
 interface TerradrawStub {
   hasFeature: (featureId: MapFeatureId) => boolean;
   getSnapshotFeature: (featureId: MapFeatureId) => TerradrawFeature | null;
-  updateFeatureProperties: (featureId: MapFeatureId, patch: FeatureProperties) => void;
+  updateFeatureProperties: (
+    featureId: MapFeatureId,
+    patch: FeatureProperties,
+  ) => void;
 }
 
 /**
@@ -52,17 +58,17 @@ interface TerradrawStub {
  */
 function createPointFeature(
   id: string,
-  properties: Record<string, any> = {}
+  properties: Record<string, any> = {},
 ): MapCommonFeature {
   return {
-    type: 'Feature',
+    type: "Feature",
     id,
     properties: {
       id,
       ...properties,
     },
     geometry: {
-      type: 'Point',
+      type: "Point",
       coordinates: [120, 30],
     },
   };
@@ -73,9 +79,11 @@ function createPointFeature(
  * @param features 要素列表
  * @returns 标准要素集合
  */
-function createFeatureCollection(features: MapCommonFeature[]): MapCommonFeatureCollection {
+function createFeatureCollection(
+  features: MapCommonFeature[],
+): MapCommonFeatureCollection {
   return {
-    type: 'FeatureCollection',
+    type: "FeatureCollection",
     features,
   };
 }
@@ -86,7 +94,9 @@ function createFeatureCollection(features: MapCommonFeature[]): MapCommonFeature
  * @returns 清理后的属性对象
  */
 function cleanProperties(properties: FeatureProperties): FeatureProperties {
-  return Object.fromEntries(Object.entries(properties).filter(([, value]) => value !== undefined));
+  return Object.fromEntries(
+    Object.entries(properties).filter(([, value]) => value !== undefined),
+  );
 }
 
 /**
@@ -98,23 +108,23 @@ function createBusinessSourceHarness(): {
   sourceRegistry: ReturnType<typeof createMapBusinessSourceRegistry>;
 } {
   const source = createMapBusinessSource({
-    sourceId: 'business-source',
+    sourceId: "business-source",
     data: ref(
       createFeatureCollection([
-        createPointFeature('feature-1', {
-          name: '原始名称',
-          mark: '锁定值',
-          tag: '临时字段',
+        createPointFeature("feature-1", {
+          name: "原始名称",
+          mark: "锁定值",
+          tag: "临时字段",
         }),
-      ])
+      ]),
     ),
-    promoteId: 'id',
+    promoteId: "id",
     layers: [
       createCircleBusinessLayer({
-        layerId: 'circleLayer',
+        layerId: "circleLayer",
         propertyPolicy: {
-          readonlyKeys: ['id'],
-          fixedKeys: ['mark'],
+          readonlyKeys: ["id"],
+          fixedKeys: ["mark"],
         },
       }),
     ],
@@ -122,7 +132,11 @@ function createBusinessSourceHarness(): {
 
   return {
     source,
-    sourceRegistry: createMapBusinessSourceRegistry([source]),
+    sourceRegistry: (() => {
+      const sourceRegistry = createMapBusinessSourceRegistry();
+      sourceRegistry.addSource(source);
+      return sourceRegistry;
+    })(),
   };
 }
 
@@ -135,7 +149,7 @@ function createBusinessSourceHarness(): {
  * @returns 可供公开实例复用的绘图控件替身
  */
 function createDrawControlStub(
-  terradraw: TerradrawStub | null | undefined
+  terradraw: TerradrawStub | null | undefined,
 ): MaplibreTerradrawControl | null {
   if (!terradraw) {
     return null;
@@ -157,7 +171,7 @@ function createDrawControlStub(
  * @returns 可供公开实例复用的测量控件替身
  */
 function createMeasureControlStub(
-  terradraw: TerradrawStub | null | undefined
+  terradraw: TerradrawStub | null | undefined,
 ): MaplibreMeasureControl | null {
   if (!terradraw) {
     return null;
@@ -180,7 +194,7 @@ function createMeasureControlStub(
 function createMapExpose(
   api?: LineDraftPreviewPluginApi | null,
   drawTerradraw?: TerradrawStub | null,
-  measureTerradraw?: TerradrawStub | null
+  measureTerradraw?: TerradrawStub | null,
 ): MapLibreInitExpose {
   const mapInstance = {
     component: undefined,
@@ -190,14 +204,14 @@ function createMapExpose(
     language: undefined,
   } as MapInstance;
   const pluginHost: MapPluginHostExpose = {
-    has: (pluginId) => pluginId === 'lineDraftPreview' && Boolean(api),
+    has: (pluginId) => pluginId === "lineDraftPreview" && Boolean(api),
     getApi: <TApi = unknown>() => (api as TApi | null) || null,
     getState: <TState = unknown>() => null as TState | null,
     list: () =>
       api
         ? [
             {
-              id: 'lineDraftPreview',
+              id: "lineDraftPreview",
               type: LINE_DRAFT_PREVIEW_PLUGIN_TYPE,
             },
           ]
@@ -234,11 +248,11 @@ function createLineDraftApi(source: MapBusinessSource): {
   api: LineDraftPreviewPluginApi;
   getFeature: () => MapCommonFeature;
 } {
-  let lineDraftFeature = createPointFeature('draft-1', {
-    name: '草稿名称',
+  let lineDraftFeature = createPointFeature("draft-1", {
+    name: "草稿名称",
     managedPreviewOriginSourceId: source.sourceId,
-    managedPreviewOriginFeatureId: 'feature-1',
-    managedPreviewOriginLayerId: 'circleLayer',
+    managedPreviewOriginFeatureId: "feature-1",
+    managedPreviewOriginLayerId: "circleLayer",
     managedPreviewOriginKey: `${source.sourceId}::feature-1`,
   });
 
@@ -256,9 +270,10 @@ function createLineDraftApi(source: MapBusinessSource): {
    * @returns 结构化写回结果
    */
   const commitDraftCollection = (
-    nextCollection: MapCommonFeatureCollection | undefined
+    nextCollection: MapCommonFeatureCollection | undefined,
   ): MapCommonFeature => {
-    lineDraftFeature = (nextCollection?.features?.[0] || lineDraftFeature) as MapCommonFeature;
+    lineDraftFeature = (nextCollection?.features?.[0] ||
+      lineDraftFeature) as MapCommonFeature;
     return lineDraftFeature;
   };
 
@@ -269,7 +284,8 @@ function createLineDraftApi(source: MapBusinessSource): {
     getFeatureById: (featureId: MapFeatureId | null) => {
       return featureId === lineDraftFeature.id ? lineDraftFeature : null;
     },
-    isFeatureById: (featureId: MapFeatureId | null) => featureId === lineDraftFeature.id,
+    isFeatureById: (featureId: MapFeatureId | null) =>
+      featureId === lineDraftFeature.id,
     isSelectedFeature: () => false,
     getSelectedFeatureSnapshot: () => null,
     previewLine: () => null,
@@ -294,7 +310,7 @@ function createLineDraftApi(source: MapBusinessSource): {
       if (!result.success || !result.data || !result.properties) {
         return {
           success: false,
-          target: 'map' as const,
+          target: "map" as const,
           featureId: options.featureId,
           message: result.message,
           blockedKeys: result.blockedKeys,
@@ -305,7 +321,7 @@ function createLineDraftApi(source: MapBusinessSource): {
       commitDraftCollection(result.data as MapCommonFeatureCollection);
       return {
         success: true,
-        target: 'map' as const,
+        target: "map" as const,
         featureId: options.featureId,
         properties: result.properties,
         message: result.message,
@@ -332,7 +348,7 @@ function createLineDraftApi(source: MapBusinessSource): {
       if (!result.success || !result.data || !result.properties) {
         return {
           success: false,
-          target: 'map' as const,
+          target: "map" as const,
           featureId: options.featureId,
           message: result.message,
           blockedKeys: result.blockedKeys,
@@ -343,7 +359,7 @@ function createLineDraftApi(source: MapBusinessSource): {
       commitDraftCollection(result.data as MapCommonFeatureCollection);
       return {
         success: true,
-        target: 'map' as const,
+        target: "map" as const,
         featureId: options.featureId,
         properties: result.properties,
         message: result.message,
@@ -368,7 +384,10 @@ function createTerradrawHarness(feature: TerradrawFeature): {
   terradraw: {
     hasFeature: (featureId: MapFeatureId) => boolean;
     getSnapshotFeature: (featureId: MapFeatureId) => TerradrawFeature | null;
-    updateFeatureProperties: (featureId: MapFeatureId, patch: FeatureProperties) => void;
+    updateFeatureProperties: (
+      featureId: MapFeatureId,
+      patch: FeatureProperties,
+    ) => void;
   };
   getFeature: () => TerradrawFeature;
 } {
@@ -398,8 +417,8 @@ function createTerradrawHarness(feature: TerradrawFeature): {
   };
 }
 
-describe('useMapFeaturePropertyEditor', () => {
-  it('map 目标可以统一保存单个属性键', () => {
+describe("useMapFeaturePropertyEditor", () => {
+  it("map 目标可以统一保存单个属性键", () => {
     const { source, sourceRegistry } = createBusinessSourceHarness();
     const propertyEditor = useMapFeaturePropertyEditor({
       mapRef: shallowRef(createMapExpose()),
@@ -408,22 +427,22 @@ describe('useMapFeaturePropertyEditor', () => {
 
     const result = propertyEditor.saveItem(
       {
-        type: 'map',
-        featureRef: source.toFeatureRef('feature-1', 'circleLayer'),
+        type: "map",
+        featureRef: source.toFeatureRef("feature-1", "circleLayer"),
       },
       {
-        key: 'name',
-        value: '已改名',
-      }
+        key: "name",
+        value: "已改名",
+      },
     );
 
     expect(result.success).toBe(true);
-    expect(result.target).toBe('business');
-    expect(result.editorState.rawProperties.name).toBe('已改名');
-    expect(source.resolveFeature('feature-1')?.properties?.name).toBe('已改名');
+    expect(result.target).toBe("business");
+    expect(result.editorState.rawProperties.name).toBe("已改名");
+    expect(source.resolveFeature("feature-1")?.properties?.name).toBe("已改名");
   });
 
-  it('map 目标可以统一删除单个属性键', () => {
+  it("map 目标可以统一删除单个属性键", () => {
     const { source, sourceRegistry } = createBusinessSourceHarness();
     const propertyEditor = useMapFeaturePropertyEditor({
       mapRef: shallowRef(createMapExpose()),
@@ -432,19 +451,19 @@ describe('useMapFeaturePropertyEditor', () => {
 
     const result = propertyEditor.removeItem(
       {
-        type: 'map',
-        featureRef: source.toFeatureRef('feature-1', 'circleLayer'),
+        type: "map",
+        featureRef: source.toFeatureRef("feature-1", "circleLayer"),
       },
-      'tag'
+      "tag",
     );
 
     expect(result.success).toBe(true);
-    expect(result.target).toBe('business');
+    expect(result.target).toBe("business");
     expect(result.editorState.rawProperties.tag).toBeUndefined();
-    expect(source.resolveFeature('feature-1')?.properties?.tag).toBeUndefined();
+    expect(source.resolveFeature("feature-1")?.properties?.tag).toBeUndefined();
   });
 
-  it('map 目标会按图层 propertyPolicy 阻止固定字段删除', () => {
+  it("map 目标会按图层 propertyPolicy 阻止固定字段删除", () => {
     const { source, sourceRegistry } = createBusinessSourceHarness();
     const propertyEditor = useMapFeaturePropertyEditor({
       mapRef: shallowRef(createMapExpose()),
@@ -453,21 +472,22 @@ describe('useMapFeaturePropertyEditor', () => {
 
     const result = propertyEditor.removeItem(
       {
-        type: 'map',
-        featureRef: source.toFeatureRef('feature-1', 'circleLayer'),
+        type: "map",
+        featureRef: source.toFeatureRef("feature-1", "circleLayer"),
       },
-      'mark'
+      "mark",
     );
 
     expect(result.success).toBe(false);
-    expect(result.blockedKeys).toEqual(['mark']);
-    expect(result.editorState.panelState.items.find((item) => item.key === 'mark')?.removable).toBe(
-      false
-    );
-    expect(source.resolveFeature('feature-1')?.properties?.mark).toBe('锁定值');
+    expect(result.blockedKeys).toEqual(["mark"]);
+    expect(
+      result.editorState.panelState.items.find((item) => item.key === "mark")
+        ?.removable,
+    ).toBe(false);
+    expect(source.resolveFeature("feature-1")?.properties?.mark).toBe("锁定值");
   });
 
-  it('lineDraft 来源会自动分流到线草稿属性写回', () => {
+  it("lineDraft 来源会自动分流到线草稿属性写回", () => {
     const { source, sourceRegistry } = createBusinessSourceHarness();
     const lineDraftHarness = createLineDraftApi(source);
     const propertyEditor = useMapFeaturePropertyEditor({
@@ -477,84 +497,95 @@ describe('useMapFeaturePropertyEditor', () => {
 
     const result = propertyEditor.saveItem(
       {
-        type: 'map',
-        featureRef: createMapSourceFeatureRef(LINE_DRAFT_PREVIEW_SOURCE_ID, 'draft-1'),
+        type: "map",
+        featureRef: createMapSourceFeatureRef(
+          LINE_DRAFT_PREVIEW_SOURCE_ID,
+          "draft-1",
+        ),
       },
       {
-        key: 'name',
-        value: '草稿已更新',
-      }
+        key: "name",
+        value: "草稿已更新",
+      },
     );
 
     expect(result.success).toBe(true);
-    expect(result.target).toBe('lineDraft');
-    expect(lineDraftHarness.getFeature().properties?.name).toBe('草稿已更新');
-    expect(result.editorState.rawProperties.name).toBe('草稿已更新');
-    expect(result.editorState.panelState.properties.managedPreviewOriginSourceId).toBeUndefined();
-    expect(result.editorState.panelState.properties.managedPreviewOriginLayerId).toBeUndefined();
+    expect(result.target).toBe("lineDraft");
+    expect(lineDraftHarness.getFeature().properties?.name).toBe("草稿已更新");
+    expect(result.editorState.rawProperties.name).toBe("草稿已更新");
+    expect(
+      result.editorState.panelState.properties.managedPreviewOriginSourceId,
+    ).toBeUndefined();
+    expect(
+      result.editorState.panelState.properties.managedPreviewOriginLayerId,
+    ).toBeUndefined();
   });
 
-  it('terradraw 目标可以统一保存和删除属性，并返回最新属性快照', () => {
+  it("terradraw 目标可以统一保存和删除属性，并返回最新属性快照", () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const drawHarness = createTerradrawHarness({
-      id: 'draw-1',
-      type: 'Feature',
+      id: "draw-1",
+      type: "Feature",
       properties: {
-        id: 'draw-1',
-        name: '绘制前',
+        id: "draw-1",
+        name: "绘制前",
       },
       geometry: null,
     } as unknown as TerradrawFeature);
     const measureHarness = createTerradrawHarness({
-      id: 'measure-1',
-      type: 'Feature',
+      id: "measure-1",
+      type: "Feature",
       properties: {
-        id: 'measure-1',
-        label: '测量前',
+        id: "measure-1",
+        label: "测量前",
         distance: 120,
-        unit: 'm',
+        unit: "m",
       },
       geometry: null,
     } as unknown as TerradrawFeature);
     const propertyEditor = useMapFeaturePropertyEditor({
-      mapRef: shallowRef(createMapExpose(null, drawHarness.terradraw, measureHarness.terradraw)),
+      mapRef: shallowRef(
+        createMapExpose(null, drawHarness.terradraw, measureHarness.terradraw),
+      ),
       sourceRegistry,
     });
 
     const saveResult = propertyEditor.saveItem(
       {
-        type: 'terradraw',
-        controlType: 'draw',
-        featureId: 'draw-1',
+        type: "terradraw",
+        controlType: "draw",
+        featureId: "draw-1",
       },
       {
-        key: 'name',
-        value: '绘制后',
-      }
+        key: "name",
+        value: "绘制后",
+      },
     );
     const removeResult = propertyEditor.removeItem(
       {
-        type: 'terradraw',
-        controlType: 'measure',
-        featureId: 'measure-1',
+        type: "terradraw",
+        controlType: "measure",
+        featureId: "measure-1",
       },
-      'label'
+      "label",
     );
 
     expect(saveResult.success).toBe(true);
-    expect(saveResult.target).toBe('terradraw');
-    expect(saveResult.editorState.rawProperties.name).toBe('绘制后');
-    expect(drawHarness.getFeature().properties?.name).toBe('绘制后');
+    expect(saveResult.target).toBe("terradraw");
+    expect(saveResult.editorState.rawProperties.name).toBe("绘制后");
+    expect(drawHarness.getFeature().properties?.name).toBe("绘制后");
 
     expect(removeResult.success).toBe(true);
-    expect(removeResult.target).toBe('terradraw');
+    expect(removeResult.target).toBe("terradraw");
     expect(removeResult.editorState.rawProperties.label).toBeUndefined();
     expect(removeResult.editorState.rawProperties.distance).toBe(120);
-    expect(removeResult.editorState.panelState.properties.distance).toBeUndefined();
+    expect(
+      removeResult.editorState.panelState.properties.distance,
+    ).toBeUndefined();
     expect(measureHarness.getFeature().properties?.label).toBeUndefined();
   });
 
-  it('底层动作失败时会保留现有错误消息语义', () => {
+  it("底层动作失败时会保留现有错误消息语义", () => {
     const { sourceRegistry } = createBusinessSourceHarness();
     const propertyEditor = useMapFeaturePropertyEditor({
       mapRef: shallowRef(createMapExpose()),
@@ -563,17 +594,17 @@ describe('useMapFeaturePropertyEditor', () => {
 
     const result = propertyEditor.saveItem(
       {
-        type: 'terradraw',
-        controlType: 'draw',
-        featureId: 'missing-feature',
+        type: "terradraw",
+        controlType: "draw",
+        featureId: "missing-feature",
       },
       {
-        key: 'name',
-        value: '不会成功',
-      }
+        key: "name",
+        value: "不会成功",
+      },
     );
 
     expect(result.success).toBe(false);
-    expect(result.message).toBe('TerraDraw 控件尚未初始化完成');
+    expect(result.message).toBe("TerraDraw 控件尚未初始化完成");
   });
 });

@@ -12,27 +12,40 @@
         <!-- 自定义控件插槽 -->
         <template #MglCustomControl>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="getDrawnData"
+            <ElButton
+              style="background: white; width: 120px"
+              @click="getDrawnData"
               >获取绘制数据</ElButton
             >
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="getMeasureData"
+            <ElButton
+              style="background: white; width: 120px"
+              @click="getMeasureData"
               >获取测量数据</ElButton
             >
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 130px" @click="runRawApiDemo">
+            <ElButton
+              style="background: white; width: 130px"
+              @click="runRawApiDemo"
+            >
               rawHandles示例
             </ElButton>
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="changeStyle">
+            <ElButton
+              style="background: white; width: 120px"
+              @click="changeStyle"
+            >
               切换样式
             </ElButton>
           </mgl-custom-control>
           <mgl-custom-control position="top-right" :noClasses="false">
-            <ElButton style="background: white; width: 120px" @click="toggleFlash">
+            <ElButton
+              style="background: white; width: 120px"
+              @click="toggleFlash"
+            >
               {{ flashButtonText }}
             </ElButton>
           </mgl-custom-control>
@@ -100,7 +113,9 @@
       :hasLineDraftFeatures="hasLineDraftFeatures"
       :lineDraftCount="lineDraftPreview.featureCount.value"
       :intersectionCount="intersectionPreview.count.value"
-      :intersectionMaterializedCount="intersectionPreview.materializedCount.value"
+      :intersectionMaterializedCount="
+        intersectionPreview.materializedCount.value
+      "
       :dxfDefaultOptions="dxfDefaultOptions"
       :dxfPrimaryOptions="dxfPrimaryOptions"
       :selectionPanelState="selectionPanelState"
@@ -201,9 +216,7 @@ import {
   type MapCommonFeature,
   type MapCommonLineFeature,
 } from "vue-maplibre-kit/geometry";
-import {
-  LINE_DRAFT_PREVIEW_SOURCE_ID,
-} from "vue-maplibre-kit/plugins/line-draft-preview";
+import { LINE_DRAFT_PREVIEW_SOURCE_ID } from "vue-maplibre-kit/plugins/line-draft-preview";
 import {
   createIntersectionPreviewPlugin,
   createLineDraftPreviewPlugin,
@@ -223,7 +236,8 @@ import {
 import type { GeoJSONSource } from "maplibre-gl";
 
 // 业务 source 工厂统一从分组入口读取，避免业务页面在根入口平铺查找。
-const { createMapBusinessSource, createMapBusinessSourceRegistry } = businessSources;
+const { createMapBusinessSource, createMapBusinessSourceRegistry } =
+  businessSources;
 
 // 业务图层工厂同样按职责分组，方便业务开发者记忆“去哪里找什么”。
 const {
@@ -310,7 +324,9 @@ const RAW_DEMO_COLORS = {
 } as const;
 
 /** raw API 示例统一复用公开实例上的原始地图类型，避免与宿主类型来源分叉。 */
-type RawDemoMap = NonNullable<BusinessKit.MapLibreInitExpose["rawHandles"]["map"]>;
+type RawDemoMap = NonNullable<
+  BusinessKit.MapLibreInitExpose["rawHandles"]["map"]
+>;
 
 import sendIcon from "./assets/send.svg";
 // import segment_stretch_test from './assets/segment-stretch.svg';
@@ -323,7 +339,9 @@ import texturelabsWater from "./assets/Texturelabs_Water.jpg";
  */
 
 // 业务数据响应式引用 (通常来自接口请求或本地 mock)
-const test_geojson = ref<MapCommonFeatureCollection>(mapGeojson as MapCommonFeatureCollection);
+const test_geojson = ref<MapCommonFeatureCollection>(
+  mapGeojson as MapCommonFeatureCollection,
+);
 const test_geojson_secondary = ref<MapCommonFeatureCollection>(
   mapGeojson2 as MapCommonFeatureCollection,
 );
@@ -565,7 +583,11 @@ const mapControls: BusinessKit.MapControlsConfig = {
 
       // 要素形状或属性发生任何变化时触发，可用于实时同步数据
       onFeatureChange: (context) => {
-        console.log("[TerraDraw 示例] 要素发生变化:", context.featureIds, context.changeType);
+        console.log(
+          "[TerraDraw 示例] 要素发生变化:",
+          context.featureIds,
+          context.changeType,
+        );
       },
 
       // 在 select 模式下，要素被选中时触发，适合联动显示右侧属性面板
@@ -666,19 +688,19 @@ const mapControls: BusinessKit.MapControlsConfig = {
       // 覆盖测量线模式，例如将当前页面的测量线颜色改为亮紫色
       linestring: {
         styles: {
-          lineStringColor: '#8A2BE2', // 亮紫色
+          lineStringColor: "#8A2BE2", // 亮紫色
           lineStringWidth: 4,
-          snappingPointColor: '#8A2BE2', // 吸附提示点颜色
+          snappingPointColor: "#8A2BE2", // 吸附提示点颜色
         },
       },
     },
     // 覆盖文字标签样式，例如修改距离文字的颜色和大小
     lineLayerLabelSpec: {
       layout: {
-        'text-size': 16, // 字体调大
+        "text-size": 16, // 字体调大
       },
       paint: {
-        'text-color': '#8A2BE2', // 文字颜色同步改为亮紫色
+        "text-color": "#8A2BE2", // 文字颜色同步改为亮紫色
       },
     },
 
@@ -748,7 +770,10 @@ const mapControls: BusinessKit.MapControlsConfig = {
       // 交互管理器准备完成时触发。
       // 适合在业务层做初始化日志、默认状态同步或首屏数据检查。
       onReady: (context) => {
-        console.log("[Measure 示例] 业务交互管理器已初始化:", context.controlType);
+        console.log(
+          "[Measure 示例] 业务交互管理器已初始化:",
+          context.controlType,
+        );
       },
 
       // 测量模式变化时触发。
@@ -1166,7 +1191,8 @@ const secondaryBusinessSource = createMapBusinessSource({
 });
 
 // 将所有业务源注册到管理中心，供查询与写入时使用。
-const businessSourceRegistry = createMapBusinessSourceRegistry([
+const businessSourceRegistry = createMapBusinessSourceRegistry();
+businessSourceRegistry.setSources([
   primaryBusinessSource,
   secondaryBusinessSource,
 ]);
@@ -1491,7 +1517,11 @@ const mapDxfExportOptions = {
 
       // 示例 2：主业务 source 里的重点线要素，额外提亮成橙色。
       // 这里故意同时结合 sourceId、图层名、业务属性做判断，演示规则可以非常细。
-      if (sourceId === SOURCE_IDS.primary && layerName.includes("Line") && name.includes("主")) {
+      if (
+        sourceId === SOURCE_IDS.primary &&
+        layerName.includes("Line") &&
+        name.includes("主")
+      ) {
         return "#FF9900";
       }
 
@@ -1524,7 +1554,10 @@ const mapDxfExportOptions = {
     }, */
 
     // 图层名解析器：决定当前要素写入 DXF 时落到哪个图层。
-    layerNameResolver: (feature: MapCommonFeature, sourceId: string): string => {
+    layerNameResolver: (
+      feature: MapCommonFeature,
+      sourceId: string,
+    ): string => {
       // DXF 里的“图层”可以理解成 CAD 中的分类目录。
       // 同一个图层里的实体会被放在一起，便于后续单独开关显示、选择、改样式。
 
@@ -1686,13 +1719,12 @@ const intersectionPreviewOptions = {
     // intersectionPreview.removeMaterialized(context.intersectionId);
     //
     const materializedFeature =
-      intersectionPreview
-        .getMaterializedData()
-        ?.features.find((feature) => {
-          return (
-            String(feature.properties?.id ?? feature.id ?? "") === context.intersectionId
-          );
-        }) || null;
+      intersectionPreview.getMaterializedData()?.features.find((feature) => {
+        return (
+          String(feature.properties?.id ?? feature.id ?? "") ===
+          context.intersectionId
+        );
+      }) || null;
     const coordinates =
       materializedFeature?.geometry?.type === "Point"
         ? materializedFeature.geometry.coordinates
@@ -1700,7 +1732,10 @@ const intersectionPreviewOptions = {
 
     console.log("[NGGI00 交点示例] 当前点击交点上下文", context);
     console.log("[NGGI00 交点示例] 当前正式交点要素", materializedFeature);
-    console.log("[NGGI00 交点示例] 当前正式交点属性", materializedFeature?.properties || {});
+    console.log(
+      "[NGGI00 交点示例] 当前正式交点属性",
+      materializedFeature?.properties || {},
+    );
     console.log("[NGGI00 交点示例] 当前正式交点坐标", coordinates);
 
     if (!coordinates) {
@@ -1717,20 +1752,21 @@ const intersectionPreviewOptions = {
   // 当前示例演示“右键撤销正式交点”。
   onContextMenu: (context) => {
     const materializedFeature =
-      intersectionPreview
-        .getMaterializedData()
-        ?.features.find((feature) => {
-          return (
-            String(feature.properties?.id ?? feature.id ?? "") === context.intersectionId
-          );
-        }) || null;
+      intersectionPreview.getMaterializedData()?.features.find((feature) => {
+        return (
+          String(feature.properties?.id ?? feature.id ?? "") ===
+          context.intersectionId
+        );
+      }) || null;
 
     if (!materializedFeature) {
       ElMessage.info("当前交点还没有生成正式点，无需删除");
       return;
     }
 
-    const removed = intersectionPreview.removeMaterialized(context.intersectionId);
+    const removed = intersectionPreview.removeMaterialized(
+      context.intersectionId,
+    );
     if (!removed) {
       ElMessage.warning("正式交点删除失败");
       return;
@@ -1834,7 +1870,9 @@ const hasLineDraftFeatures = computed(() => {
  */
 const intersectionScopeButtonText = computed(() => {
   const scopeText =
-    intersectionPreview.scope.value === "all" ? "全量业务线求交" : "当前选中线求交";
+    intersectionPreview.scope.value === "all"
+      ? "全量业务线求交"
+      : "当前选中线求交";
   return `交点范围：${scopeText}（${intersectionPreview.count.value}）`;
 });
 
@@ -1927,7 +1965,9 @@ const toggleFlash = (): void => {
   });
 
   if (nextFlashing) {
-    ElMessage.success("已开启 point_1、point_2 和 line_1 闪烁，line_1 使用 300ms 频率");
+    ElMessage.success(
+      "已开启 point_1、point_2 和 line_1 闪烁，line_1 使用 300ms 频率",
+    );
     return;
   }
 
@@ -1953,12 +1993,13 @@ interface FeaturePropertyEditorRemovePayload {
  * 创建空的属性面板态。
  * @returns 空的业务属性面板态
  */
-const createEmptyPropertyPanelState = (): BusinessKit.MapFeaturePropertyPanelState => {
-  return {
-    properties: {},
-    items: [],
+const createEmptyPropertyPanelState =
+  (): BusinessKit.MapFeaturePropertyPanelState => {
+    return {
+      properties: {},
+      items: [],
+    };
   };
-};
 
 /**
  * 克隆一份原始属性快照，避免 UI 直接持有底层引用。
@@ -2041,7 +2082,9 @@ const getDemoStyleStateTarget = (
  * @param selectedFeature 当前选中要素快照
  * @returns 是否已处于示例样式态
  */
-const isDemoStyleEnabled = (selectedFeature: BusinessKit.MapLayerSelectedFeature): boolean => {
+const isDemoStyleEnabled = (
+  selectedFeature: BusinessKit.MapLayerSelectedFeature,
+): boolean => {
   const targetKey = getDemoStyleTargetKey({
     sourceId: selectedFeature.sourceId,
     sourceLayer: selectedFeature.sourceLayer,
@@ -2096,9 +2139,11 @@ const changeStyle = (): void => {
     return;
   }
 
-  const shouldEnableDemoStyle = [...styleTargetMap.values()].some(({ selectedFeature }) => {
-    return !isDemoStyleEnabled(selectedFeature);
-  });
+  const shouldEnableDemoStyle = [...styleTargetMap.values()].some(
+    ({ selectedFeature }) => {
+      return !isDemoStyleEnabled(selectedFeature);
+    },
+  );
 
   let changedCount = 0;
   styleTargetMap.forEach(({ target }, targetKey) => {
@@ -2221,7 +2266,8 @@ const resolvePrimaryBusinessDxfLayerName: MapDxfLayerNameResolver = (
   sourceId: string,
 ): string => {
   const featureMark =
-    typeof feature.properties?.mark === "string" && feature.properties.mark.length > 0
+    typeof feature.properties?.mark === "string" &&
+    feature.properties.mark.length > 0
       ? feature.properties.mark
       : "default";
 
@@ -2259,7 +2305,9 @@ const dxfDefaultOptions = computed<DxfSummaryOptions | null>(() => {
  * 这里与“导出主业务 DXF”按钮保持同一套 overrides，避免说明与实际行为脱节。
  */
 const dxfPrimaryOptions = computed<DxfSummaryOptions | null>(() => {
-  const options = dxfExport.getResolvedOptions(createPrimaryBusinessDxfOverrides());
+  const options = dxfExport.getResolvedOptions(
+    createPrimaryBusinessDxfOverrides(),
+  );
   if (!options) {
     return null;
   }
@@ -2273,14 +2321,18 @@ const dxfPrimaryOptions = computed<DxfSummaryOptions | null>(() => {
  * 通过 `downloadDxf(overrides)` 为某一次导出任务临时覆写参数。
  */
 const downloadPrimaryBusinessSourceDxf = async (): Promise<void> => {
-  const options = dxfExport.getResolvedOptions(createPrimaryBusinessDxfOverrides());
+  const options = dxfExport.getResolvedOptions(
+    createPrimaryBusinessDxfOverrides(),
+  );
   if (!options) {
     ElMessage.warning("DXF 导出插件尚未初始化完成");
     return;
   }
 
   try {
-    const result = await dxfExport.downloadDxf(createPrimaryBusinessDxfOverrides());
+    const result = await dxfExport.downloadDxf(
+      createPrimaryBusinessDxfOverrides(),
+    );
     if (!result) {
       ElMessage.warning("DXF 导出插件尚未初始化完成");
       return;
@@ -2338,7 +2390,8 @@ const handleClearMaterializedIntersections = (): void => {
  * all 更适合一次性观察当前页面所有业务线的交点分布。
  */
 const toggleIntersectionPreviewScope = (): void => {
-  const nextScope = intersectionPreview.scope.value === "all" ? "selected" : "all";
+  const nextScope =
+    intersectionPreview.scope.value === "all" ? "selected" : "all";
   const success = intersectionPreview.setScope(nextScope);
   if (!success) {
     ElMessage.warning("交点插件尚未初始化完成");
@@ -2346,7 +2399,9 @@ const toggleIntersectionPreviewScope = (): void => {
   }
 
   const scopeText = nextScope === "all" ? "全量业务线求交" : "当前选中线求交";
-  ElMessage.success(`已切换为${scopeText}，当前共 ${intersectionPreview.count.value} 个`);
+  ElMessage.success(
+    `已切换为${scopeText}，当前共 ${intersectionPreview.count.value} 个`,
+  );
 };
 
 /**
@@ -2357,10 +2412,10 @@ const toggleIntersectionPreviewScope = (): void => {
 const isPolygonFeature = (feature: unknown): feature is MapCommonFeature => {
   return Boolean(
     feature &&
-      typeof feature === "object" &&
-      "geometry" in feature &&
-      ((feature as MapCommonFeature).geometry.type === "Polygon" ||
-        (feature as MapCommonFeature).geometry.type === "MultiPolygon")
+    typeof feature === "object" &&
+    "geometry" in feature &&
+    ((feature as MapCommonFeature).geometry.type === "Polygon" ||
+      (feature as MapCommonFeature).geometry.type === "MultiPolygon"),
   );
 };
 
@@ -2418,7 +2473,9 @@ const syncSelectionPanelFromChange = (
     addedIds: getSelectionItemIds(selectionContext.added),
     removedIds: getSelectionItemIds(selectionContext.removed),
     circleIds: getSelectionItemIds(
-      selectionContext.selected.filter((selectedItem) => selectedItem.layerId === LAYER_IDS.circle),
+      selectionContext.selected.filter(
+        (selectedItem) => selectedItem.layerId === LAYER_IDS.circle,
+      ),
     ),
   };
 
@@ -2459,7 +2516,10 @@ const getSelectionItemIds = (
  * @param lngLat 当前地图经纬度
  * @returns 可直接传给 Popup 的坐标数组
  */
-const createPopupLngLat = (lngLat: { lng: number; lat: number }): [number, number] => {
+const createPopupLngLat = (lngLat: {
+  lng: number;
+  lat: number;
+}): [number, number] => {
   return [lngLat.lng, lngLat.lat];
 };
 
@@ -2467,8 +2527,11 @@ const createPopupLngLat = (lngLat: { lng: number; lat: number }): [number, numbe
  * 在 NGGI00 示例页中演示“点击线后立即测长”的业务效果。
  * @param lineFeature 当前点击命中的线要素
  */
-const showClickedLineMeasureExample = (lineFeature: MapCommonLineFeature): void => {
-  const lineLengthMeters = MapLineMeasureTool.getFeatureLengthInMeters(lineFeature);
+const showClickedLineMeasureExample = (
+  lineFeature: MapCommonLineFeature,
+): void => {
+  const lineLengthMeters =
+    MapLineMeasureTool.getFeatureLengthInMeters(lineFeature);
   if (lineLengthMeters === null) {
     return;
   }
@@ -2478,7 +2541,9 @@ const showClickedLineMeasureExample = (lineFeature: MapCommonLineFeature): void 
     featureId,
     lineLengthMeters,
   });
-  ElMessage.success(`示例：线 ${String(featureId)} 总长度为 ${lineLengthMeters.toFixed(2)} m`);
+  ElMessage.success(
+    `示例：线 ${String(featureId)} 总长度为 ${lineLengthMeters.toFixed(2)} m`,
+  );
 };
 
 // ==========================================
@@ -2491,7 +2556,11 @@ const showClickedLineMeasureExample = (lineFeature: MapCommonLineFeature): void 
  * 确保后续在调用 popup.open / popup.setPayload 时具备严格的类型提示与校验。
  */
 const popup = useMapPopupState<NgPopupPayload>();
-const { visible: popupVisible, lngLat: popupLngLat, payload: popupPayload } = popup;
+const {
+  visible: popupVisible,
+  lngLat: popupLngLat,
+  payload: popupPayload,
+} = popup;
 
 const lineActionForm = reactive({
   widthMeters: 10,
@@ -2516,7 +2585,9 @@ const handlePopupAction = (): void => {
   }
 
   if (currentPayload.type === NGGI00_POPUP_TYPE.point) {
-    ElMessage.success(`进入站点：${String(currentPayload.featureProps.name || "未命名站点")}`);
+    ElMessage.success(
+      `进入站点：${String(currentPayload.featureProps.name || "未命名站点")}`,
+    );
     return;
   }
 
@@ -2611,7 +2682,9 @@ const handleCreateLineDraft = (payload: NgLineActionPayload): void => {
  * 这个"第几段"的数据会被后面的【创建线草稿】和【生成线廊】直接使用。
  * @param context 点击事件传过来的数据
  */
-const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) => {
+const openMapFeaturePopup = (
+  context: BusinessKit.MapLayerInteractiveContext,
+) => {
   const businessContext = featureQuery.toBusinessContext(context);
   if (!businessContext.feature || !businessContext.lngLat) return;
 
@@ -2633,12 +2706,13 @@ const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) =>
     // 这样后续线段识别、弹窗摘要、线草稿生成等业务计算就都会自动跟随吸附点工作。
     // resolveLineInteractionSnapshot获取未被引擎裁剪的完整线数据，并计算当前点击命中了第几段线段。
     // （MapLibre 渲染时长线会被裁剪，导致坐标缺失，必须回源取完整数据才能算准）
-    const lineInteractionSnapshot = MapLineExtensionTool.resolveLineInteractionSnapshot({
-      feature: businessContext.feature,
-      featureRef: businessContext.featureRef,
-      lngLat: businessContext.lngLat,
-      resolveLatestFeature: featureQuery.resolveFeature,
-    });
+    const lineInteractionSnapshot =
+      MapLineExtensionTool.resolveLineInteractionSnapshot({
+        feature: businessContext.feature,
+        featureRef: businessContext.featureRef,
+        lngLat: businessContext.lngLat,
+        resolveLatestFeature: featureQuery.resolveFeature,
+      });
 
     if (!lineInteractionSnapshot) {
       popup.open({
@@ -2666,7 +2740,10 @@ const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) =>
 
   popup.open({
     lngLat: createPopupLngLat(businessContext.lngLat),
-    payload: createPointPopupPayload(businessContext.feature, businessContext.featureId),
+    payload: createPointPopupPayload(
+      businessContext.feature,
+      businessContext.featureId,
+    ),
   });
 };
 
@@ -2675,9 +2752,12 @@ const openMapFeaturePopup = (context: BusinessKit.MapLayerInteractiveContext) =>
  * 该示例用于演示普通图层如何通过属性面板态门面复用统一的 FeaturePropertyEditor。
  * @param context 普通图层统一交互上下文
  */
-const openMapFeatureContextMenu = (context: BusinessKit.MapLayerInteractiveContext) => {
+const openMapFeatureContextMenu = (
+  context: BusinessKit.MapLayerInteractiveContext,
+) => {
   const businessContext = featureQuery.toBusinessContext(context);
-  if (!businessContext.feature || !context.point || !context.originalEvent) return;
+  if (!businessContext.feature || !context.point || !context.originalEvent)
+    return;
 
   context.originalEvent.preventDefault();
   popup.close();
@@ -2705,13 +2785,17 @@ const openMapFeatureContextMenu = (context: BusinessKit.MapLayerInteractiveConte
   const editorState = propertyEditor.resolveEditorState(editorTarget);
   contextMenuState.position = { x: context.point.x, y: context.point.y };
   contextMenuState.panelState = editorState.panelState;
-  contextMenuState.rawProperties = clonePropertySnapshot(editorState.rawProperties);
+  contextMenuState.rawProperties = clonePropertySnapshot(
+    editorState.rawProperties,
+  );
   contextMenuState.summaryRows = summaryRows;
   contextMenuState.editorTarget = editorTarget;
   contextMenuState.note = resolvePropertyPanelNote(editorTarget);
   contextMenuState.visible = true;
   selectionPanelState.contextMenuSummary =
-    summaryRows.length > 0 ? buildSelectionSummaryText(summaryRows) : MAP_CONTEXT_MENU_SUMMARY_TEXT;
+    summaryRows.length > 0
+      ? buildSelectionSummaryText(summaryRows)
+      : MAP_CONTEXT_MENU_SUMMARY_TEXT;
 };
 
 /**
@@ -2719,7 +2803,10 @@ const openMapFeatureContextMenu = (context: BusinessKit.MapLayerInteractiveConte
  * @param label 日志标题
  * @param context 普通图层统一交互上下文
  */
-const logMapInteractiveEvent = (label: string, context: BusinessKit.MapLayerInteractiveContext) => {
+const logMapInteractiveEvent = (
+  label: string,
+  context: BusinessKit.MapLayerInteractiveContext,
+) => {
   console.log(`[Map 图层示例] ${label}`, {
     eventType: context.eventType, // 当前回调对应的交互事件类型
     selectionMode: context.selectionMode, // 当前交互层生效的选择模式
@@ -2751,7 +2838,10 @@ const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
   // 普通图层交互管理器初始化完成时触发。
   // 适合做首屏联调日志、默认状态同步或图层可用性检查。
   onReady: (context: BusinessKit.MapLayerInteractiveContext) => {
-    console.log("[Map 图层示例] 初始化完成，可直接使用普通图层交互能力", context.map);
+    console.log(
+      "[Map 图层示例] 初始化完成，可直接使用普通图层交互能力",
+      context.map,
+    );
   },
 
   // 普通图层统一 hover 入口。
@@ -2874,7 +2964,10 @@ const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
       enableFeatureStateHover: true,
 
       onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
-        console.log("[Map 图层示例] 正式线图层额外 onClick，可在这里补充专属业务逻辑", context);
+        console.log(
+          "[Map 图层示例] 正式线图层额外 onClick，可在这里补充专属业务逻辑",
+          context,
+        );
       },
     },
 
@@ -2884,7 +2977,10 @@ const mapInteractive: BusinessKit.MapLayerInteractiveOptions = {
       cursor: "pointer",
       enableFeatureStateHover: true,
       onClick: (context: BusinessKit.MapLayerInteractiveContext) => {
-        console.log("[Map 图层示例] 第二正式线图层额外 onClick，可在这里补充专属业务逻辑", context);
+        console.log(
+          "[Map 图层示例] 第二正式线图层额外 onClick，可在这里补充专属业务逻辑",
+          context,
+        );
       },
     },
   },
@@ -2953,9 +3049,12 @@ const syncContextMenuPanelState = (
   }
 
   const editorState =
-    nextEditorState || propertyEditor.resolveEditorState(contextMenuState.editorTarget);
+    nextEditorState ||
+    propertyEditor.resolveEditorState(contextMenuState.editorTarget);
   contextMenuState.panelState = editorState.panelState;
-  contextMenuState.rawProperties = clonePropertySnapshot(editorState.rawProperties);
+  contextMenuState.rawProperties = clonePropertySnapshot(
+    editorState.rawProperties,
+  );
 };
 
 /**
@@ -2977,7 +3076,9 @@ const closeBusinessPanels = () => {
  * @param context TerraDraw / Measure 统一交互上下文
  * @returns 适合业务层直接展示的测量摘要文本
  */
-const getMeasureFeatureSummaryText = (context: BusinessKit.TerradrawInteractiveContext) => {
+const getMeasureFeatureSummaryText = (
+  context: BusinessKit.TerradrawInteractiveContext,
+) => {
   const properties = context.feature?.properties || {};
 
   if (properties.distance !== undefined) {
@@ -3003,7 +3104,9 @@ const getMeasureFeatureSummaryText = (context: BusinessKit.TerradrawInteractiveC
  * 打开 TerraDraw 要素详情弹窗。
  * @param context TerraDraw 统一交互上下文
  */
-const openTerradrawPopup = (context: BusinessKit.TerradrawInteractiveContext) => {
+const openTerradrawPopup = (
+  context: BusinessKit.TerradrawInteractiveContext,
+) => {
   if (!context.feature || !context.lngLat) return;
 
   contextMenuState.visible = false;
@@ -3023,14 +3126,18 @@ const openTerradrawPopup = (context: BusinessKit.TerradrawInteractiveContext) =>
  * 这里同样先走属性面板态查询，让系统字段在进入业务编辑器前就被收口。
  * @param context TerraDraw 统一交互上下文
  */
-const openTerradrawContextMenu = (context: BusinessKit.TerradrawInteractiveContext) => {
+const openTerradrawContextMenu = (
+  context: BusinessKit.TerradrawInteractiveContext,
+) => {
   if (!context.feature || !context.point || !context.originalEvent) return;
 
   context.originalEvent.preventDefault();
   popup.close();
 
   const featureId =
-    context.featureId ?? (context.feature.id as string | number | null | undefined) ?? null;
+    context.featureId ??
+    (context.feature.id as string | number | null | undefined) ??
+    null;
   const rawProperties = clonePropertySnapshot(context.feature.properties || {});
   const editorTarget =
     featureId === null
@@ -3045,7 +3152,9 @@ const openTerradrawContextMenu = (context: BusinessKit.TerradrawInteractiveConte
 
   contextMenuState.position = { x: context.point.x, y: context.point.y };
   contextMenuState.panelState = editorState.panelState;
-  contextMenuState.rawProperties = clonePropertySnapshot(editorState.rawProperties);
+  contextMenuState.rawProperties = clonePropertySnapshot(
+    editorState.rawProperties,
+  );
   contextMenuState.summaryRows = [];
   contextMenuState.editorTarget = editorTarget;
   contextMenuState.note = resolvePropertyPanelNote(editorTarget);
@@ -3070,7 +3179,10 @@ const syncSavedPropertiesToPanels = (
   }
 
   const currentPopupPayload = popupPayload.value;
-  if (popupVisible.value && currentPopupPayload?.featureId === getContextMenuFeatureId()) {
+  if (
+    popupVisible.value &&
+    currentPopupPayload?.featureId === getContextMenuFeatureId()
+  ) {
     popup.setPayload({
       ...currentPopupPayload,
       featureProps: clonePropertySnapshot(nextEditorState.rawProperties),
@@ -3090,7 +3202,10 @@ const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
     return;
   }
 
-  const result = propertyEditor.saveItem(contextMenuState.editorTarget, payload);
+  const result = propertyEditor.saveItem(
+    contextMenuState.editorTarget,
+    payload,
+  );
   if (!result.success) {
     ElMessage.warning(result.message);
     return;
@@ -3106,13 +3221,18 @@ const handleSavePropertyItem = (payload: FeaturePropertyEditorSavePayload) => {
  *
  * @param payload 本次需要删除的单个属性键
  */
-const handleRemovePropertyItem = (payload: FeaturePropertyEditorRemovePayload) => {
+const handleRemovePropertyItem = (
+  payload: FeaturePropertyEditorRemovePayload,
+) => {
   if (!contextMenuState.editorTarget) {
     ElMessage.warning("当前没有可删除属性的目标要素");
     return;
   }
 
-  const result = propertyEditor.removeItem(contextMenuState.editorTarget, payload.key);
+  const result = propertyEditor.removeItem(
+    contextMenuState.editorTarget,
+    payload.key,
+  );
   if (!result.success) {
     ElMessage.warning(result.message);
     return;
@@ -3144,7 +3264,11 @@ const createRawDemoData = (): MapCommonFeatureCollection => {
  * @param color 当前要素颜色
  * @returns 最小可运行的演示要素
  */
-const createRawDemoFeature = (lng: number, lat: number, color: string): MapCommonFeature => {
+const createRawDemoFeature = (
+  lng: number,
+  lat: number,
+  color: string,
+): MapCommonFeature => {
   return {
     type: "Feature",
     id: RAW_DEMO_IDS.feature,
@@ -3201,7 +3325,9 @@ const getRawDemoMap = (): RawDemoMap | null => {
  * @returns 可直接读写的 GeoJSONSource；异常时返回 null
  */
 const ensureRawDemoSource = (map: RawDemoMap): GeoJSONSource | null => {
-  const currentSource = map.getSource(RAW_DEMO_IDS.source) as GeoJSONSource | undefined;
+  const currentSource = map.getSource(RAW_DEMO_IDS.source) as
+    | GeoJSONSource
+    | undefined;
   if (currentSource) {
     return currentSource;
   }
@@ -3211,7 +3337,9 @@ const ensureRawDemoSource = (map: RawDemoMap): GeoJSONSource | null => {
     data: createRawDemoData(),
   });
 
-  return (map.getSource(RAW_DEMO_IDS.source) as GeoJSONSource | undefined) || null;
+  return (
+    (map.getSource(RAW_DEMO_IDS.source) as GeoJSONSource | undefined) || null
+  );
 };
 
 /**
@@ -3274,9 +3402,14 @@ const runRawApiDemo = async (): Promise<void> => {
 
   if (featureIndex < 0) {
     const center = map.getCenter();
-    nextData.features.push(createRawDemoFeature(center.lng, center.lat, RAW_DEMO_COLORS.idle));
+    nextData.features.push(
+      createRawDemoFeature(center.lng, center.lat, RAW_DEMO_COLORS.idle),
+    );
     source.setData(nextData);
-    console.log("[NGGI00 示例] raw API 已添加 source、layer、feature", nextData);
+    console.log(
+      "[NGGI00 示例] raw API 已添加 source、layer、feature",
+      nextData,
+    );
     ElMessage.success("raw API 示例已创建数据源、图层和一个点要素");
     return;
   }
@@ -3287,7 +3420,9 @@ const runRawApiDemo = async (): Promise<void> => {
       ? currentFeature.properties.color
       : RAW_DEMO_COLORS.idle;
   const nextColor =
-    currentColor === RAW_DEMO_COLORS.active ? RAW_DEMO_COLORS.idle : RAW_DEMO_COLORS.active;
+    currentColor === RAW_DEMO_COLORS.active
+      ? RAW_DEMO_COLORS.idle
+      : RAW_DEMO_COLORS.active;
 
   nextData.features[featureIndex] = {
     ...currentFeature,

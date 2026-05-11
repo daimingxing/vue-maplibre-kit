@@ -21,9 +21,9 @@ import {
 } from "vue-maplibre-kit/business";
 
 export const EXAMPLE_SOURCE_ID = "nggi-example-source";
-export const EXAMPLE_POINT_LAYER_ID = "nggi-example-point-layer";
-export const EXAMPLE_LINE_LAYER_ID = "nggi-example-line-layer";
-export const EXAMPLE_FILL_LAYER_ID = "nggi-example-fill-layer";
+export const EXAMPLE_POINT_LAYER_ID = `${EXAMPLE_SOURCE_ID}-point`;
+export const EXAMPLE_LINE_LAYER_ID = `${EXAMPLE_SOURCE_ID}-line`;
+export const EXAMPLE_FILL_LAYER_ID = `${EXAMPLE_SOURCE_ID}-fill`;
 
 // 深圳附近经纬度仅用于本地示例定位，避免依赖外部底图服务。
 const BASE_LNG = 113.9;
@@ -78,7 +78,9 @@ export function createBlankStyle() {
  * 创建示例地图初始化参数。
  * @returns 地图初始化参数
  */
-export function createExampleMapOptions(): Partial<MapOptions & { mapStyle: object }> {
+export function createExampleMapOptions(): Partial<
+  MapOptions & { mapStyle: object }
+> {
   return {
     mapStyle: createBlankStyle(),
     center: createCoord(0, 0) as LngLatLike,
@@ -91,7 +93,9 @@ export function createExampleMapOptions(): Partial<MapOptions & { mapStyle: obje
  * @param kind 示例控件组合名称
  * @returns 已显式声明开关的控件配置
  */
-export function createExampleControls(kind: ExampleControlKind = "minimal"): MapControlsConfig {
+export function createExampleControls(
+  kind: ExampleControlKind = "minimal",
+): MapControlsConfig {
   const controls: MapControlsConfig = {
     MglNavigationControl: { isUse: true, position: "top-left" },
     MglScaleControl: { isUse: true, position: "bottom-left" },
@@ -128,7 +132,7 @@ export function createPointFeature(
   id: string,
   name: string,
   x: number,
-  y: number
+  y: number,
 ): MapCommonFeature {
   return {
     type: "Feature",
@@ -157,7 +161,7 @@ export function createPointFeature(
 export function createLineFeature(
   id: string,
   name: string,
-  coords: Array<[number, number]>
+  coords: Array<[number, number]>,
 ): MapCommonLineFeature {
   return {
     type: "Feature",
@@ -235,10 +239,14 @@ export function createMixedData(): MapCommonFeatureCollection {
 
 /**
  * 创建示例业务图层。
+ * @param sourceId 当前图层组归属的业务 source ID
  * @returns 业务图层描述数组
  */
-export function createExampleLayers(): MapBusinessLayerDescriptor[] {
+export function createExampleLayers(
+  sourceId = EXAMPLE_SOURCE_ID,
+): MapBusinessLayerDescriptor[] {
   return createLayerGroup({
+    sourceId,
     defaultPolicy: {
       readonlyKeys: ["id"],
       fixedKeys: ["name", "status"],
@@ -247,7 +255,7 @@ export function createExampleLayers(): MapBusinessLayerDescriptor[] {
     layers: [
       {
         type: "fill",
-        id: EXAMPLE_FILL_LAYER_ID,
+        id: "fill",
         geometryTypes: ["Polygon", "MultiPolygon"],
         style: createSimpleFillStyle({
           color: "#79b8ff",
@@ -257,7 +265,7 @@ export function createExampleLayers(): MapBusinessLayerDescriptor[] {
       },
       {
         type: "line",
-        id: EXAMPLE_LINE_LAYER_ID,
+        id: "line",
         geometryTypes: ["LineString", "MultiLineString"],
         style: createSimpleLineStyle({
           color: "#0f766e",
@@ -267,7 +275,7 @@ export function createExampleLayers(): MapBusinessLayerDescriptor[] {
       },
       {
         type: "circle",
-        id: EXAMPLE_POINT_LAYER_ID,
+        id: "point",
         geometryTypes: ["Point", "MultiPoint"],
         style: createSimpleCircleStyle({
           color: "#f97316",
@@ -291,7 +299,7 @@ export function createExampleLayers(): MapBusinessLayerDescriptor[] {
 export function createExampleSourceKit(
   data: Ref<MapCommonFeatureCollection>,
   layers: MapBusinessLayerDescriptor[],
-  policy?: MapFeaturePropertyPolicy
+  policy?: MapFeaturePropertyPolicy,
 ) {
   const source = createMapBusinessSource({
     sourceId: EXAMPLE_SOURCE_ID,
@@ -300,7 +308,8 @@ export function createExampleSourceKit(
     propertyPolicy: policy,
     layers,
   });
-  const registry = createMapBusinessSourceRegistry([source]);
+  const registry = createMapBusinessSourceRegistry();
+  registry.addSource(source);
 
   return { source, registry };
 }
@@ -310,7 +319,9 @@ export function createExampleSourceKit(
  * @param kind 示例控件组合名称
  * @returns 示例页面可直接使用的组合对象
  */
-export function createExampleKit(kind: ExampleControlKind = "minimal"): ExampleKit {
+export function createExampleKit(
+  kind: ExampleControlKind = "minimal",
+): ExampleKit {
   const sourceData = ref(createMixedData());
   const layers = createExampleLayers();
   const { source, registry } = createExampleSourceKit(sourceData, layers);
@@ -331,7 +342,7 @@ export function createExampleKit(kind: ExampleControlKind = "minimal"): ExampleK
  * @returns 普通图层交互配置
  */
 export function createExampleInteractive(
-  onText: (text: string) => void
+  onText: (text: string) => void,
 ): MapLayerInteractiveOptions {
   return {
     enabled: true,
