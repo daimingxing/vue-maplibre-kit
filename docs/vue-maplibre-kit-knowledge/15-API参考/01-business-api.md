@@ -41,7 +41,7 @@
 | `layers` | source/layer 增删、显隐、paint/layout、feature-state |
 | `editor` | 统一属性编辑状态、保存、删除 |
 | `effect` | feature-state 动效和表达式辅助 |
-| `plugins` | snap、lineDraft、intersection、multiSelect、dxfExport |
+| `plugins` | snap、lineDraft、intersection、polygonEdge、multiSelect、dxfExport |
 
 ## 关键类型
 

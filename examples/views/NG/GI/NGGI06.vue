@@ -96,7 +96,7 @@ const plugins = createBusinessPlugins({
   dxfExport: {
     enabled: true,
     defaults: {
-      fileName: "nggi06-six-plugins.dxf",
+      fileName: "nggi06-plugin-overview.dxf",
       lineWidth: 2,
       pointMode: "circle",
       // DXF 点圆半径使用地图坐标单位，本例坐标范围下 0.003 比较容易看见。
@@ -306,7 +306,6 @@ function clearPolygonEdge(): void {
 async function exportDxf(): Promise<void> {
   const result = await businessMap.plugins.dxfExport.exportDxf({
     sourceIds: [EXAMPLE_SOURCE_ID],
-    fileName: "nggi06-summary-only.dxf",
     // 总览页给一个明显线宽，证明单次导出可以覆盖默认值。
     lineWidth: 3,
   });

@@ -188,6 +188,22 @@ describe('useMapLayerActions', () => {
     );
   });
 
+  it('应把 feature-state 异常转换为结构化失败结果', () => {
+    const setMapFeatureState = vi.fn(() => {
+      throw new Error('feature state target is invalid');
+    });
+    const rawMap = {
+      getLayer: vi.fn(),
+      getSource: vi.fn(),
+    };
+    const actions = useMapLayerActions(shallowRef(createMapExpose(rawMap, setMapFeatureState)));
+
+    const result = actions.setFeatureState('source-a', 'feature-a', { active: true });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('feature state target is invalid');
+  });
+
   it('应把运行时图层属性异常转换为结构化失败结果', () => {
     const rawMap = {
       getLayer: vi.fn((layerId: string) => (layerId === 'line-layer' ? { id: layerId } : null)),

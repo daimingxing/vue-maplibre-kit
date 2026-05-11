@@ -316,18 +316,22 @@ export function useMapLayerActions(
     setPaint: (layerId, paint) => setLayerValues(layerId, paint, 'setPaintProperty'),
     setLayout: (layerId, layout) => setLayerValues(layerId, layout, 'setLayoutProperty'),
     setFeatureState: (sourceId, featureId, state, sourceLayer) => {
-      const success = Boolean(
-        getMapExpose()?.setMapFeatureState(
-          {
-            source: sourceId,
-            id: featureId,
-            sourceLayer,
-          },
-          state
-        )
-      );
+      try {
+        const success = Boolean(
+          getMapExpose()?.setMapFeatureState(
+            {
+              source: sourceId,
+              id: featureId,
+              sourceLayer,
+            },
+            state
+          )
+        );
 
-      return createLayerActionResult(success, success ? '要素状态已更新' : '要素状态更新失败');
+        return createLayerActionResult(success, success ? '要素状态已更新' : '要素状态更新失败');
+      } catch (error) {
+        return createLayerActionResult(false, `要素状态更新失败：${getErrorMessage(error)}`);
+      }
     },
   };
 }
