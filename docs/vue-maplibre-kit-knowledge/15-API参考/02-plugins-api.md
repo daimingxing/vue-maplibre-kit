@@ -25,6 +25,14 @@
 | `multiSelect` | 多选插件配置 |
 | `dxfExport` | DXF 导出插件配置 |
 
+## `BusinessSnapPresetOptions`
+
+| 字段 | 用途 |
+| --- | --- |
+| `businessLayers` | 推荐的业务图层吸附配置，支持完整 `{ enabled, rules }` 写法或命名规则简写 |
+| `layerIds` | 旧版兼容简写，会展开为一条默认业务规则；新代码优先使用 `businessLayers` |
+| `ruleDefaults` | 命名规则简写和旧版 `layerIds` 展开时使用的规则默认值 |
+
 ## `useBusinessMap().plugins`
 
 | 分组 | 关键方法和状态 |

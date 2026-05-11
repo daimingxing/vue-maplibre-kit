@@ -69,9 +69,11 @@ const plugins = createBusinessPlugins({
   // sourceRegistry 放在顶层，交点和 DXF 导出插件会复用同一份业务 source 注册表。
   sourceRegistry: kit.registry,
   snap: {
-    layerIds: [EXAMPLE_LINE_LAYER_ID],
-    // 内置吸附按钮用于运行期开关整个吸附能力；右键配置面板后续再扩展。
-    control: { enabled: true, position: "top-left" },
+    businessLayers: {
+      管线: EXAMPLE_LINE_LAYER_ID,
+    },
+    // 内置吸附按钮用于运行期开关整个吸附能力；右键可展开业务规则开关面板。
+    control: { enabled: true, position: "top-left", panel: { enabled: true } },
   },
   // lineDraft: true 使用线草稿插件默认配置，适合总览页快速注册能力。
   lineDraft: true,

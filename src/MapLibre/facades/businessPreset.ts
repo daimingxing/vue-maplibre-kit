@@ -6,7 +6,12 @@ import {
 } from '../plugins/map-dxf-export';
 import { createLineDraftPreviewPlugin } from '../plugins/line-draft-preview';
 import { createMapFeatureMultiSelectPlugin } from '../plugins/map-feature-multi-select';
-import { createMapFeatureSnapPlugin, type MapFeatureSnapOptions } from '../plugins/map-feature-snap';
+import {
+  createMapFeatureSnapPlugin,
+  type MapFeatureSnapBusinessLayerOptions,
+  type MapFeatureSnapOptions,
+  type MapFeatureSnapRule,
+} from '../plugins/map-feature-snap';
 import {
   createIntersectionPreviewPlugin,
   type IntersectionPreviewOptions,
@@ -108,10 +113,30 @@ export interface LayerGroupOptions {
   layers: LayerGroupItem[];
 }
 
+/** createBusinessPlugins({ snap.businessLayers }) 的单条简写值。 */
+export type BusinessSnapLayerRuleValue =
+  | string
+  | string[]
+  | (Omit<MapFeatureSnapRule, 'id'> & {
+      /** 参与当前规则候选查询的图层 ID 集合。 */
+      layerIds: string[];
+    });
+
+/** createBusinessPlugins({ snap.businessLayers }) 的命名规则简写。 */
+export type BusinessSnapLayerRules = Record<string, BusinessSnapLayerRuleValue>;
+
 /** 吸附插件简写配置。 */
-export interface BusinessSnapPresetOptions extends Partial<MapFeatureSnapOptions> {
-  /** 参与业务图层吸附的图层 ID；未显式传 businessLayers 时，会用它生成一条默认吸附规则。 */
+export interface BusinessSnapPresetOptions
+  extends Omit<Partial<MapFeatureSnapOptions>, 'businessLayers'> {
+  /** 旧版业务图层吸附简写；推荐改用 businessLayers 命名规则写法。 */
   layerIds?: string[];
+  /**
+   * 业务图层吸附配置。
+   * 传 { enabled, rules } 时按完整写法原样使用；传 Record<规则名, 图层或规则> 时展开为 rules。
+   */
+  businessLayers?: MapFeatureSnapBusinessLayerOptions | BusinessSnapLayerRules;
+  /** 简便 businessLayers 写法展开单条规则时使用的默认值。 */
+  ruleDefaults?: Partial<Omit<MapFeatureSnapRule, 'id' | 'label' | 'layerIds'>>;
 }
 
 /** 交点插件业务预设配置。 */
@@ -219,6 +244,103 @@ function createLayerBase(options: LayerGroupOptions, item: LayerGroupItem) {
 }
 
 /**
+ * 判断业务图层吸附配置是否为底层完整写法。
+ * @param businessLayers 业务图层吸附配置
+ * @returns 是否为完整 businessLayers 配置
+ */
+function isFullSnapBusinessLayersConfig(
+  businessLayers: BusinessSnapPresetOptions['businessLayers']
+): businessLayers is MapFeatureSnapBusinessLayerOptions {
+  return Boolean(
+    businessLayers &&
+      typeof businessLayers === 'object' &&
+      !Array.isArray(businessLayers) &&
+      Array.isArray((businessLayers as MapFeatureSnapBusinessLayerOptions).rules)
+  );
+}
+
+/**
+ * 归一化业务吸附简写中的图层 ID。
+ * @param layerIds 单个或多个图层 ID
+ * @returns 图层 ID 数组
+ */
+function normalizeBusinessSnapLayerIds(layerIds: string | string[]): string[] {
+  return Array.isArray(layerIds) ? layerIds : [layerIds];
+}
+
+/**
+ * 展开命名业务吸附规则简写。
+ * @param id 规则 ID
+ * @param value 单条规则简写值
+ * @param ruleDefaults 规则默认值
+ * @returns 标准吸附规则
+ */
+function resolveBusinessSnapRuleValue(
+  id: string,
+  value: BusinessSnapLayerRuleValue,
+  ruleDefaults: BusinessSnapPresetOptions['ruleDefaults']
+): MapFeatureSnapRule {
+  if (typeof value === 'string' || Array.isArray(value)) {
+    return {
+      id,
+      label: id,
+      ...(ruleDefaults || {}),
+      layerIds: normalizeBusinessSnapLayerIds(value),
+    };
+  }
+
+  return {
+    id,
+    label: value.label ?? id,
+    ...(ruleDefaults || {}),
+    ...value,
+    layerIds: value.layerIds,
+  };
+}
+
+/**
+ * 解析业务图层吸附配置。
+ * @param businessLayers 命名规则简写或完整规则配置
+ * @param layerIds 旧版图层 ID 简写
+ * @param ruleDefaults 规则默认值
+ * @returns 标准业务图层吸附配置
+ */
+function resolveBusinessSnapLayers(
+  businessLayers: BusinessSnapPresetOptions['businessLayers'],
+  layerIds: BusinessSnapPresetOptions['layerIds'],
+  ruleDefaults: BusinessSnapPresetOptions['ruleDefaults']
+): MapFeatureSnapBusinessLayerOptions | undefined {
+  if (!businessLayers) {
+    if (!layerIds?.length) {
+      return undefined;
+    }
+
+    return {
+      enabled: true,
+      rules: [
+        {
+          id: 'business-layer-snap',
+          label: '业务图层',
+          ...(ruleDefaults || {}),
+          layerIds,
+        },
+      ],
+    };
+  }
+
+  if (isFullSnapBusinessLayersConfig(businessLayers)) {
+    return businessLayers;
+  }
+
+  return {
+    enabled: true,
+    rules: Object.entries(businessLayers).map(([id, value]) =>
+      resolveBusinessSnapRuleValue(id, value, ruleDefaults)
+    ),
+  };
+}
+
+/**
  * 创建业务图层组。
  * @param options 图层组配置
  * @returns 标准业务图层描述数组
@@ -253,18 +375,8 @@ function resolveSnapOptions(options: true | BusinessSnapPresetOptions): MapFeatu
     };
   }
 
-  const { layerIds, ...restOptions } = options;
-  const businessLayers = options.businessLayers ||
-    (layerIds
-      ? {
-          enabled: true,
-          rules: [
-            {
-              layerIds,
-            },
-          ],
-        }
-      : undefined);
+  const { ruleDefaults, businessLayers: rawBusinessLayers, layerIds, ...restOptions } = options;
+  const businessLayers = resolveBusinessSnapLayers(rawBusinessLayers, layerIds, ruleDefaults);
 
   return {
     enabled: true,

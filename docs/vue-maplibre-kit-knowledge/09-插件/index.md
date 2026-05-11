@@ -12,6 +12,7 @@
 6. [multiSelect 多选](./05-multiSelect多选.md)
 7. [dxfExport 导出 DXF](./06-dxfExport导出DXF.md)
 8. [单插件子路径高级用法](./07-单插件子路径高级用法.md)
+9. [单插件工厂注册](./09-单插件工厂注册.md)
 
 ## 核心约定
 
@@ -65,7 +66,11 @@ const businessMap = useBusinessMap({
 
 const plugins = createBusinessPlugins({
   sourceRegistry: kit.registry,
-  snap: { layerIds: [lineLayerId] },
+  snap: {
+    businessLayers: {
+      管线: lineLayerId,
+    },
+  },
   lineDraft: true,
   intersection: {
     targetLayerIds: [lineLayerId],
@@ -83,6 +88,7 @@ const plugins = createBusinessPlugins({
 - 高级模式可以只传 `intersection.getCandidates`，此时候选线完全由业务方提供。
 - `dxfExport: true` 使用顶层 `sourceRegistry`、库内默认值和全局 DXF 默认值。
 - `dxfExport` 对象写法允许把 `sourceCrs`、`targetCrs`、`fileName` 等任务默认值扁平写在业务预设层。
+- 单插件工厂 `createMapFeatureSnapPlugin()`、`createLineDraftPreviewPlugin()` 等仍是公开高级入口，适合只注册单个插件、精确传完整 options 或封装自定义预设。常规业务页仍优先使用 `createBusinessPlugins()`。
 - 动态修改插件配置时，请替换 `descriptor/options` 顶层引用。推荐用 `computed(() => createBusinessPlugins(...))` 生成新描述对象，不推荐原地改写嵌套配置对象。
 
 插件初始化失败时，宿主会在控制台输出错误并跳过当前插件，避免单个插件拖垮地图。业务层如果发现 `businessMap.plugins.*` 能力不可用，应先检查插件注册配置和控制台错误。

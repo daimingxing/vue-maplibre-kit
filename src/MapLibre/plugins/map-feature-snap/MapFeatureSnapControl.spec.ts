@@ -20,8 +20,17 @@ describe('MapFeatureSnapControl', () => {
     expect(source).toContain('background-color: transparent;');
     expect(source).not.toContain('min-width: 29px;');
     expect(source).not.toContain('min-height: 29px;');
-    expect(source).not.toContain('background: #ffffff;');
-    expect(source).not.toContain('border-radius: 4px;');
     expect(source).not.toContain('box-shadow: 0 1px 4px');
+  });
+
+  it('应提供右键配置面板，并沿用控件组的白底和小圆角风格', () => {
+    const source = readFileSync(resolve(__dirname, './MapFeatureSnapControl.vue'), 'utf-8');
+
+    expect(source).toContain('@contextmenu="handleContextMenu"');
+    expect(source).toContain('snap-control-panel');
+    expect(source).toContain('background: #ffffff;');
+    expect(source).toContain('border-radius: 4px;');
+    expect(source).toContain('box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);');
+    expect(source).toContain("event.key === 'Escape'");
   });
 });

@@ -1287,8 +1287,8 @@ const mapFeatureSnapOptions = {
   // 启用统一吸附扩展。
   enabled: true,
 
-  // 内置吸附按钮用于运行期开关整个吸附能力，label 用作无障碍提示文本。
-  control: { enabled: true, position: "top-left"},
+  // 内置吸附按钮用于运行期开关整个吸附能力；右键按钮可展开业务规则开关面板。
+  control: { enabled: true, position: "top-left", panel: { enabled: true } },
 
   // 全局默认吸附范围（像素）。
   // 业务层大多数规则不需要重复传，只有个别规则需要更大或更小的吸附范围时再局部覆写。
@@ -1311,6 +1311,7 @@ const mapFeatureSnapOptions = {
       {
         // 主正式线图层：既允许吸附到顶点，也允许吸附到线段。
         id: "primary-line-snap",
+        label: "主正式线",
         layerIds: [LAYER_IDS.primaryLine],
         priority: 30,
         snapTo: ["vertex", "segment"],
@@ -1326,6 +1327,7 @@ const mapFeatureSnapOptions = {
       {
         // 第二正式线图层：继续参与吸附，但优先级略低于主线图层。
         id: "secondary-line-snap",
+        label: "第二正式线",
         layerIds: [LAYER_IDS.secondaryLine],
         priority: 20,
         snapTo: ["vertex", "segment"],
@@ -1333,6 +1335,7 @@ const mapFeatureSnapOptions = {
       {
         // 点图层示例：点要素只参与顶点吸附。
         id: "point-hole-snap",
+        label: "全部点位",
         layerIds: [LAYER_IDS.circle, LAYER_IDS.circleDec],
         priority: 10,
         snapTo: ["vertex"], // 点图层只能吸附到顶点
@@ -1341,6 +1344,7 @@ const mapFeatureSnapOptions = {
         // 特定条件要素示例：只允许吸附 mark === 'hole' 的点。
         // 用于演示“不是按点/线/面粗分，而是按具体业务条件筛选”的能力。
         id: "point-hole-filtered-snap",
+        label: "孔洞点位",
         layerIds: [LAYER_IDS.circle, LAYER_IDS.circleDec],
         priority: 40,
         tolerancePx: 20,

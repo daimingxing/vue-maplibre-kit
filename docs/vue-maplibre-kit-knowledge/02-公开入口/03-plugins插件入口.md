@@ -20,7 +20,9 @@ import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 const plugins = createBusinessPlugins({
   sourceRegistry: registry,
   snap: {
-    layerIds: ["pipe-line"],
+    businessLayers: {
+      管线: "pipe-line",
+    },
   },
   lineDraft: true,
   intersection: {

@@ -65,7 +65,10 @@ export const mapFeatureSnapPlugin = defineMapPlugin({
               position: pluginController.controlOptions.value.position,
               isActive: pluginController.isActive.value,
               label: pluginController.controlOptions.value.label,
+              panelEnabled: pluginController.controlOptions.value.panelEnabled,
+              rules: pluginController.controlRuleItems.value,
               onToggle: pluginController.toggle,
+              onToggleRule: pluginController.toggleRule,
             },
           });
         }

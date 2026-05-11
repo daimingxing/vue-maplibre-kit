@@ -4,12 +4,18 @@ import { createCircleLayerStyle, createLineLayerStyle } from '../../shared/map-l
 import type { TerradrawControlType, TerradrawSnapSharedOptions } from '../../shared/mapLibre-controls-types';
 import { getMapGlobalSnapDefaults } from '../../shared/map-global-config';
 import type { ResolvedTerradrawSnapOptions } from '../types';
-import { createEmptyMapFeatureSnapResult, createMapFeatureSnapBinding, type MapFeatureSnapBinding } from './useMapFeatureSnapBinding';
+import {
+  createEmptyMapFeatureSnapResult,
+  createGeneratedRuleId,
+  createMapFeatureSnapBinding,
+  type MapFeatureSnapBinding,
+} from './useMapFeatureSnapBinding';
 import type {
   MapFeatureSnapGeometryType,
   MapFeatureSnapMode,
   MapFeatureSnapOptions,
   MapFeatureSnapPreviewOptions,
+  MapFeatureSnapRule,
   MapFeatureSnapTargetOptions,
 } from './types';
 
@@ -26,6 +32,15 @@ interface UseMapFeatureSnapControllerOptions {
   getOptions: () => MapFeatureSnapOptions | null | undefined;
   /** 读取当前地图实例。 */
   getMap: () => MaplibreMap | null | undefined;
+}
+
+export interface MapFeatureSnapControlRuleItem {
+  /** 规则唯一标识。 */
+  id: string;
+  /** 面板展示名称。 */
+  label: string;
+  /** 当前运行期是否启用。 */
+  enabled: boolean;
 }
 
 /**
@@ -196,7 +211,55 @@ function mergeSnapControlOptions(
   return {
     ...(globalControl || {}),
     ...(localControl || {}),
+    panel: mergeSnapControlPanelOptions(globalControl?.panel, localControl?.panel),
   };
+}
+
+function normalizeSnapControlPanelOptions(
+  panel: NonNullable<MapFeatureSnapOptions['control']>['panel']
+): { enabled?: boolean } | undefined {
+  if (typeof panel === 'boolean') {
+    return {
+      enabled: panel,
+    };
+  }
+
+  return panel;
+}
+
+function mergeSnapControlPanelOptions(
+  globalPanel: NonNullable<MapFeatureSnapOptions['control']>['panel'],
+  localPanel: NonNullable<MapFeatureSnapOptions['control']>['panel']
+): { enabled?: boolean } | undefined {
+  const normalizedGlobal = normalizeSnapControlPanelOptions(globalPanel);
+  const normalizedLocal = normalizeSnapControlPanelOptions(localPanel);
+  if (!normalizedGlobal && !normalizedLocal) {
+    return undefined;
+  }
+
+  return {
+    ...(normalizedGlobal || {}),
+    ...(normalizedLocal || {}),
+  };
+}
+
+function getRuleDisplayLabel(rule: MapFeatureSnapRule): string {
+  return rule.label || rule.id || rule.layerIds.join(', ');
+}
+
+/**
+ * 读取面板开关使用的业务吸附规则 ID。
+ * 与吸附绑定保持同一套生成逻辑，避免无 ID 规则能吸附但不能在面板关闭。
+ * @param rule 原始业务吸附规则
+ * @param index 当前规则序号
+ * @returns 面板运行期开关使用的规则 ID
+ */
+function getRuleControlId(rule: MapFeatureSnapRule, index: number): string {
+  return rule.id || createGeneratedRuleId(rule, index);
+}
+
+function isSnapControlPanelEnabled(control: MapFeatureSnapOptions['control']): boolean {
+  return normalizeSnapControlPanelOptions(control?.panel)?.enabled === true;
 }
 
 /**
@@ -284,8 +347,34 @@ function resolveMapFeatureSnapOptions(
 export function useMapFeatureSnapController(options: UseMapFeatureSnapControllerOptions) {
   const { getOptions, getMap } = options;
   const activeRef = ref(true);
+  const ruleEnabledOverridesRef = ref<Record<string, boolean>>({});
   const bindingRef = shallowRef<MapFeatureSnapBinding | null>(null);
   const resolvedOptions = computed(() => resolveMapFeatureSnapOptions(getOptions()));
+  const effectiveOptions = computed<MapFeatureSnapOptions | undefined>(() => {
+    const snapOptions = resolvedOptions.value;
+    const overrides = ruleEnabledOverridesRef.value;
+    if (!snapOptions?.businessLayers?.rules?.length || !Object.keys(overrides).length) {
+      return snapOptions;
+    }
+
+    return {
+      ...snapOptions,
+      businessLayers: {
+        ...snapOptions.businessLayers,
+        rules: snapOptions.businessLayers.rules.map((rule, index) => {
+          const ruleId = getRuleControlId(rule, index);
+          if (overrides[ruleId] === undefined) {
+            return rule;
+          }
+
+          return {
+            ...rule,
+            enabled: overrides[ruleId],
+          };
+        }),
+      },
+    };
+  });
 
   /**
    * 当前吸附插件是否启用。
@@ -303,7 +392,22 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     enabled: resolvedOptions.value?.control?.enabled !== false,
     position: resolvedOptions.value?.control?.position ?? 'top-right',
     label: resolvedOptions.value?.control?.label ?? '吸附',
+    panelEnabled: isSnapControlPanelEnabled(resolvedOptions.value?.control),
   }));
+
+  /** 配置面板展示的业务吸附规则。 */
+  const controlRuleItems = computed<MapFeatureSnapControlRuleItem[]>(() => {
+    const overrides = ruleEnabledOverridesRef.value;
+    const rules = resolvedOptions.value?.businessLayers?.rules || [];
+    return rules.map((rule, index) => {
+      const id = getRuleControlId(rule, index);
+      return {
+        id,
+        label: getRuleDisplayLabel(rule),
+        enabled: overrides[id] ?? rule.enabled !== false,
+      };
+    });
+  });
 
   /**
    * 普通图层吸附预览是否启用。
@@ -376,7 +480,7 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
 
     bindingRef.value = createMapFeatureSnapBinding({
       map,
-      getOptions: () => resolvedOptions.value,
+      getOptions: () => effectiveOptions.value,
     });
   }
 
@@ -385,7 +489,7 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
       enabled: configuredEnabled.value,
       active: isActive.value,
       map: getMap(),
-      options: resolvedOptions.value,
+      options: effectiveOptions.value,
     }),
     () => {
       syncBinding();
@@ -433,6 +537,22 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     }
 
     activate();
+  }
+
+  function setRuleEnabled(ruleId: string, enabled: boolean): void {
+    ruleEnabledOverridesRef.value = {
+      ...ruleEnabledOverridesRef.value,
+      [ruleId]: enabled,
+    };
+  }
+
+  function toggleRule(ruleId: string): void {
+    const currentRule = controlRuleItems.value.find((rule) => rule.id === ruleId);
+    if (!currentRule) {
+      return;
+    }
+
+    setRuleEnabled(ruleId, !currentRule.enabled);
   }
 
   /**
@@ -492,6 +612,7 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     enabled: configuredEnabled,
     isActive,
     controlOptions,
+    controlRuleItems,
     previewEnabled,
     previewData,
     previewPointStyle,
@@ -501,6 +622,8 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     activate,
     deactivate,
     toggle,
+    setRuleEnabled,
+    toggleRule,
     resolveTerradrawSnapOptions,
     resolveMapEvent: (event: any) =>
       bindingRef.value?.resolveMapEvent(event) || createEmptyMapFeatureSnapResult(),

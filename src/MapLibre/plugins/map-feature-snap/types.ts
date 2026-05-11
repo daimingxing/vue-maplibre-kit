@@ -40,6 +40,8 @@ export interface MapFeatureSnapRuleFilterContext {
 export interface MapFeatureSnapRule {
   /** 规则唯一标识；不传时由系统根据来源和 layerIds 自动生成。 */
   id?: string;
+  /** 规则展示名称；配置面板优先展示该名称，未传时展示 id。 */
+  label?: string;
   /** 是否启用当前规则。 */
   enabled?: boolean;
   /** 参与当前规则候选查询的图层 ID 集合。 */
@@ -104,6 +106,13 @@ export interface MapFeatureSnapOptions {
     position?: ControlPosition;
     /** 控件可访问文本。 */
     label?: string;
+    /** 右键配置面板；默认关闭。 */
+    panel?:
+      | boolean
+      | {
+          /** 是否启用右键配置面板。 */
+          enabled?: boolean;
+        };
   };
   /** 全局默认吸附范围。 */
   defaultTolerancePx?: number;

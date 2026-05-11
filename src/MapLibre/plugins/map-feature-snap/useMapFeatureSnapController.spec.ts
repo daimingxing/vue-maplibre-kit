@@ -109,7 +109,263 @@ describe('useMapFeatureSnapController', () => {
       enabled: true,
       position: 'bottom-left',
       label: '全局吸附',
+      panelEnabled: false,
     });
+  });
+
+  it('应字段级合并 snap 右键面板配置，并默认关闭面板', () => {
+    setMapGlobalConfig({
+      plugins: {
+        snap: {
+          control: {
+            panel: true,
+          },
+        },
+      },
+    });
+
+    const enabledController = useMapFeatureSnapController({
+      getOptions: () => ({
+        control: {
+          enabled: true,
+        },
+      }),
+      getMap: () => null,
+    });
+    const disabledController = useMapFeatureSnapController({
+      getOptions: () => ({
+        control: {
+          panel: {
+            enabled: false,
+          },
+        },
+      }),
+      getMap: () => null,
+    });
+
+    expect(enabledController.controlOptions.value.panelEnabled).toBe(true);
+    expect(disabledController.controlOptions.value.panelEnabled).toBe(false);
+
+    enabledController.destroy();
+    disabledController.destroy();
+  });
+
+  it('应暴露业务吸附规则面板项，并用运行期开关停用对应规则', async () => {
+    const map = createMapStub([
+      {
+        id: 'line-a',
+        source: 'business-source',
+        properties: {
+          id: 'line-a',
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [0, 0],
+            [10, 0],
+          ],
+        },
+        layer: {
+          id: 'business-line-layer',
+        },
+      },
+    ]);
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        enabled: true,
+        control: {
+          panel: {
+            enabled: true,
+          },
+        },
+        businessLayers: {
+          enabled: true,
+          rules: [
+            {
+              id: 'business-line',
+              label: '业务线',
+              layerIds: ['business-line-layer'],
+              snapTo: ['segment'],
+            },
+          ],
+        },
+      }),
+      getMap: () => map as any,
+    });
+
+    expect(controller.controlRuleItems.value).toEqual([
+      {
+        id: 'business-line',
+        label: '业务线',
+        enabled: true,
+      },
+    ]);
+    expect(controller.resolveMapEvent({
+      point: { x: 5, y: 1 },
+      lngLat: { lng: 5, lat: 1 },
+    }).matched).toBe(true);
+
+    controller.toggleRule('business-line');
+    await Promise.resolve();
+
+    expect(controller.controlRuleItems.value[0].enabled).toBe(false);
+    expect(controller.resolveMapEvent({
+      point: { x: 5, y: 1 },
+      lngLat: { lng: 5, lat: 1 },
+    }).matched).toBe(false);
+
+    controller.destroy();
+  });
+
+  it('业务规则未显式传 id 时仍应在面板展示并支持运行期停用', async () => {
+    const map = createMapStub([
+      {
+        id: 'line-a',
+        source: 'business-source',
+        properties: {
+          id: 'line-a',
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [0, 0],
+            [10, 0],
+          ],
+        },
+        layer: {
+          id: 'business-line-layer',
+        },
+      },
+    ]);
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        enabled: true,
+        businessLayers: {
+          enabled: true,
+          rules: [
+            {
+              layerIds: ['business-line-layer'],
+              snapTo: ['segment'],
+            },
+          ],
+        },
+      }),
+      getMap: () => map as any,
+    });
+
+    expect(controller.controlRuleItems.value).toEqual([
+      {
+        id: 'business-layer:0:business-line-layer',
+        label: 'business-line-layer',
+        enabled: true,
+      },
+    ]);
+    expect(controller.resolveMapEvent({
+      point: { x: 5, y: 1 },
+      lngLat: { lng: 5, lat: 1 },
+    }).matched).toBe(true);
+
+    controller.toggleRule('business-layer:0:business-line-layer');
+    await Promise.resolve();
+
+    expect(controller.controlRuleItems.value[0].enabled).toBe(false);
+    expect(controller.resolveMapEvent({
+      point: { x: 5, y: 1 },
+      lngLat: { lng: 5, lat: 1 },
+    }).matched).toBe(false);
+
+    controller.destroy();
+  });
+
+  it('同图层多条无 id 规则应生成不同面板 ID 并可独立停用', async () => {
+    const map = createMapStub([
+      {
+        id: 'main-line',
+        source: 'business-source',
+        properties: {
+          type: 'main',
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [0, 0],
+            [10, 0],
+          ],
+        },
+        layer: {
+          id: 'pipe-line',
+        },
+      },
+      {
+        id: 'branch-line',
+        source: 'business-source',
+        properties: {
+          type: 'branch',
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [0, 50],
+            [10, 50],
+          ],
+        },
+        layer: {
+          id: 'pipe-line',
+        },
+      },
+    ]);
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        enabled: true,
+        businessLayers: {
+          enabled: true,
+          rules: [
+            {
+              layerIds: ['pipe-line'],
+              snapTo: ['vertex'],
+              tolerancePx: 4,
+              filter: (context) => context.properties?.type === 'main',
+            },
+            {
+              layerIds: ['pipe-line'],
+              snapTo: ['segment'],
+              tolerancePx: 4,
+              filter: (context) => context.properties?.type === 'branch',
+            },
+          ],
+        },
+      }),
+      getMap: () => map as any,
+    });
+
+    expect(controller.controlRuleItems.value.map((rule) => rule.id)).toEqual([
+      'business-layer:0:pipe-line',
+      'business-layer:1:pipe-line',
+    ]);
+
+    controller.toggleRule('business-layer:0:pipe-line');
+    await Promise.resolve();
+
+    expect(controller.controlRuleItems.value).toMatchObject([
+      {
+        id: 'business-layer:0:pipe-line',
+        enabled: false,
+      },
+      {
+        id: 'business-layer:1:pipe-line',
+        enabled: true,
+      },
+    ]);
+    expect(controller.resolveMapEvent({
+      point: { x: 0, y: 0 },
+      lngLat: { lng: 0, lat: 0 },
+    }).matched).toBe(false);
+    expect(controller.resolveMapEvent({
+      point: { x: 5, y: 51 },
+      lngLat: { lng: 5, lat: 51 },
+    }).matched).toBe(true);
+
+    controller.destroy();
   });
 
   it('resolveTerradrawSnapOptions 应按 全局默认 -> 控件默认 -> 实例局部 覆写合并', () => {

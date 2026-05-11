@@ -276,7 +276,7 @@ describe('createMapFeatureSnapBinding', () => {
     });
 
     expect(result.matched).toBe(true);
-    expect(result.ruleId).toBe('business-layer:business-line-layer');
+    expect(result.ruleId).toBe('business-layer:0:business-line-layer');
 
     binding.destroy();
   });

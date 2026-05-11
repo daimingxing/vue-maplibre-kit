@@ -46,6 +46,19 @@ describe('mapFeatureSnapPlugin', () => {
         enabled: true,
         position: 'top-right',
         label: '吸附',
+        panel: {
+          enabled: true,
+        },
+      },
+      businessLayers: {
+        enabled: true,
+        rules: [
+          {
+            id: 'line-snap',
+            label: '线吸附',
+            layerIds: ['line-layer'],
+          },
+        ],
       },
     } as MapFeatureSnapOptions);
     const pluginInstance = mapFeatureSnapPlugin.createInstance(createPluginContext(optionsRef));
@@ -57,6 +70,14 @@ describe('mapFeatureSnapPlugin', () => {
       position: 'top-right',
       isActive: true,
       label: '吸附',
+      panelEnabled: true,
+      rules: [
+        {
+          id: 'line-snap',
+          label: '线吸附',
+          enabled: true,
+        },
+      ],
     });
     expect(api?.isActive()).toBe(true);
 

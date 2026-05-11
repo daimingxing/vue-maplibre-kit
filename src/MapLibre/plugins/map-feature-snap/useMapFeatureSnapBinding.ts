@@ -547,9 +547,9 @@ function shouldReplaceCandidate(current: SnapCandidate | null, next: SnapCandida
  * @param index 当前规则序号
  * @returns 稳定规则 ID
  */
-function createGeneratedRuleId(rule: MapFeatureSnapRule, index: number): string {
+export function createGeneratedRuleId(rule: MapFeatureSnapRule, index: number): string {
   const layerKey = rule.layerIds.length ? rule.layerIds.join(',') : `rule-${index}`;
-  return `business-layer:${layerKey}`;
+  return `business-layer:${index}:${layerKey}`;
 }
 
 /**

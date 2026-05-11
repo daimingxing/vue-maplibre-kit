@@ -141,7 +141,9 @@ describe('businessPreset', () => {
     const plugins = createBusinessPlugins({
       sourceRegistry,
       snap: {
-        layerIds: ['pipe-line'],
+        businessLayers: {
+          管线: 'pipe-line',
+        },
       },
       lineDraft: true,
       intersection: {
@@ -164,8 +166,11 @@ describe('businessPreset', () => {
       'mapFeatureMultiSelect',
       'mapDxfExport',
     ]);
-    expect((plugins[0].options as any).businessLayers.rules[0].layerIds).toEqual(['pipe-line']);
-    expect((plugins[0].options as any).businessLayers.rules[0].id).toBeUndefined();
+    expect((plugins[0].options as any).businessLayers.rules[0]).toMatchObject({
+      id: '管线',
+      label: '管线',
+      layerIds: ['pipe-line'],
+    });
     expect((plugins[2].options as any).sourceRegistry).toBe(sourceRegistry);
     expect((plugins[3].options as any).enabled).toBe(true);
     expect((plugins[5].options as any).sourceRegistry).toBe(sourceRegistry);
@@ -289,17 +294,90 @@ describe('businessPreset', () => {
     expect((plugins[0].options as any).businessLayers.rules[0].id).toBe('custom-snap');
   });
 
-  it('snap layerIds 简写应生成无手写 id 的业务图层规则', async () => {
+  it('应兼容 snap.layerIds 旧版业务图层吸附简写', async () => {
     const businessPreset = await loadBusinessPreset();
     const { createBusinessPlugins } = businessPreset;
     const plugins = createBusinessPlugins({
       snap: {
         layerIds: ['pipe-line'],
+        ruleDefaults: {
+          snapTo: ['vertex'],
+          tolerancePx: 18,
+        },
       },
     });
 
-    const rule = (plugins[0].options as any).businessLayers.rules[0];
-    expect(rule.id).toBeUndefined();
-    expect(rule.layerIds).toEqual(['pipe-line']);
+    expect((plugins[0].options as any).layerIds).toBeUndefined();
+    expect((plugins[0].options as any).businessLayers).toEqual({
+      enabled: true,
+      rules: [
+        {
+          id: 'business-layer-snap',
+          label: '业务图层',
+          layerIds: ['pipe-line'],
+          snapTo: ['vertex'],
+          tolerancePx: 18,
+        },
+      ],
+    });
+  });
+
+  it('同时传 businessLayers 和旧版 layerIds 时应优先使用 businessLayers', async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+    const plugins = createBusinessPlugins({
+      snap: {
+        layerIds: ['legacy-line'],
+        businessLayers: {
+          新规则: 'pipe-line',
+        },
+      },
+    });
+
+    expect((plugins[0].options as any).businessLayers.rules).toEqual([
+      {
+        id: '新规则',
+        label: '新规则',
+        layerIds: ['pipe-line'],
+      },
+    ]);
+  });
+
+  it('snap businessLayers 简写应生成带 id 和 label 的业务图层规则', async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+    const plugins = createBusinessPlugins({
+      snap: {
+        defaultTolerancePx: 12,
+        ruleDefaults: {
+          snapTo: ['vertex'],
+        },
+        businessLayers: {
+          主正式线: 'pipe-line',
+          parcelBorder: {
+            label: '地块边界',
+            layerIds: ['parcel-line', 'parcel-fill'],
+            snapTo: ['vertex', 'segment'],
+            tolerancePx: 20,
+          },
+        },
+      },
+    });
+
+    const [lineRule, parcelRule] = (plugins[0].options as any).businessLayers.rules;
+    expect(lineRule).toMatchObject({
+      id: '主正式线',
+      label: '主正式线',
+      layerIds: ['pipe-line'],
+      snapTo: ['vertex'],
+    });
+    expect(parcelRule).toMatchObject({
+      id: 'parcelBorder',
+      label: '地块边界',
+      layerIds: ['parcel-line', 'parcel-fill'],
+      snapTo: ['vertex', 'segment'],
+      tolerancePx: 20,
+    });
+    expect((plugins[0].options as any).defaultTolerancePx).toBe(12);
   });
 });

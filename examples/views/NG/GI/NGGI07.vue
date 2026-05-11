@@ -17,7 +17,7 @@
       <button type="button" @click="toggleSnap">切换吸附</button>
       <p>吸附：{{ businessMap.plugins.snap.isActive.value ? "已开启" : "已关闭" }}</p>
       <ul>
-        <li v-for="rule in snapRules" :key="rule.name">{{ rule.name }}：{{ rule.summary }}</li>
+        <li v-for="rule in snapRules" :key="rule.id">{{ rule.id }}：{{ rule.summary }}</li>
       </ul>
       <p>先画点、线或面，再切换绘制模式，可吸附到刚刚绘制出的要素。</p>
     </aside>
@@ -32,7 +32,7 @@ import {
   useBusinessMap,
   type MapLibreInitExpose,
 } from "vue-maplibre-kit/business";
-import { createBusinessPlugins, type MapFeatureSnapRule } from "vue-maplibre-kit/plugins";
+import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 import {
   EXAMPLE_FILL_LAYER_ID,
   EXAMPLE_LINE_LAYER_ID,
@@ -50,7 +50,7 @@ const interactive = createExampleInteractive(() => {});
 // snapRules 是业务层最重要的声明：告诉插件“哪些图层、哪些几何、用什么方式吸附”。
 const snapRules = [
   {
-    name: "巡检点",
+    id: "巡检点",
     summary: "命中点图层顶点，适合从既有节点开始绘制。",
     layerIds: [EXAMPLE_POINT_LAYER_ID],
     geometryTypes: ["Point"],
@@ -61,7 +61,7 @@ const snapRules = [
     tolerancePx: 14,
   },
   {
-    name: "管线",
+    id: "管线",
     summary: "命中线图层顶点与线段，适合沿管线补绘。",
     layerIds: [EXAMPLE_LINE_LAYER_ID],
     geometryTypes: ["LineString"],
@@ -72,7 +72,7 @@ const snapRules = [
     tolerancePx: 12,
   },
   {
-    name: "作业面",
+    id: "作业面",
     summary: "命中面边界顶点与边线，适合贴合作业范围绘制。",
     layerIds: [EXAMPLE_FILL_LAYER_ID],
     geometryTypes: ["Polygon"],
@@ -82,13 +82,15 @@ const snapRules = [
     // 面边界吸附范围稍小，降低绘制时跨越边界误命中的概率。
     tolerancePx: 10,
   },
-] satisfies Array<MapFeatureSnapRule & { name: string; summary: string }>;
+] as const;
 const plugins = createBusinessPlugins({
   // snap 当前主要是注册型插件：配置写在 plugins prop，吸附结果由地图绘制交互即时使用。
   snap: {
-    layerIds: [EXAMPLE_POINT_LAYER_ID, EXAMPLE_LINE_LAYER_ID, EXAMPLE_FILL_LAYER_ID],
     // 全局默认范围兜底，具体业务规则仍可按类型覆盖。
     defaultTolerancePx: 12,
+    ruleDefaults: {
+      snapTo: ["vertex", "segment"],
+    },
     preview: {
       enabled: true,
       // 红色预览点用于区别示例业务点图层的橙色圆点。
@@ -101,12 +103,28 @@ const plugins = createBusinessPlugins({
       lineWidth: 5,
     },
     // 内置吸附按钮和面板按钮都会调用同一组运行期开关能力。
-    control: { enabled: true, position: "top-left" },
+    control: { enabled: true, position: "top-left", panel: { enabled: true } },
     businessLayers: {
-      enabled: true,
-      // businessLayers.rules 表示从业务图层中提取可吸附目标。
-      // 如果项目还有自定义绘图图层，也可以继续扩展插件配置。
-      rules: snapRules,
+      // createBusinessPlugins 的简便写法中，key 会同时作为规则 id 和默认 label。
+      // 单条规则仍可覆写 snapTo、priority、tolerancePx 等精细配置。
+      巡检点: {
+        layerIds: [EXAMPLE_POINT_LAYER_ID],
+        geometryTypes: ["Point"],
+        snapTo: ["vertex"],
+        priority: 30,
+        tolerancePx: 14,
+      },
+      管线: {
+        layerIds: [EXAMPLE_LINE_LAYER_ID],
+        geometryTypes: ["LineString"],
+        priority: 20,
+      },
+      作业面: {
+        layerIds: [EXAMPLE_FILL_LAYER_ID],
+        geometryTypes: ["Polygon"],
+        priority: 10,
+        tolerancePx: 10,
+      },
     },
     terradraw: {
       defaults: {
