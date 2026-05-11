@@ -187,4 +187,30 @@ describe('useMapLayerActions', () => {
       { active: true }
     );
   });
+
+  it('应把运行时图层属性异常转换为结构化失败结果', () => {
+    const rawMap = {
+      getLayer: vi.fn((layerId: string) => (layerId === 'line-layer' ? { id: layerId } : null)),
+      getSource: vi.fn(),
+      setLayoutProperty: vi.fn(() => {
+        throw new Error('layout property is invalid');
+      }),
+      setPaintProperty: vi.fn(() => {
+        throw new Error('paint expression is invalid');
+      }),
+      addSource: vi.fn(),
+      addLayer: vi.fn(),
+      removeLayer: vi.fn(),
+      removeSource: vi.fn(),
+    };
+    const actions = useMapLayerActions(shallowRef(createMapExpose(rawMap)));
+
+    const paintResult = actions.setPaint('line-layer', { 'line-color': ['bad-expression'] });
+    const layoutResult = actions.hide('line-layer');
+
+    expect(paintResult.success).toBe(false);
+    expect(paintResult.message).toContain('paint expression is invalid');
+    expect(layoutResult.success).toBe(false);
+    expect(layoutResult.message).toContain('layout property is invalid');
+  });
 });

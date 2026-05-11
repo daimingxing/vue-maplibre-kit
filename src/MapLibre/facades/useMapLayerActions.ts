@@ -143,8 +143,12 @@ export function useMapLayerActions(
       return createLayerActionResult(false, `未找到图层：${layerId}`);
     }
 
-    action(rawMap);
-    return createLayerActionResult(true, '图层动作已执行');
+    try {
+      action(rawMap);
+      return createLayerActionResult(true, '图层动作已执行');
+    } catch (error) {
+      return createLayerActionResult(false, `图层动作失败：${getErrorMessage(error)}`);
+    }
   };
 
   /**

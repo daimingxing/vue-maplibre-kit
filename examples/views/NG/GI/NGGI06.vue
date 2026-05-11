@@ -96,7 +96,7 @@ const plugins = createBusinessPlugins({
   dxfExport: {
     enabled: true,
     defaults: {
-      fileName: "nggi06-five-plugins.dxf",
+      fileName: "nggi06-six-plugins.dxf",
       lineWidth: 2,
       pointMode: "circle",
       // DXF 点圆半径使用地图坐标单位，本例坐标范围下 0.003 比较容易看见。
