@@ -26,11 +26,14 @@ export const mapFeatureSnapPlugin = defineMapPlugin({
     const pluginController = useMapFeatureSnapController({
       getOptions: () => context.getOptions() as MapFeatureSnapOptions,
       getMap: context.getMap,
+      listPlugins: context.listPlugins,
     });
     const pluginApi = computed<MapFeatureSnapPluginApi>(() => ({
       activate: () => pluginController.activate(),
       deactivate: () => pluginController.deactivate(),
       toggle: () => pluginController.toggle(),
+      setTargetEnabled: pluginController.setTargetEnabled,
+      toggleTarget: pluginController.toggleTarget,
       isActive: () => pluginController.isActive.value,
       clearPreview: () => pluginController.clearPreview(),
       resolveMapEvent: (event: any) =>
@@ -66,9 +69,10 @@ export const mapFeatureSnapPlugin = defineMapPlugin({
               isActive: pluginController.isActive.value,
               label: pluginController.controlOptions.value.label,
               panelEnabled: pluginController.controlOptions.value.panelEnabled,
-              rules: pluginController.controlRuleItems.value,
+              groups: pluginController.controlGroups.value,
               onToggle: pluginController.toggle,
               onToggleRule: pluginController.toggleRule,
+              onToggleTarget: pluginController.toggleTarget,
             },
           });
         }

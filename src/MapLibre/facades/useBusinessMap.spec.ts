@@ -491,6 +491,8 @@ function createSnapPluginHarness(): {
         isActive: !state.value.isActive,
       };
     }),
+    setTargetEnabled: vi.fn(),
+    toggleTarget: vi.fn(),
     isActive: vi.fn(() => state.value.isActive),
     clearPreview: vi.fn(),
     resolveMapEvent: vi.fn(() => ({

@@ -33,4 +33,16 @@ describe('MapFeatureSnapControl', () => {
     expect(source).toContain('box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);');
     expect(source).toContain("event.key === 'Escape'");
   });
+
+  it('应按分组渲染右键面板，并按规则或插件目标分发切换动作', () => {
+    const source = readFileSync(resolve(__dirname, './MapFeatureSnapControl.vue'), 'utf-8');
+
+    expect(source).toContain('v-for="group in groups"');
+    expect(source).toContain('v-for="item in group.items"');
+    expect(source).toContain("kind: 'rule' | 'target'");
+    expect(source).toContain('handleItemToggle(item)');
+    expect(source).toContain("props.onToggleTarget(item.id)");
+    expect(source).toContain("props.onToggleRule(item.id)");
+    expect(source).toContain('.snap-control-panel__group + .snap-control-panel__group');
+  });
 });

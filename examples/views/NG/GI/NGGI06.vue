@@ -73,7 +73,17 @@ const plugins = createBusinessPlugins({
       管线: EXAMPLE_LINE_LAYER_ID,
     },
     // 内置吸附按钮用于运行期开关整个吸附能力；右键可展开业务规则开关面板。
-    control: { enabled: true, position: "top-left", panel: { enabled: true } },
+    control: {
+      enabled: true,
+      position: "top-left",
+      panel: {
+        enabled: true,
+        businessLayers: true,
+        intersection: true,
+        polygonEdge: true,
+        terradraw: true,
+      },
+    },
   },
   // lineDraft: true 使用线草稿插件默认配置，适合总览页快速注册能力。
   lineDraft: true,

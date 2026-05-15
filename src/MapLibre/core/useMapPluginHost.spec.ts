@@ -68,6 +68,36 @@ function createDescriptor(
 }
 
 describe('useMapPluginHost', () => {
+  it('插件上下文应能读取当前已注册插件列表', () => {
+    const seenList: Array<Array<{ id: string; type: string }>> = [];
+    const { scope } = createHostHarness([
+      createDescriptor({
+        id: 'reader-a',
+        plugin: {
+          type: 'reader',
+          createInstance: (context) => {
+            seenList.push(context.listPlugins());
+            return {};
+          },
+        },
+      }),
+      createDescriptor({
+        id: 'other-a',
+        plugin: {
+          type: 'other',
+          createInstance: () => ({}),
+        },
+      }),
+    ]);
+
+    expect(seenList[0]).toEqual([
+      { id: 'reader-a', type: 'reader' },
+      { id: 'other-a', type: 'other' },
+    ]);
+
+    scope.stop();
+  });
+
   it('插件初始化失败时应跳过失败插件并保留其他插件', () => {
     const error = new Error('init failed');
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);

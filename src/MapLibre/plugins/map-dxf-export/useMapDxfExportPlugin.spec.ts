@@ -100,6 +100,7 @@ function createPluginContext(optionsRef: {
     clearSelectedFeature: () => undefined,
     clearPluginHoverState: () => undefined,
     clearPluginSelectedFeature: () => undefined,
+    listPlugins: () => [],
     toFeatureSnapshot: () => null,
   };
 }

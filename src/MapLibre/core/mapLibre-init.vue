@@ -139,6 +139,10 @@ import type {
   MapPluginStateChangePayload,
 } from '../plugins/types';
 import {
+  MAP_FEATURE_SNAP_PLUGIN_TYPE,
+  type MapFeatureSnapOptions,
+} from '../plugins/map-feature-snap';
+import {
   createMapLibreRawHandles,
   type MapFeatureStatePatch,
   type MapFeatureStateTarget,
@@ -288,6 +292,33 @@ const mergedOptions = computed(() => {
  */
 const controls = computed(() => resolveMapControls(props.controls));
 
+/**
+ * 给吸附插件附加容器运行期上下文。
+ * 业务用户不需要传 TerraDraw 控件引用；snap 面板只读取这里注入的布尔状态。
+ */
+const pluginsWithRuntimeContext = computed(() => {
+  return props.plugins.map((descriptor) => {
+    if (descriptor.type !== MAP_FEATURE_SNAP_PLUGIN_TYPE) {
+      return descriptor;
+    }
+
+    const snapOptions = (descriptor.options || {}) as MapFeatureSnapOptions;
+    return {
+      ...descriptor,
+      options: {
+        ...snapOptions,
+        internalContext: {
+          ...(snapOptions.internalContext || {}),
+          terradraw: {
+            drawEnabled: Boolean(controls.value.MaplibreTerradrawControl?.isUse),
+            measureEnabled: Boolean(controls.value.MaplibreMeasureControl?.isUse),
+          },
+        },
+      },
+    };
+  });
+});
+
 // 初始化地图实例引用。
 // 后续普通图层交互、吸附模块、绘图控件和测量控件都统一复用这一个 map 句柄。
 const map = useMap(props.mapKey as string | symbol | undefined);
@@ -309,7 +340,7 @@ let pluginLayerInteractiveBinding: ReturnType<typeof usePluginLayerInteractive> 
  * mapLibreInit 自身不再直接识别任何具体插件，只消费宿主聚合后的渲染项、交互补丁与服务接口。
  */
 const pluginHost = useMapPluginHost({
-  getDescriptors: () => props.plugins,
+  getDescriptors: () => pluginsWithRuntimeContext.value,
   getMap: () => map.map || null,
   getMapInstance: () => map,
   getBaseMapInteractive: () => props.mapInteractive,

@@ -12,14 +12,19 @@ import {
 } from './useMapFeatureSnapBinding';
 import type {
   MapFeatureSnapGeometryType,
+  MapFeatureSnapControlGroup,
+  MapFeatureSnapControlPanelOptions,
   MapFeatureSnapMode,
   MapFeatureSnapOptions,
+  MapFeatureSnapPanelTargetKey,
   MapFeatureSnapPreviewOptions,
   MapFeatureSnapRule,
   MapFeatureSnapTargetOptions,
 } from './types';
 
 const DEFAULT_TOLERANCE_PX = 16;
+const INTERSECTION_PLUGIN_TYPE = 'intersectionPreview';
+const POLYGON_EDGE_PLUGIN_TYPE = 'polygonEdgePreview';
 const DEFAULT_DRAWN_TARGET_GEOMETRY_TYPES: MapFeatureSnapGeometryType[] = [
   'Point',
   'LineString',
@@ -32,6 +37,8 @@ interface UseMapFeatureSnapControllerOptions {
   getOptions: () => MapFeatureSnapOptions | null | undefined;
   /** 读取当前地图实例。 */
   getMap: () => MaplibreMap | null | undefined;
+  /** 读取当前已注册插件列表。 */
+  listPlugins?: () => Array<{ id: string; type: string }>;
 }
 
 export interface MapFeatureSnapControlRuleItem {
@@ -217,7 +224,7 @@ function mergeSnapControlOptions(
 
 function normalizeSnapControlPanelOptions(
   panel: NonNullable<MapFeatureSnapOptions['control']>['panel']
-): { enabled?: boolean } | undefined {
+): MapFeatureSnapControlPanelOptions | undefined {
   if (typeof panel === 'boolean') {
     return {
       enabled: panel,
@@ -230,7 +237,7 @@ function normalizeSnapControlPanelOptions(
 function mergeSnapControlPanelOptions(
   globalPanel: NonNullable<MapFeatureSnapOptions['control']>['panel'],
   localPanel: NonNullable<MapFeatureSnapOptions['control']>['panel']
-): { enabled?: boolean } | undefined {
+): MapFeatureSnapControlPanelOptions | undefined {
   const normalizedGlobal = normalizeSnapControlPanelOptions(globalPanel);
   const normalizedLocal = normalizeSnapControlPanelOptions(localPanel);
   if (!normalizedGlobal && !normalizedLocal) {
@@ -263,6 +270,41 @@ function isSnapControlPanelEnabled(control: MapFeatureSnapOptions['control']): b
 }
 
 /**
+ * 判断面板配置是否允许展示指定开关。
+ * @param panel 面板配置
+ * @param key 配置字段名
+ * @returns 是否允许展示
+ */
+function isPanelItemAllowed(
+  panel: MapFeatureSnapControlPanelOptions | undefined,
+  key: keyof Pick<
+    MapFeatureSnapControlPanelOptions,
+    'businessLayers' | 'intersection' | 'polygonEdge' | 'terradraw'
+  >
+): boolean {
+  return panel?.[key] !== false;
+}
+
+/**
+ * 判断内置吸附目标初始是否启用。
+ * @param targetOptions 当前目标配置
+ * @returns 是否启用
+ */
+function isTargetInitiallyEnabled(
+  targetOptions: MapFeatureSnapOptions['intersection'] | MapFeatureSnapOptions['polygonEdge']
+): boolean {
+  if (targetOptions === false) {
+    return false;
+  }
+
+  if (targetOptions && typeof targetOptions === 'object') {
+    return targetOptions.enabled !== false;
+  }
+
+  return true;
+}
+
+/**
  * 合并插件内置吸附目标配置。
  * 布尔值表示整项开关；对象配置按字段合并，便于页面只覆写单个默认值。
  *
@@ -289,6 +331,32 @@ function mergeSnapTargetOptions(
   return {
     ...(globalConfig || {}),
     ...(localConfig || {}),
+  };
+}
+
+/**
+ * 应用内置目标运行期覆盖。
+ * @param targetOptions 原始目标配置
+ * @param enabled 运行期是否启用
+ * @returns 覆盖后的目标配置
+ */
+function applyTargetEnabledOverride(
+  targetOptions: boolean | MapFeatureSnapTargetOptions | undefined,
+  enabled: boolean | undefined
+): boolean | MapFeatureSnapTargetOptions | undefined {
+  if (enabled === undefined) {
+    return targetOptions;
+  }
+
+  if (targetOptions && typeof targetOptions === 'object') {
+    return {
+      ...targetOptions,
+      enabled,
+    };
+  }
+
+  return {
+    enabled,
   };
 }
 
@@ -348,32 +416,41 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
   const { getOptions, getMap } = options;
   const activeRef = ref(true);
   const ruleEnabledOverridesRef = ref<Record<string, boolean>>({});
+  const targetEnabledOverridesRef = ref<Partial<Record<MapFeatureSnapPanelTargetKey, boolean>>>({});
   const bindingRef = shallowRef<MapFeatureSnapBinding | null>(null);
   const resolvedOptions = computed(() => resolveMapFeatureSnapOptions(getOptions()));
   const effectiveOptions = computed<MapFeatureSnapOptions | undefined>(() => {
     const snapOptions = resolvedOptions.value;
-    const overrides = ruleEnabledOverridesRef.value;
-    if (!snapOptions?.businessLayers?.rules?.length || !Object.keys(overrides).length) {
+    if (!snapOptions) {
       return snapOptions;
     }
 
-    return {
+    const ruleOverrides = ruleEnabledOverridesRef.value;
+    const targetOverrides = targetEnabledOverridesRef.value;
+    const nextOptions: MapFeatureSnapOptions = {
       ...snapOptions,
-      businessLayers: {
+      intersection: applyTargetEnabledOverride(snapOptions.intersection, targetOverrides.intersection),
+      polygonEdge: applyTargetEnabledOverride(snapOptions.polygonEdge, targetOverrides.polygonEdge),
+    };
+
+    if (snapOptions.businessLayers?.rules?.length && Object.keys(ruleOverrides).length) {
+      nextOptions.businessLayers = {
         ...snapOptions.businessLayers,
         rules: snapOptions.businessLayers.rules.map((rule, index) => {
           const ruleId = getRuleControlId(rule, index);
-          if (overrides[ruleId] === undefined) {
+          if (ruleOverrides[ruleId] === undefined) {
             return rule;
           }
 
           return {
             ...rule,
-            enabled: overrides[ruleId],
+            enabled: ruleOverrides[ruleId],
           };
         }),
-      },
-    };
+      };
+    }
+
+    return nextOptions;
   });
 
   /**
@@ -395,6 +472,32 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     panelEnabled: isSnapControlPanelEnabled(resolvedOptions.value?.control),
   }));
 
+  /** 右键面板最终配置。 */
+  const panelOptions = computed(() => {
+    return normalizeSnapControlPanelOptions(resolvedOptions.value?.control?.panel);
+  });
+
+  /** 当前页面已注册插件类型集合。 */
+  const registeredPluginTypes = computed(() => {
+    return new Set((options.listPlugins?.() || []).map((plugin) => plugin.type));
+  });
+
+  /** 当前页面是否注册了交点插件。 */
+  const hasIntersectionPlugin = computed(() => {
+    return registeredPluginTypes.value.has(INTERSECTION_PLUGIN_TYPE);
+  });
+
+  /** 当前页面是否注册了面边线插件。 */
+  const hasPolygonEdgePlugin = computed(() => {
+    return registeredPluginTypes.value.has(POLYGON_EDGE_PLUGIN_TYPE);
+  });
+
+  /** 当前页面是否启用了绘图或测量控件。 */
+  const hasTerradrawControl = computed(() => {
+    const terradrawContext = resolvedOptions.value?.internalContext?.terradraw;
+    return Boolean(terradrawContext?.drawEnabled || terradrawContext?.measureEnabled);
+  });
+
   /** 配置面板展示的业务吸附规则。 */
   const controlRuleItems = computed<MapFeatureSnapControlRuleItem[]>(() => {
     const overrides = ruleEnabledOverridesRef.value;
@@ -408,6 +511,80 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
       };
     });
   });
+
+  /** 配置面板展示的业务吸附规则分组。 */
+  const controlRuleGroups = computed<MapFeatureSnapControlGroup[]>(() => {
+    if (!isPanelItemAllowed(panelOptions.value, 'businessLayers')) {
+      return [];
+    }
+
+    const items = controlRuleItems.value.map((rule) => ({
+      ...rule,
+      kind: 'rule' as const,
+    }));
+
+    return items.length
+      ? [
+          {
+            id: 'business-layers',
+            label: '业务图层',
+            items,
+          },
+        ]
+      : [];
+  });
+
+  /** 配置面板展示的插件吸附目标分组。 */
+  const controlTargetGroups = computed<MapFeatureSnapControlGroup[]>(() => {
+    const panel = panelOptions.value;
+    const overrides = targetEnabledOverridesRef.value;
+    const pluginItems: MapFeatureSnapControlGroup['items'] = [];
+
+    if (isPanelItemAllowed(panel, 'intersection') && hasIntersectionPlugin.value) {
+      pluginItems.push({
+        id: 'intersection',
+        kind: 'target',
+        label: '交点',
+        enabled:
+          overrides.intersection ?? isTargetInitiallyEnabled(resolvedOptions.value?.intersection),
+      });
+    }
+
+    if (isPanelItemAllowed(panel, 'polygonEdge') && hasPolygonEdgePlugin.value) {
+      pluginItems.push({
+        id: 'polygonEdge',
+        kind: 'target',
+        label: '面边线',
+        enabled:
+          overrides.polygonEdge ?? isTargetInitiallyEnabled(resolvedOptions.value?.polygonEdge),
+      });
+    }
+
+    if (isPanelItemAllowed(panel, 'terradraw') && hasTerradrawControl.value) {
+      pluginItems.push({
+        id: 'terradraw',
+        kind: 'target',
+        label: 'TerraDraw 绘图/测量',
+        enabled: overrides.terradraw ?? true,
+      });
+    }
+
+    return pluginItems.length
+      ? [
+          {
+            id: 'plugin-targets',
+            label: '插件目标',
+            items: pluginItems,
+          },
+        ]
+      : [];
+  });
+
+  /** 配置面板展示的全部分组。 */
+  const controlGroups = computed<MapFeatureSnapControlGroup[]>(() => [
+    ...controlRuleGroups.value,
+    ...controlTargetGroups.value,
+  ]);
 
   /**
    * 普通图层吸附预览是否启用。
@@ -556,6 +733,33 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
   }
 
   /**
+   * 设置插件目标运行期开关。
+   * @param targetId 插件目标标识
+   * @param enabled 是否启用
+   */
+  function setTargetEnabled(targetId: MapFeatureSnapPanelTargetKey, enabled: boolean): void {
+    targetEnabledOverridesRef.value = {
+      ...targetEnabledOverridesRef.value,
+      [targetId]: enabled,
+    };
+  }
+
+  /**
+   * 切换插件目标运行期开关。
+   * @param targetId 插件目标标识
+   */
+  function toggleTarget(targetId: MapFeatureSnapPanelTargetKey): void {
+    const currentTarget = controlTargetGroups.value
+      .flatMap((group) => group.items)
+      .find((item) => item.id === targetId);
+    if (!currentTarget) {
+      return;
+    }
+
+    setTargetEnabled(targetId, !currentTarget.enabled);
+  }
+
+  /**
    * 读取当前控件最终生效的 TerraDraw / Measure 吸附配置。
    * 合并顺序为：插件默认值 -> 控件类别默认值 -> 业务层局部覆写。
    * @param controlType 当前控件类型
@@ -592,7 +796,7 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
       drawnTargets: normalizeDrawnTargets(mergedConfig.drawnTargets),
     };
 
-    if (!isActive.value) {
+    if (!isActive.value || targetEnabledOverridesRef.value.terradraw === false) {
       return {
         ...resolvedSnapOptions,
         enabled: false,
@@ -611,8 +815,10 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
   return {
     enabled: configuredEnabled,
     isActive,
+    effectiveOptions,
     controlOptions,
     controlRuleItems,
+    controlGroups,
     previewEnabled,
     previewData,
     previewPointStyle,
@@ -624,6 +830,8 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     toggle,
     setRuleEnabled,
     toggleRule,
+    setTargetEnabled,
+    toggleTarget,
     resolveTerradrawSnapOptions,
     resolveMapEvent: (event: any) =>
       bindingRef.value?.resolveMapEvent(event) || createEmptyMapFeatureSnapResult(),

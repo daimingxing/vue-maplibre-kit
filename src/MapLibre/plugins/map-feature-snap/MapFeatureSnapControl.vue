@@ -49,16 +49,18 @@
         <span class="snap-control__label">{{ isActive ? `关闭${label}` : `开启${label}` }}</span>
       </button>
       <div v-if="isPanelOpen" class="snap-control-panel" @click.stop @contextmenu.prevent>
-        <div class="snap-control-panel__title">吸附目标</div>
-        <label v-for="rule in rules" :key="rule.id" class="snap-control-panel__item">
-          <input
-            class="snap-control-panel__checkbox"
-            type="checkbox"
-            :checked="rule.enabled"
-            @change="onToggleRule(rule.id)"
-          />
-          <span class="snap-control-panel__text" :title="rule.label">{{ rule.label }}</span>
-        </label>
+        <section v-for="group in groups" :key="group.id" class="snap-control-panel__group">
+          <div class="snap-control-panel__title">{{ group.label }}</div>
+          <label v-for="item in group.items" :key="item.id" class="snap-control-panel__item">
+            <input
+              class="snap-control-panel__checkbox"
+              type="checkbox"
+              :checked="item.enabled"
+              @change="handleItemToggle(item)"
+            />
+            <span class="snap-control-panel__text" :title="item.label">{{ item.label }}</span>
+          </label>
+        </section>
       </div>
     </div>
   </mgl-custom-control>
@@ -69,10 +71,17 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { ControlPosition } from 'maplibre-gl';
 import { MglCustomControl } from 'vue-maplibre-gl';
 
-interface SnapRuleItem {
+interface SnapPanelItem {
   id: string;
+  kind: 'rule' | 'target';
   label: string;
   enabled: boolean;
+}
+
+interface SnapPanelGroup {
+  id: string;
+  label: string;
+  items: SnapPanelItem[];
 }
 
 interface Props {
@@ -84,19 +93,21 @@ interface Props {
   label: string;
   /** 是否启用右键配置面板。 */
   panelEnabled: boolean;
-  /** 配置面板展示的吸附规则。 */
-  rules: SnapRuleItem[];
+  /** 配置面板展示的吸附目标分组。 */
+  groups: SnapPanelGroup[];
   /** 控件点击后的切换回调。 */
   onToggle: () => void;
   /** 切换单条吸附规则。 */
   onToggleRule: (ruleId: string) => void;
+  /** 切换插件吸附目标。 */
+  onToggleTarget: (targetId: string) => void;
 }
 
 const props = defineProps<Props>();
 const controlRef = ref<HTMLElement | null>(null);
 const panelOpenRef = ref(false);
 
-const isPanelOpen = computed(() => props.panelEnabled && panelOpenRef.value && props.rules.length > 0);
+const isPanelOpen = computed(() => props.panelEnabled && panelOpenRef.value && props.groups.length > 0);
 
 /**
  * 响应控件点击，切换吸附运行期状态。
@@ -114,13 +125,26 @@ const closePanel = (): void => {
 };
 
 const handleContextMenu = (event: MouseEvent): void => {
-  if (!props.panelEnabled || !props.rules.length) {
+  if (!props.panelEnabled || !props.groups.length) {
     return;
   }
 
   event.preventDefault();
   event.stopPropagation();
   panelOpenRef.value = !panelOpenRef.value;
+};
+
+/**
+ * 根据面板项类型分发切换动作。
+ * @param item 当前被切换的面板项
+ */
+const handleItemToggle = (item: SnapPanelItem): void => {
+  if (item.kind === 'target') {
+    props.onToggleTarget(item.id);
+    return;
+  }
+
+  props.onToggleRule(item.id);
 };
 
 const handleDocumentPointerDown = (event: PointerEvent): void => {
@@ -248,6 +272,12 @@ watch(
   font-size: 12px;
   line-height: 18px;
   color: #4b5563;
+}
+
+.snap-control-panel__group + .snap-control-panel__group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .snap-control-panel__item {

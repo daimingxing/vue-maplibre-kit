@@ -532,7 +532,6 @@ const mapControls: BusinessKit.MapControlsConfig = {
       //   lineWidth: 30, // 每个拉伸段的像素宽度
       //   opacity: 0.95, // 拉伸图层透明度
       // } as TerradrawLineDecorationStyle,
-      // 如果你仍然想使用沿线重复图标的模式，可以切回下面这组配置：
       defaultStyle: {
         mode: "symbol-repeat",
         svg: sendIcon,
@@ -1314,7 +1313,17 @@ const mapFeatureSnapOptions = {
   enabled: true,
 
   // 内置吸附按钮用于运行期开关整个吸附能力；右键按钮可展开业务规则开关面板。
-  control: { enabled: true, position: "top-left", panel: { enabled: true } },
+  control: {
+    enabled: true,
+    position: "top-left",
+    panel: {
+      enabled: true,
+      businessLayers: true,
+      intersection: true,
+      polygonEdge: true,
+      terradraw: true,
+    },
+  },
 
   // 全局默认吸附范围（像素）。
   // 业务层大多数规则不需要重复传，只有个别规则需要更大或更小的吸附范围时再局部覆写。

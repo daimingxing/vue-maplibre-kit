@@ -178,6 +178,8 @@ export interface MapPluginContext<TType extends string = string, TOptions = unkn
   getMap: () => MaplibreMap | null | undefined;
   /** 读取当前地图实例包装对象。 */
   getMapInstance: () => MapInstance;
+  /** 列出当前已注册插件。 */
+  listPlugins: () => Array<{ id: string; type: string }>;
   /** 读取业务层原始普通图层交互配置。 */
   getBaseMapInteractive: () => MapLayerInteractiveOptions | null | undefined;
   /** 读取普通图层当前选中上下文。 */

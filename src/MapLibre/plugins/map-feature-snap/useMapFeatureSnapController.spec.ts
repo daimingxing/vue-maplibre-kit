@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ref } from 'vue';
 import { resetMapGlobalConfig, setMapGlobalConfig } from '../../../config';
 import { useMapFeatureSnapController } from './useMapFeatureSnapController';
 
@@ -364,6 +365,251 @@ describe('useMapFeatureSnapController', () => {
       point: { x: 5, y: 51 },
       lngLat: { lng: 5, lat: 51 },
     }).matched).toBe(true);
+
+    controller.destroy();
+  });
+
+  it('应仅在绘图或测量控件启用时展示 TerraDraw 吸附目标', () => {
+    const optionsRef = ref({
+      enabled: true,
+      control: {
+        panel: {
+          enabled: true,
+          terradraw: true,
+        },
+      },
+      terradraw: {
+        defaults: {
+          enabled: true,
+        },
+      },
+      internalContext: {
+        terradraw: {
+          drawEnabled: false,
+          measureEnabled: false,
+        },
+      },
+    });
+    const controller = useMapFeatureSnapController({
+      getOptions: () => optionsRef.value,
+      getMap: () => null,
+      listPlugins: () => [],
+    });
+
+    expect(controller.controlGroups.value.flatMap((group) => group.items)).toEqual([]);
+
+    optionsRef.value = {
+      ...optionsRef.value,
+      internalContext: {
+        terradraw: {
+          drawEnabled: true,
+          measureEnabled: false,
+        },
+      },
+    };
+
+    expect(controller.controlGroups.value.flatMap((group) => group.items)).toEqual([
+      {
+        id: 'terradraw',
+        kind: 'target',
+        label: 'TerraDraw 绘图/测量',
+        enabled: true,
+      },
+    ]);
+
+    controller.destroy();
+  });
+
+  it('应根据已注册插件展示 intersection 与 polygonEdge 吸附目标', () => {
+    const optionsRef = ref({
+      enabled: true,
+      control: {
+        panel: {
+          enabled: true,
+          intersection: true,
+          polygonEdge: true,
+        },
+      },
+    });
+    const controller = useMapFeatureSnapController({
+      getOptions: () => optionsRef.value,
+      getMap: () => null,
+      listPlugins: () => [
+        { id: 'intersectionPreview', type: 'intersectionPreview' },
+        { id: 'polygonEdgePreview', type: 'polygonEdgePreview' },
+      ],
+    });
+
+    expect(controller.controlGroups.value).toEqual([
+      {
+        id: 'plugin-targets',
+        label: '插件目标',
+        items: [
+          {
+            id: 'intersection',
+            kind: 'target',
+            label: '交点',
+            enabled: true,
+          },
+          {
+            id: 'polygonEdge',
+            kind: 'target',
+            label: '面边线',
+            enabled: true,
+          },
+        ],
+      },
+    ]);
+
+    controller.destroy();
+  });
+
+  it('panel 字段为 false 时应隐藏对应插件目标', () => {
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        enabled: true,
+        control: {
+          panel: {
+            enabled: true,
+            intersection: false,
+            polygonEdge: true,
+          },
+        },
+      }),
+      getMap: () => null,
+      listPlugins: () => [
+        { id: 'intersectionPreview', type: 'intersectionPreview' },
+        { id: 'polygonEdgePreview', type: 'polygonEdgePreview' },
+      ],
+    });
+
+    expect(controller.controlGroups.value[0].items).toEqual([
+      {
+        id: 'polygonEdge',
+        kind: 'target',
+        label: '面边线',
+        enabled: true,
+      },
+    ]);
+
+    controller.destroy();
+  });
+
+  it('应支持运行期切换 intersection 与 polygonEdge 吸附目标', () => {
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        enabled: true,
+        control: {
+          panel: {
+            enabled: true,
+            intersection: true,
+            polygonEdge: true,
+          },
+        },
+      }),
+      getMap: () => null,
+      listPlugins: () => [
+        { id: 'intersectionPreview', type: 'intersectionPreview' },
+        { id: 'polygonEdgePreview', type: 'polygonEdgePreview' },
+      ],
+    });
+
+    controller.toggleTarget('intersection');
+    controller.toggleTarget('polygonEdge');
+
+    expect(controller.controlGroups.value[0].items).toEqual([
+      {
+        id: 'intersection',
+        kind: 'target',
+        label: '交点',
+        enabled: false,
+      },
+      {
+        id: 'polygonEdge',
+        kind: 'target',
+        label: '面边线',
+        enabled: false,
+      },
+    ]);
+
+    controller.destroy();
+  });
+
+  it('关闭插件目标后应在有效配置中禁用对应内置目标', () => {
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        enabled: true,
+        control: {
+          panel: {
+            enabled: true,
+            intersection: true,
+            polygonEdge: true,
+          },
+        },
+        intersection: true,
+        polygonEdge: true,
+      }),
+      getMap: () => null,
+      listPlugins: () => [
+        { id: 'intersectionPreview', type: 'intersectionPreview' },
+        { id: 'polygonEdgePreview', type: 'polygonEdgePreview' },
+      ],
+    });
+
+    controller.setTargetEnabled('intersection', false);
+    controller.setTargetEnabled('polygonEdge', false);
+
+    expect(controller.effectiveOptions.value).toMatchObject({
+      intersection: {
+        enabled: false,
+      },
+      polygonEdge: {
+        enabled: false,
+      },
+    });
+
+    controller.destroy();
+  });
+
+  it('关闭 TerraDraw 插件目标后应关闭原生、地图目标和已绘制目标吸附', () => {
+    const controller = useMapFeatureSnapController({
+      getOptions: () => ({
+        enabled: true,
+        control: {
+          panel: {
+            enabled: true,
+            terradraw: true,
+          },
+        },
+        terradraw: {
+          defaults: {
+            enabled: true,
+            useNative: true,
+            useMapTargets: true,
+            drawnTargets: true,
+          },
+        },
+        internalContext: {
+          terradraw: {
+            drawEnabled: true,
+            measureEnabled: false,
+          },
+        },
+      }),
+      getMap: () => null,
+      listPlugins: () => [],
+    });
+
+    controller.setTargetEnabled('terradraw', false);
+
+    expect(controller.resolveTerradrawSnapOptions('draw', undefined)).toMatchObject({
+      enabled: false,
+      useNative: false,
+      useMapTargets: false,
+      drawnTargets: {
+        enabled: false,
+      },
+    });
 
     controller.destroy();
   });

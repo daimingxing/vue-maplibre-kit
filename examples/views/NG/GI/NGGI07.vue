@@ -103,7 +103,17 @@ const plugins = createBusinessPlugins({
       lineWidth: 5,
     },
     // 内置吸附按钮和面板按钮都会调用同一组运行期开关能力。
-    control: { enabled: true, position: "top-left", panel: { enabled: true } },
+    control: {
+      enabled: true,
+      position: "top-left",
+      panel: {
+        enabled: true,
+        businessLayers: true,
+        intersection: true,
+        polygonEdge: true,
+        terradraw: true,
+      },
+    },
     businessLayers: {
       // createBusinessPlugins 的简便写法中，key 会同时作为规则 id 和默认 label。
       // 单条规则仍可覆写 snapTo、priority、tolerancePx 等精细配置。

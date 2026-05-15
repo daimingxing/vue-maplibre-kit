@@ -677,6 +677,11 @@ export function useMapPluginHost(options: UseMapPluginHostOptions) {
       getOptions: () => descriptorRef.value.options,
       getMap,
       getMapInstance,
+      listPlugins: () =>
+        getDescriptors().map((pluginDescriptor) => ({
+          id: pluginDescriptor.id,
+          type: pluginDescriptor.type,
+        })),
       getBaseMapInteractive,
       getSelectedFeatureContext,
       clearHoverState,

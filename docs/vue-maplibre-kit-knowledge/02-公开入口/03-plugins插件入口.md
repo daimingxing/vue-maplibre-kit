@@ -20,6 +20,16 @@ import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 const plugins = createBusinessPlugins({
   sourceRegistry: registry,
   snap: {
+    control: {
+      enabled: true,
+      panel: {
+        enabled: true,
+        businessLayers: true,
+        intersection: true,
+        polygonEdge: true,
+        terradraw: true,
+      },
+    },
     businessLayers: {
       管线: "pipe-line",
     },
@@ -41,6 +51,7 @@ const plugins = createBusinessPlugins({
 - `sourceRegistry` 推荐放在顶层，供 `intersection` 和 `dxfExport` 复用。
 - `intersection` 不支持 `true`；自动模式必须传入 `targetSourceIds` 或 `targetLayerIds`，并提供顶层或局部 `sourceRegistry`。
 - 高级模式可以只传 `intersection.getCandidates`，此时候选线完全由业务方提供。
+- `snap.control.panel` 的四个分项只控制右键面板是否展示运行期开关；插件和控件是否存在由内部自动判断，不需要业务侧额外传入 `intersectionPreview`、`polygonEdgePreview` 或 TerraDraw 实例。
 - `dxfExport: true` 使用顶层 `sourceRegistry`、库内默认值和全局 DXF 默认值。
 - `dxfExport` 对象写法允许把 `sourceCrs`、`targetCrs`、`fileName` 等任务默认值扁平写在业务预设层。
 

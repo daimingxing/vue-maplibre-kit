@@ -66,4 +66,9 @@ export type {
   MapFeatureSnapSegmentInfo,
   MapFeatureSnapState,
   MapFeatureSnapTargetOptions,
+  MapFeatureSnapControlPanelOptions,
+  MapFeatureSnapControlGroup,
+  MapFeatureSnapControlItem,
+  MapFeatureSnapControlItemKind,
+  MapFeatureSnapPanelTargetKey,
 } from './types';

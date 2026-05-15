@@ -16,7 +16,8 @@ vi.mock('vue-maplibre-gl', () => ({}));
  * @returns 标准插件上下文
  */
 function createPluginContext(
-  optionsRef: { value: MapFeatureSnapOptions | any }
+  optionsRef: { value: MapFeatureSnapOptions | any },
+  listPlugins: () => Array<{ id: string; type: string }> = () => []
 ): MapPluginContext<typeof MAP_FEATURE_SNAP_PLUGIN_TYPE, MapFeatureSnapOptions> {
   return {
     descriptor: {
@@ -35,6 +36,7 @@ function createPluginContext(
     clearPluginHoverState: () => undefined,
     clearPluginSelectedFeature: () => undefined,
     toFeatureSnapshot: () => null,
+    listPlugins,
   };
 }
 
@@ -71,14 +73,22 @@ describe('mapFeatureSnapPlugin', () => {
       isActive: true,
       label: '吸附',
       panelEnabled: true,
-      rules: [
+      groups: [
         {
-          id: 'line-snap',
-          label: '线吸附',
-          enabled: true,
+          id: 'business-layers',
+          label: '业务图层',
+          items: [
+            {
+              id: 'line-snap',
+              kind: 'rule',
+              label: '线吸附',
+              enabled: true,
+            },
+          ],
         },
       ],
     });
+    expect(typeof controlItem?.props.onToggleTarget).toBe('function');
     expect(api?.isActive()).toBe(true);
 
     api?.toggle();
@@ -88,6 +98,52 @@ describe('mapFeatureSnapPlugin', () => {
       .toMatchObject({
         isActive: false,
       });
+
+    pluginInstance.destroy?.();
+  });
+
+  it('应把插件列表传给控制器，用于渲染已注册插件吸附目标', () => {
+    const optionsRef = ref({
+      enabled: true,
+      control: {
+        enabled: true,
+        panel: {
+          enabled: true,
+          intersection: true,
+          polygonEdge: true,
+        },
+      },
+    } as MapFeatureSnapOptions);
+    const pluginInstance = mapFeatureSnapPlugin.createInstance(
+      createPluginContext(optionsRef, () => [
+        { id: 'intersectionPreview', type: 'intersectionPreview' },
+        { id: 'polygonEdgePreview', type: 'polygonEdgePreview' },
+      ])
+    );
+    const controlItem = pluginInstance
+      .getRenderItems?.()
+      .find((item) => item.id === 'mapFeatureSnap-control');
+
+    expect(controlItem?.props.groups).toEqual([
+      {
+        id: 'plugin-targets',
+        label: '插件目标',
+        items: [
+          {
+            id: 'intersection',
+            kind: 'target',
+            label: '交点',
+            enabled: true,
+          },
+          {
+            id: 'polygonEdge',
+            kind: 'target',
+            label: '面边线',
+            enabled: true,
+          },
+        ],
+      },
+    ]);
 
     pluginInstance.destroy?.();
   });

@@ -94,6 +94,48 @@ export interface MapFeatureSnapTargetOptions {
   snapTo?: MapFeatureSnapMode[];
 }
 
+/** 吸附右键面板插件目标标识。 */
+export type MapFeatureSnapPanelTargetKey = 'intersection' | 'polygonEdge' | 'terradraw';
+
+/** 吸附右键面板配置。 */
+export interface MapFeatureSnapControlPanelOptions {
+  /** 是否启用右键配置面板。 */
+  enabled?: boolean;
+  /** 是否展示业务图层吸附规则；默认 true。 */
+  businessLayers?: boolean;
+  /** 是否展示交点吸附目标开关；默认 true。 */
+  intersection?: boolean;
+  /** 是否展示面边线吸附目标开关；默认 true。 */
+  polygonEdge?: boolean;
+  /** 是否展示 TerraDraw 绘图/测量吸附目标开关；默认 true。 */
+  terradraw?: boolean;
+}
+
+/** 吸附右键面板项类型。 */
+export type MapFeatureSnapControlItemKind = 'rule' | 'target';
+
+/** 吸附右键面板单项。 */
+export interface MapFeatureSnapControlItem {
+  /** 面板项唯一标识。 */
+  id: string;
+  /** 面板项类别。 */
+  kind: MapFeatureSnapControlItemKind;
+  /** 面板展示名称。 */
+  label: string;
+  /** 当前运行期是否启用。 */
+  enabled: boolean;
+}
+
+/** 吸附右键面板分组。 */
+export interface MapFeatureSnapControlGroup {
+  /** 分组唯一标识。 */
+  id: string;
+  /** 分组展示名称。 */
+  label: string;
+  /** 分组中的面板项。 */
+  items: MapFeatureSnapControlItem[];
+}
+
 /** 地图吸附插件配置。 */
 export interface MapFeatureSnapOptions {
   /** 是否启用整个吸附插件。 */
@@ -107,12 +149,7 @@ export interface MapFeatureSnapOptions {
     /** 控件可访问文本。 */
     label?: string;
     /** 右键配置面板；默认关闭。 */
-    panel?:
-      | boolean
-      | {
-          /** 是否启用右键配置面板。 */
-          enabled?: boolean;
-        };
+    panel?: boolean | MapFeatureSnapControlPanelOptions;
   };
   /** 全局默认吸附范围。 */
   defaultTolerancePx?: number;
@@ -133,6 +170,19 @@ export interface MapFeatureSnapOptions {
     /** 测量控件默认值。 */
     measure?: TerradrawSnapSharedOptions | boolean;
   };
+  /**
+   * 组件内部注入的运行期上下文。
+   * 业务侧不需要传该字段，公开文档也不推荐业务直接使用。
+   */
+  internalContext?: {
+    /** TerraDraw / Measure 控件当前是否启用。 */
+    terradraw?: {
+      /** 绘图控件是否启用。 */
+      drawEnabled?: boolean;
+      /** 测量控件是否启用。 */
+      measureEnabled?: boolean;
+    };
+  };
 }
 
 /** 地图吸附插件 API。 */
@@ -143,6 +193,10 @@ export interface MapFeatureSnapPluginApi {
   deactivate: () => void;
   /** 运行期切换吸附能力。 */
   toggle: () => void;
+  /** 设置插件吸附目标运行期开关。 */
+  setTargetEnabled: (targetId: MapFeatureSnapPanelTargetKey, enabled: boolean) => void;
+  /** 切换插件吸附目标运行期开关。 */
+  toggleTarget: (targetId: MapFeatureSnapPanelTargetKey) => void;
   /** 读取当前运行期吸附是否开启。 */
   isActive: () => boolean;
   /** 主动清空当前吸附预览。 */
