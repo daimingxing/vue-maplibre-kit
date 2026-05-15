@@ -81,6 +81,17 @@ function addRegion(): void {
 - `removeProperties(featureId, keys, options)`：删除草稿属性。
 - `clear()`：清空全部线草稿。
 
+## 生成要素与 generatedKind
+
+lineDraft 会生成两类草稿要素，业务交互回调中的 `context.generatedKind` 会读取当前草稿要素的 `feature.properties.generatedKind`。
+
+| generatedKind | 公开常量 | 含义 |
+| --- | --- | --- |
+| `line-extension-draft` | `LINE_DRAFT_PREVIEW_EXTENSION_KIND` | `previewLine()` 生成的线延长草稿 |
+| `line-corridor-draft` | `LINE_DRAFT_PREVIEW_CORRIDOR_KIND` | `replacePreviewRegion()` 生成的线廊面草稿 |
+
+需要判断草稿类型时，优先使用 `context.generatedKind` 或要素属性里的 `generatedKind`。`LINE_DRAFT_PREVIEW_SOURCE_ID`、`LINE_DRAFT_PREVIEW_LINE_LAYER_ID`、`LINE_DRAFT_PREVIEW_FILL_LAYER_ID` 用于高级调试、样式覆盖、图层识别或测试断言，不建议作为普通业务判断的主路径。
+
 ## 业务配合
 
 真实业务通常先通过 `businessMap.feature.toBusinessContext(context)` 或 `businessMap.feature.resolveSelectedLine()` 拿到正式线要素，再传给 lineDraft。`origin` 建议使用 `MapSourceFeatureRef`，方便后续知道草稿来自哪条正式要素。
@@ -88,7 +99,7 @@ function addRegion(): void {
 ## 示例引用
 
 - `examples/views/NG/GI/NGGI08.vue`：选中线段、生成延长线、生成线廊、读写草稿属性、读取草稿 GeoJSON。
-- `examples/views/NG/GI/NGGI06.vue`：五插件总览中的 `previewLine`、`previewRegion`、`clearDraft`。
+- `examples/views/NG/GI/NGGI06.vue`：业务插件总览中的 `previewLine`、`previewRegion`、`clearDraft`。
 
 ## 风险提示
 

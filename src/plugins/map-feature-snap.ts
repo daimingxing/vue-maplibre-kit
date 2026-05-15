@@ -51,8 +51,11 @@ export type { MapFeatureSnapMode } from '../MapLibre/plugins/map-feature-snap';
 /** 吸附插件配置类型。初始化地图吸附插件时使用。 */
 export type { MapFeatureSnapOptions } from '../MapLibre/plugins/map-feature-snap';
 
-/** 普通图层吸附配置类型。给业务普通图层声明吸附规则时使用。 */
-export type { MapFeatureSnapOrdinaryLayerOptions } from '../MapLibre/plugins/map-feature-snap';
+/** 业务图层吸附配置类型。给业务图层声明吸附规则时使用。 */
+export type { MapFeatureSnapBusinessLayerOptions } from '../MapLibre/plugins/map-feature-snap';
+
+/** TerraDraw 已绘制要素吸附目标配置类型。 */
+export type { MapFeatureSnapDrawnTargetOptions } from '../MapLibre/plugins/map-feature-snap';
 
 /** 吸附插件 API 类型。业务层直接调用吸附插件实例时使用。 */
 export type { MapFeatureSnapPluginApi } from '../MapLibre/plugins/map-feature-snap';
@@ -71,3 +74,6 @@ export type { MapFeatureSnapRuleFilterContext } from '../MapLibre/plugins/map-fe
 
 /** 吸附线段信息类型。需要读取命中线段细节时使用。 */
 export type { MapFeatureSnapSegmentInfo } from '../MapLibre/plugins/map-feature-snap';
+
+/** 内置吸附目标配置类型。配置交点或面边线默认吸附规则时使用。 */
+export type { MapFeatureSnapTargetOptions } from '../MapLibre/plugins/map-feature-snap';

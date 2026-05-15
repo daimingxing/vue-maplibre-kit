@@ -12,6 +12,9 @@ export { lineDraftPreviewPlugin } from '../MapLibre/plugins/line-draft-preview';
 /** 线草稿线廊类型常量。识别草稿生成的区域要素时使用。 */
 export { LINE_DRAFT_PREVIEW_CORRIDOR_KIND } from '../MapLibre/plugins/line-draft-preview';
 
+/** 线草稿延长线类型常量。识别草稿生成的延长线要素时使用。 */
+export { LINE_DRAFT_PREVIEW_EXTENSION_KIND } from '../MapLibre/plugins/line-draft-preview';
+
 /** 线草稿填充图层 ID 常量。需要直接控制草稿面图层时使用。 */
 export { LINE_DRAFT_PREVIEW_FILL_LAYER_ID } from '../MapLibre/plugins/line-draft-preview';
 

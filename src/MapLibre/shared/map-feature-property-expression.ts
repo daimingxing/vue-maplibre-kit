@@ -1,16 +1,99 @@
 /** 简化后的 MapLibre 表达式值。 */
-type MapExpressionValue = any;
+export type MapExpressionValue =
+  | string
+  | number
+  | boolean
+  | null
+  | MapExpression
+  | { [key: string]: MapExpressionValue };
+
+/** MapLibre 表达式数组。 */
+export type MapExpression = MapExpressionValue[];
 
 /** 可参与属性比较的字面量值。 */
 type FeaturePropertyComparableValue = string | number | boolean | null;
+
+/** 业务属性名。 */
+type FeaturePropertyKey = string;
 
 /**
  * 生成读取 feature properties 的 `get` 表达式。
  * @param propertyKey 属性键名
  * @returns MapLibre `get` 表达式
  */
-function getFeaturePropertyExpression(propertyKey: string): any {
+export function getFeatureProperty(propertyKey: FeaturePropertyKey): MapExpression {
   return ['get', propertyKey];
+}
+
+/**
+ * 生成带默认值的属性取值表达式。
+ * @param propertyKey 属性键名
+ * @param fallbackValue 属性不存在或为空时使用的默认值
+ * @returns MapLibre `case` 表达式，空字符串、缺失值和 null 都会回退到默认值
+ */
+function getFeaturePropertyWithFallback(
+  propertyKey: FeaturePropertyKey,
+  fallbackValue: MapExpressionValue
+): MapExpression {
+  const propertyExpression = getFeatureProperty(propertyKey);
+  return [
+    'case',
+    ['==', propertyExpression, ''],
+    fallbackValue,
+    ['coalesce', propertyExpression, fallbackValue],
+  ];
+}
+
+/**
+ * 读取属性并转换为颜色表达式。
+ * @param propertyKey 属性键名
+ * @param fallbackValue 属性不存在或为空时使用的默认颜色
+ * @returns MapLibre `to-color` 表达式
+ */
+export function getFeatureColor(
+  propertyKey: FeaturePropertyKey,
+  fallbackValue: string
+): MapExpression {
+  return ['to-color', getFeaturePropertyWithFallback(propertyKey, fallbackValue)];
+}
+
+/**
+ * 读取属性并转换为数值表达式。
+ * @param propertyKey 属性键名
+ * @param fallbackValue 属性不存在或为空时使用的默认数值
+ * @returns MapLibre `to-number` 表达式
+ */
+export function getFeatureNumber(
+  propertyKey: FeaturePropertyKey,
+  fallbackValue: number
+): MapExpression {
+  return ['to-number', getFeaturePropertyWithFallback(propertyKey, fallbackValue)];
+}
+
+/**
+ * 读取属性并转换为字符串表达式。
+ * @param propertyKey 属性键名
+ * @param fallbackValue 属性不存在或为空时使用的默认字符串
+ * @returns MapLibre `to-string` 表达式
+ */
+export function getFeatureString(
+  propertyKey: FeaturePropertyKey,
+  fallbackValue: string
+): MapExpression {
+  return ['to-string', getFeaturePropertyWithFallback(propertyKey, fallbackValue)];
+}
+
+/**
+ * 读取属性并转换为布尔表达式。
+ * @param propertyKey 属性键名
+ * @param fallbackValue 属性不存在或为空时使用的默认布尔值
+ * @returns MapLibre `to-boolean` 表达式
+ */
+export function getFeatureBoolean(
+  propertyKey: FeaturePropertyKey,
+  fallbackValue: boolean
+): MapExpression {
+  return ['to-boolean', getFeaturePropertyWithFallback(propertyKey, fallbackValue)];
 }
 
 /**
@@ -31,7 +114,7 @@ export function whenFeaturePropertyEquals(
 ): any {
   return [
     'case',
-    ['==', getFeaturePropertyExpression(propertyKey), expectedValue],
+    ['==', getFeatureProperty(propertyKey), expectedValue],
     matchedValue,
     fallbackValue,
   ];
@@ -57,7 +140,7 @@ export function whenFeaturePropertyIn(
     return fallbackValue;
   }
 
-  return ['match', getFeaturePropertyExpression(propertyKey), [...expectedValues], matchedValue, fallbackValue];
+  return ['match', getFeatureProperty(propertyKey), [...expectedValues], matchedValue, fallbackValue];
 }
 
 /**
@@ -82,7 +165,7 @@ export function matchFeatureProperty(
 
   return [
     'match',
-    getFeaturePropertyExpression(propertyKey),
+    getFeatureProperty(propertyKey),
     ...entries.flatMap(([expectedValue, matchedValue]) => [expectedValue, matchedValue]),
     fallbackValue,
   ];

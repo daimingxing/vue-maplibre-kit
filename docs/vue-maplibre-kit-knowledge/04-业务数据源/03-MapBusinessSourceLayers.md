@@ -18,6 +18,23 @@
 
 `source` 来自 `createMapBusinessSource`，`layers` 来自图层工厂或 `createLayerGroup`。
 
+如果页面使用 registry 管理多个动态 source，可以直接渲染注册表里的当前列表：
+
+```vue
+<MapLibreInit ref="mapRef" :map-options="mapOptions" :controls="controls">
+  <template #dataSource>
+    <MapBusinessSourceLayers
+      v-for="source in sourceRegistry.listSources()"
+      :key="source.sourceId"
+      :source="source"
+      :layers="source.layers"
+    />
+  </template>
+</MapLibreInit>
+```
+
+动态 source 和动态 layer 分工不同：动态 source 由 `createMapBusinessSourceRegistry()` 管理，通过 `addSource()`、`setSources()`、`removeSource()`、`clearSources()` 控制 source 集合；动态 layer 由 `createMapBusinessSource({ layers })` 管理，`layers` 可以传 `ref`、`computed` 或 getter，不需要额外新增 layer registry。
+
 ## 适合声明什么
 
 - 正式业务 source。

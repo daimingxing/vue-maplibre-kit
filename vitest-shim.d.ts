@@ -4,12 +4,24 @@
  * 一旦安装真实依赖，该声明会自动被真实类型覆盖。
  */
 declare module 'vitest' {
+  interface ExpectTypeHelper {
+    toEqualTypeOf: <T>() => void;
+    toMatchTypeOf: <T>() => void;
+  }
+
   // 覆盖常用测试 API，保证离线/最小依赖场景下类型可解析。
   export const describe: any;
   export const it: any;
+  export const test: any;
   export const expect: any;
-  export const expectTypeOf: any;
+  export const expectTypeOf: {
+    <T>(): ExpectTypeHelper;
+    (value: any): ExpectTypeHelper;
+  };
+  export const beforeEach: any;
+  export const beforeAll: any;
   export const afterEach: any;
+  export const afterAll: any;
   export const vi: any;
 }
 

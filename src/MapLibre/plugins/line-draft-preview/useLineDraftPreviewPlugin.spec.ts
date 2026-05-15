@@ -45,6 +45,7 @@ function createPluginContext(
     clearSelectedFeature: () => undefined,
     clearPluginHoverState: () => undefined,
     clearPluginSelectedFeature: () => undefined,
+    listPlugins: () => [],
     toFeatureSnapshot: () => null,
   };
 }

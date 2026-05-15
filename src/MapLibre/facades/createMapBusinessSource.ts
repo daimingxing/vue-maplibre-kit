@@ -24,14 +24,14 @@
  * - 地图实例初始化，请先看 `core/mapLibre-init.vue`
  * - TerraDraw 线装饰，请先看 `terradraw/useTerradrawLineDecoration.ts`
  */
-import { reactive, ref, toValue, watch } from 'vue';
-import type { MaybeRefOrGetter, Ref } from 'vue';
-import type { GeoJSONSourceSpecification } from 'maplibre-gl';
+import { markRaw, reactive, ref, toValue, watch } from "vue";
+import type { MaybeRefOrGetter, Ref } from "vue";
+import type { GeoJSONSourceSpecification } from "maplibre-gl";
 import type {
   FeatureProperties,
   MapFeatureId,
   SaveFeaturePropertiesResult,
-} from '../composables/useMapDataUpdate';
+} from "../composables/useMapDataUpdate";
 import {
   clonePlainData,
   removeFeaturePropertiesInCollection,
@@ -40,14 +40,14 @@ import {
   saveFeaturePropertiesInCollection,
   type MapFeaturePropertyPanelState,
   type MapFeaturePropertyPolicy,
-} from '../shared/map-feature-data';
+} from "../shared/map-feature-data";
 import {
   createMapSourceFeatureRef,
   type MapCommonFeature,
   type MapCommonFeatureCollection,
   type MapSourceFeatureRef,
-} from '../shared/map-common-tools';
-import type { MapBusinessLayerDescriptor } from './mapBusinessLayer';
+} from "../shared/map-common-tools";
+import type { MapBusinessLayerDescriptor } from "./mapBusinessLayer";
 
 /**
  * 业务 GeoJSON source 可透传给组件的属性集合。
@@ -58,33 +58,33 @@ export interface MapBusinessSourceProps {
   /** 数据源唯一标识。 */
   sourceId: string;
   /** 当前要渲染的 GeoJSON 数据。 */
-  data: GeoJSONSourceSpecification['data'];
+  data: GeoJSONSourceSpecification["data"];
   /** 最大缩放级别。 */
-  maxzoom?: GeoJSONSourceSpecification['maxzoom'];
+  maxzoom?: GeoJSONSourceSpecification["maxzoom"];
   /** 版权信息。 */
-  attribution?: GeoJSONSourceSpecification['attribution'];
+  attribution?: GeoJSONSourceSpecification["attribution"];
   /** 数据缓冲区大小。 */
-  buffer?: GeoJSONSourceSpecification['buffer'];
+  buffer?: GeoJSONSourceSpecification["buffer"];
   /** 简化容差。 */
-  tolerance?: GeoJSONSourceSpecification['tolerance'];
+  tolerance?: GeoJSONSourceSpecification["tolerance"];
   /** 是否启用聚合。 */
-  cluster?: GeoJSONSourceSpecification['cluster'];
+  cluster?: GeoJSONSourceSpecification["cluster"];
   /** 聚合半径。 */
-  clusterRadius?: GeoJSONSourceSpecification['clusterRadius'];
+  clusterRadius?: GeoJSONSourceSpecification["clusterRadius"];
   /** 聚合最大缩放级别。 */
-  clusterMaxZoom?: GeoJSONSourceSpecification['clusterMaxZoom'];
+  clusterMaxZoom?: GeoJSONSourceSpecification["clusterMaxZoom"];
   /** 聚合最小点数量。 */
-  clusterMinPoints?: GeoJSONSourceSpecification['clusterMinPoints'];
+  clusterMinPoints?: GeoJSONSourceSpecification["clusterMinPoints"];
   /** 聚合属性配置。 */
-  clusterProperties?: GeoJSONSourceSpecification['clusterProperties'];
+  clusterProperties?: GeoJSONSourceSpecification["clusterProperties"];
   /** 是否启用 lineMetrics。 */
-  lineMetrics?: GeoJSONSourceSpecification['lineMetrics'];
+  lineMetrics?: GeoJSONSourceSpecification["lineMetrics"];
   /** 是否自动生成顶层 id。 */
-  generateId?: GeoJSONSourceSpecification['generateId'];
+  generateId?: GeoJSONSourceSpecification["generateId"];
   /** 顶层 ID 提升字段。 */
-  promoteId?: GeoJSONSourceSpecification['promoteId'];
+  promoteId?: GeoJSONSourceSpecification["promoteId"];
   /** source 级过滤条件。 */
-  filter?: GeoJSONSourceSpecification['filter'];
+  filter?: GeoJSONSourceSpecification["filter"];
 }
 
 /**
@@ -92,7 +92,7 @@ export interface MapBusinessSourceProps {
  */
 export type MapBusinessSourceOptions = Omit<
   MapBusinessSourceProps,
-  'sourceId' | 'data' | 'promoteId'
+  "sourceId" | "data" | "promoteId"
 >;
 
 /**
@@ -100,7 +100,9 @@ export type MapBusinessSourceOptions = Omit<
  * 统一复用仓库现有的 `MaybeRefOrGetter` 约定，
  * 允许直接传数组，也允许传 `ref / computed / getter`。
  */
-type MapBusinessSourceLayersInput = MaybeRefOrGetter<MapBusinessLayerDescriptor[]>;
+type MapBusinessSourceLayersInput = MaybeRefOrGetter<
+  MapBusinessLayerDescriptor[]
+>;
 
 /**
  * `promoteId` 策略。
@@ -195,15 +197,19 @@ export interface MapBusinessSource {
   /** 读取当前 source 下声明的全部业务图层。 */
   getLayers: () => MapBusinessLayerDescriptor[];
   /** 按 layerId 读取单个业务图层描述。 */
-  getLayer: (layerId: string | null | undefined) => MapBusinessLayerDescriptor | null;
+  getLayer: (
+    layerId: string | null | undefined,
+  ) => MapBusinessLayerDescriptor | null;
   /** 按 layerId 解析当前命中的属性治理规则。 */
-  resolvePropertyPolicy: (layerId: string | null | undefined) => MapFeaturePropertyPolicy | null;
+  resolvePropertyPolicy: (
+    layerId: string | null | undefined,
+  ) => MapFeaturePropertyPolicy | null;
   /** 按业务 ID 解析最新要素。 */
   resolveFeature: (featureId: MapFeatureId | null) => MapCommonFeature | null;
   /** 按业务 ID 解析属性面板态。 */
   resolvePropertyPanelState: (
     featureId: MapFeatureId | null,
-    layerId?: string | null
+    layerId?: string | null,
   ) => MapFeaturePropertyPanelState | null;
   /** 用最新要素数组整体替换当前 source。 */
   replaceFeatures: (nextFeatures: MapCommonFeature[]) => boolean;
@@ -211,55 +217,74 @@ export interface MapBusinessSource {
   saveProperties: (
     featureId: MapFeatureId,
     newProperties: FeatureProperties,
-    layerId?: string | null
+    layerId?: string | null,
   ) => SaveFeaturePropertiesResult;
   /** 按业务 ID 显式删除属性。 */
   removeProperties: (
     featureId: MapFeatureId,
     propertyKeys: readonly string[],
-    layerId?: string | null
+    layerId?: string | null,
   ) => SaveFeaturePropertiesResult;
   /** 将业务 ID 归一化为标准来源引用。 */
-  toFeatureRef: (featureId: MapFeatureId | null, layerId?: string | null) => MapSourceFeatureRef | null;
+  toFeatureRef: (
+    featureId: MapFeatureId | null,
+    layerId?: string | null,
+  ) => MapSourceFeatureRef | null;
   /** 判断任意要素是否命中当前 source 的业务 ID。 */
-  matchesFeature: (feature: MapCommonFeature | null | undefined, featureId: MapFeatureId) => boolean;
+  matchesFeature: (
+    feature: MapCommonFeature | null | undefined,
+    featureId: MapFeatureId,
+  ) => boolean;
 }
 
 /**
  * 业务 source 注册表。
  */
 export interface MapBusinessSourceRegistry {
+  /** 动态追加单个 source。 */
+  addSource: (source: MapBusinessSource) => void;
+  /** 批量替换全部 source。 */
+  setSources: (sources: MapBusinessSource[]) => void;
+  /** 动态移除指定 source。 */
+  removeSource: (sourceId: string | null | undefined) => boolean;
+  /** 清空全部 source。 */
+  clearSources: () => void;
   /** 读取指定 source。 */
   getSource: (sourceId: string | null | undefined) => MapBusinessSource | null;
   /** 列出全部已注册 source。 */
   listSources: () => MapBusinessSource[];
   /** 按标准来源引用解析要素。 */
-  resolveFeature: (featureRef: MapSourceFeatureRef | null) => MapCommonFeature | null;
+  resolveFeature: (
+    featureRef: MapSourceFeatureRef | null,
+  ) => MapCommonFeature | null;
   /** 按标准来源引用解析属性面板态。 */
   resolveFeaturePropertyPanelState: (
-    featureRef: MapSourceFeatureRef | null
+    featureRef: MapSourceFeatureRef | null,
   ) => MapFeaturePropertyPanelState | null;
   /** 替换指定 source 的完整要素数组。 */
-  replaceFeatures: (sourceId: string, nextFeatures: MapCommonFeature[]) => boolean;
+  replaceFeatures: (
+    sourceId: string,
+    nextFeatures: MapCommonFeature[],
+  ) => boolean;
   /** 向指定 source 写回属性。 */
   saveProperties: (
     sourceId: string,
     featureId: MapFeatureId,
     newProperties: FeatureProperties,
-    layerId?: string | null
+    layerId?: string | null,
   ) => SaveFeaturePropertiesResult;
   /** 向指定 source 显式删除属性。 */
   removeProperties: (
     sourceId: string,
     featureId: MapFeatureId,
     propertyKeys: readonly string[],
-    layerId?: string | null
+    layerId?: string | null,
   ) => SaveFeaturePropertiesResult;
   /** 创建标准来源引用。 */
   createFeatureRef: (
     sourceId: string,
     featureId: MapFeatureId | null,
-    layerId?: string | null
+    layerId?: string | null,
   ) => MapSourceFeatureRef | null;
 }
 
@@ -280,7 +305,7 @@ interface NormalizedBusinessSourceSnapshot {
  */
 function createEmptyBusinessFeatureCollection(): MapCommonFeatureCollection {
   return {
-    type: 'FeatureCollection',
+    type: "FeatureCollection",
     features: [],
   };
 }
@@ -291,7 +316,7 @@ function createEmptyBusinessFeatureCollection(): MapCommonFeatureCollection {
  * @returns 合法 FeatureCollection；为空时回退到空集合
  */
 function resolveBusinessSourceCollection(
-  featureCollection: MapCommonFeatureCollection | null | undefined
+  featureCollection: MapCommonFeatureCollection | null | undefined,
 ): MapCommonFeatureCollection {
   if (!featureCollection) {
     // 业务页常见的异步首屏会先给出 undefined / null，这里统一回退为空集合，
@@ -307,9 +332,15 @@ function resolveBusinessSourceCollection(
  * @param keys 原始键列表
  * @returns 干净的键数组；无有效值时返回 undefined
  */
-function normalizePropertyPolicyKeys(keys?: readonly string[] | null): string[] | undefined {
+function normalizePropertyPolicyKeys(
+  keys?: readonly string[] | null,
+): string[] | undefined {
   const nextKeys = Array.from(
-    new Set((keys || []).filter((key) => typeof key === 'string' && key.trim() !== ''))
+    new Set(
+      (keys || []).filter(
+        (key) => typeof key === "string" && key.trim() !== "",
+      ),
+    ),
   );
 
   return nextKeys.length ? nextKeys : undefined;
@@ -323,16 +354,24 @@ function normalizePropertyPolicyKeys(keys?: readonly string[] | null): string[] 
  * @returns 当前策略声明过的字段集合
  */
 function collectDeclaredPropertyPolicyKeys(
-  policy?: MapFeaturePropertyPolicy | null
+  policy?: MapFeaturePropertyPolicy | null,
 ): Set<string> {
   const declaredKeys = new Set<string>();
 
-  normalizePropertyPolicyKeys(policy?.fixedKeys)?.forEach((key) => declaredKeys.add(key));
-  normalizePropertyPolicyKeys(policy?.hiddenKeys)?.forEach((key) => declaredKeys.add(key));
-  normalizePropertyPolicyKeys(policy?.readonlyKeys)?.forEach((key) => declaredKeys.add(key));
-  normalizePropertyPolicyKeys(policy?.removableKeys)?.forEach((key) => declaredKeys.add(key));
+  normalizePropertyPolicyKeys(policy?.fixedKeys)?.forEach((key) =>
+    declaredKeys.add(key),
+  );
+  normalizePropertyPolicyKeys(policy?.hiddenKeys)?.forEach((key) =>
+    declaredKeys.add(key),
+  );
+  normalizePropertyPolicyKeys(policy?.readonlyKeys)?.forEach((key) =>
+    declaredKeys.add(key),
+  );
+  normalizePropertyPolicyKeys(policy?.removableKeys)?.forEach((key) =>
+    declaredKeys.add(key),
+  );
   Object.keys(policy?.rules || {}).forEach((key) => {
-    if (key.trim() !== '') {
+    if (key.trim() !== "") {
       declaredKeys.add(key);
     }
   });
@@ -352,9 +391,11 @@ function collectDeclaredPropertyPolicyKeys(
 function mergePropertyPolicyKeys(
   sourceKeys: readonly string[] | undefined,
   layerKeys: readonly string[] | undefined,
-  overriddenKeys: ReadonlySet<string>
+  overriddenKeys: ReadonlySet<string>,
 ): string[] | undefined {
-  const inheritedKeys = (sourceKeys || []).filter((key) => !overriddenKeys.has(key));
+  const inheritedKeys = (sourceKeys || []).filter(
+    (key) => !overriddenKeys.has(key),
+  );
   return normalizePropertyPolicyKeys([...inheritedKeys, ...(layerKeys || [])]);
 }
 
@@ -372,7 +413,7 @@ function mergePropertyPolicyKeys(
  */
 function mergeMapFeaturePropertyPolicy(
   sourcePolicy?: MapFeaturePropertyPolicy | null,
-  layerPolicy?: MapFeaturePropertyPolicy | null
+  layerPolicy?: MapFeaturePropertyPolicy | null,
 ): MapFeaturePropertyPolicy | null {
   if (!sourcePolicy && !layerPolicy) {
     return null;
@@ -383,22 +424,22 @@ function mergeMapFeaturePropertyPolicy(
   const fixedKeys = mergePropertyPolicyKeys(
     sourcePolicy?.fixedKeys,
     layerPolicy?.fixedKeys,
-    overriddenKeys
+    overriddenKeys,
   );
   const hiddenKeys = mergePropertyPolicyKeys(
     sourcePolicy?.hiddenKeys,
     layerPolicy?.hiddenKeys,
-    overriddenKeys
+    overriddenKeys,
   );
   const readonlyKeys = mergePropertyPolicyKeys(
     sourcePolicy?.readonlyKeys,
     layerPolicy?.readonlyKeys,
-    overriddenKeys
+    overriddenKeys,
   );
   const removableKeys = mergePropertyPolicyKeys(
     sourcePolicy?.removableKeys,
     layerPolicy?.removableKeys,
-    overriddenKeys
+    overriddenKeys,
   );
 
   if (fixedKeys) {
@@ -414,7 +455,10 @@ function mergeMapFeaturePropertyPolicy(
     nextPolicy.removableKeys = removableKeys;
   }
 
-  const nextRules = new Map<string, NonNullable<MapFeaturePropertyPolicy['rules']>[string]>();
+  const nextRules = new Map<
+    string,
+    NonNullable<MapFeaturePropertyPolicy["rules"]>[string]
+  >();
   Object.entries(sourcePolicy?.rules || {}).forEach(([key, rule]) => {
     if (!overriddenKeys.has(key)) {
       nextRules.set(key, { ...rule });
@@ -442,8 +486,10 @@ function mergeMapFeaturePropertyPolicy(
  * @returns 是否为稳定 ID 路径
  */
 function hasStableBusinessSourceIdStrategy(
-  options: CreateMapBusinessSourceOptions
-): options is CreateMapBusinessSourcePromoteIdOptions | CreateMapBusinessSourceFeatureIdKeyOptions {
+  options: CreateMapBusinessSourceOptions,
+): options is
+  | CreateMapBusinessSourcePromoteIdOptions
+  | CreateMapBusinessSourceFeatureIdKeyOptions {
   return hasPromoteIdStrategy(options) || hasFeatureIdKeyStrategy(options);
 }
 
@@ -453,16 +499,16 @@ function hasStableBusinessSourceIdStrategy(
  * @returns 策略类型
  */
 function resolveBusinessSourceIdStrategy(
-  options: CreateMapBusinessSourceOptions
-): 'promoteId' | 'featureIdKey' | 'getFeatureId' | 'invalid' {
+  options: CreateMapBusinessSourceOptions,
+): "promoteId" | "featureIdKey" | "getFeatureId" | "invalid" {
   const strategyList = [
-    options.promoteId ? 'promoteId' : null,
-    options.featureIdKey ? 'featureIdKey' : null,
-    options.getFeatureId ? 'getFeatureId' : null,
-  ].filter(Boolean) as Array<'promoteId' | 'featureIdKey' | 'getFeatureId'>;
+    options.promoteId ? "promoteId" : null,
+    options.featureIdKey ? "featureIdKey" : null,
+    options.getFeatureId ? "getFeatureId" : null,
+  ].filter(Boolean) as Array<"promoteId" | "featureIdKey" | "getFeatureId">;
 
   if (strategyList.length !== 1) {
-    return 'invalid';
+    return "invalid";
   }
 
   return strategyList[0];
@@ -474,9 +520,9 @@ function resolveBusinessSourceIdStrategy(
  * @returns 是否为 `promoteId` 路径
  */
 function hasPromoteIdStrategy(
-  options: CreateMapBusinessSourceOptions
+  options: CreateMapBusinessSourceOptions,
 ): options is CreateMapBusinessSourcePromoteIdOptions {
-  return resolveBusinessSourceIdStrategy(options) === 'promoteId';
+  return resolveBusinessSourceIdStrategy(options) === "promoteId";
 }
 
 /**
@@ -485,9 +531,9 @@ function hasPromoteIdStrategy(
  * @returns 是否为 `featureIdKey` 路径
  */
 function hasFeatureIdKeyStrategy(
-  options: CreateMapBusinessSourceOptions
+  options: CreateMapBusinessSourceOptions,
 ): options is CreateMapBusinessSourceFeatureIdKeyOptions {
-  return resolveBusinessSourceIdStrategy(options) === 'featureIdKey';
+  return resolveBusinessSourceIdStrategy(options) === "featureIdKey";
 }
 
 /**
@@ -496,9 +542,9 @@ function hasFeatureIdKeyStrategy(
  * @returns 是否为 `getFeatureId` 路径
  */
 function hasGetFeatureIdStrategy(
-  options: CreateMapBusinessSourceOptions
+  options: CreateMapBusinessSourceOptions,
 ): options is CreateMapBusinessSourceGetterOptions {
-  return resolveBusinessSourceIdStrategy(options) === 'getFeatureId';
+  return resolveBusinessSourceIdStrategy(options) === "getFeatureId";
 }
 
 /**
@@ -515,12 +561,17 @@ function buildBusinessSourceStrategyMessage(sourceId: string): string {
  * @param options 业务 source 配置
  * @returns 是否需要补齐顶层 ID
  */
-function shouldSyncTopLevelFeatureId(options: CreateMapBusinessSourceOptions): boolean {
+function shouldSyncTopLevelFeatureId(
+  options: CreateMapBusinessSourceOptions,
+): boolean {
   if (options.syncFeatureIdToTopLevel !== undefined) {
     return options.syncFeatureIdToTopLevel;
   }
 
-  return !hasPromoteIdStrategy(options) && resolveBusinessSourceIdStrategy(options) !== 'invalid';
+  return (
+    !hasPromoteIdStrategy(options) &&
+    resolveBusinessSourceIdStrategy(options) !== "invalid"
+  );
 }
 
 /**
@@ -531,7 +582,7 @@ function shouldSyncTopLevelFeatureId(options: CreateMapBusinessSourceOptions): b
  */
 function resolveBusinessFeatureId(
   feature: MapCommonFeature | null | undefined,
-  options: CreateMapBusinessSourceOptions
+  options: CreateMapBusinessSourceOptions,
 ): MapFeatureId | null {
   if (!feature) {
     return null;
@@ -539,12 +590,16 @@ function resolveBusinessFeatureId(
 
   if (hasPromoteIdStrategy(options)) {
     const propertyId = feature.properties?.[options.promoteId];
-    return propertyId === undefined || propertyId === null ? null : (propertyId as MapFeatureId);
+    return propertyId === undefined || propertyId === null
+      ? null
+      : (propertyId as MapFeatureId);
   }
 
   if (hasFeatureIdKeyStrategy(options)) {
     const propertyId = feature.properties?.[options.featureIdKey];
-    return propertyId === undefined || propertyId === null ? null : (propertyId as MapFeatureId);
+    return propertyId === undefined || propertyId === null
+      ? null
+      : (propertyId as MapFeatureId);
   }
 
   if (hasGetFeatureIdStrategy(options)) {
@@ -561,7 +616,7 @@ function resolveBusinessFeatureId(
  * @returns 需要保护的属性键
  */
 function resolveBusinessSourceProtectedKeys(
-  options: CreateMapBusinessSourceOptions
+  options: CreateMapBusinessSourceOptions,
 ): readonly string[] {
   if (hasPromoteIdStrategy(options)) {
     return [options.promoteId];
@@ -584,21 +639,21 @@ function resolveBusinessSourceProtectedKeys(
 function buildBusinessSourceValidationMessage(
   sourceId: string,
   missingIndexes: number[],
-  duplicatedIds: Array<string | number>
+  duplicatedIds: Array<string | number>,
 ): string {
   const messageList: string[] = [];
 
   if (missingIndexes.length > 0) {
     messageList.push(
-      `存在无法解析稳定 ID 的要素（序号：${missingIndexes.map((index) => index + 1).join('、')}）`
+      `存在无法解析稳定 ID 的要素（序号：${missingIndexes.map((index) => index + 1).join("、")}）`,
     );
   }
 
   if (duplicatedIds.length > 0) {
-    messageList.push(`存在重复业务 ID（${duplicatedIds.join('、')}）`);
+    messageList.push(`存在重复业务 ID（${duplicatedIds.join("、")}）`);
   }
 
-  return `[createMapBusinessSource] source '${sourceId}' ${messageList.join('；')}，当前 resolve/save 能力将不可用`;
+  return `[createMapBusinessSource] source '${sourceId}' ${messageList.join("；")}，当前 resolve/save 能力将不可用`;
 }
 
 /**
@@ -609,11 +664,12 @@ function buildBusinessSourceValidationMessage(
  */
 function normalizeBusinessSourceData(
   featureCollection: MapCommonFeatureCollection | null | undefined,
-  options: CreateMapBusinessSourceOptions
+  options: CreateMapBusinessSourceOptions,
 ): NormalizedBusinessSourceSnapshot {
-  const normalizedFeatureCollection = resolveBusinessSourceCollection(featureCollection);
+  const normalizedFeatureCollection =
+    resolveBusinessSourceCollection(featureCollection);
   const strategy = resolveBusinessSourceIdStrategy(options);
-  if (strategy === 'invalid') {
+  if (strategy === "invalid") {
     return {
       // 无效策略属于配置错误兜底路径，这里优先保证内部快照与外部输入隔离，
       // 避免业务层继续原地修改原始集合时反向污染 sourceProps.data。
@@ -625,7 +681,8 @@ function normalizeBusinessSourceData(
   }
 
   const syncTopLevelId = shouldSyncTopLevelFeatureId(options);
-  const sourceFeatures = (normalizedFeatureCollection.features || []) as MapCommonFeature[];
+  const sourceFeatures = (normalizedFeatureCollection.features ||
+    []) as MapCommonFeature[];
   const nextFeatures = sourceFeatures.slice();
   const duplicatedIdSet = new Set<string | number>();
   const usedIdSet = new Set<string | number>();
@@ -637,7 +694,11 @@ function normalizeBusinessSourceData(
 
     // 顶层 `feature.id` 仅在确有差异时才浅拷贝当前要素，
     // 避免为了补 ID 而复制整份 FeatureCollection。
-    if (syncTopLevelId && resolvedFeatureId !== null && feature.id !== resolvedFeatureId) {
+    if (
+      syncTopLevelId &&
+      resolvedFeatureId !== null &&
+      feature.id !== resolvedFeatureId
+    ) {
       nextFeatures[index] = {
         ...feature,
         id: resolvedFeatureId,
@@ -668,7 +729,7 @@ function normalizeBusinessSourceData(
     return {
       featureCollection: nextCollection,
       valid: true,
-      validationMessage: '',
+      validationMessage: "",
       featureIndexMap,
     };
   }
@@ -679,7 +740,7 @@ function normalizeBusinessSourceData(
     validationMessage: buildBusinessSourceValidationMessage(
       options.sourceId,
       missingIndexes,
-      duplicatedIds
+      duplicatedIds,
     ),
     featureIndexMap,
   };
@@ -699,7 +760,7 @@ function syncBusinessSourceProps(
   snapshot: NormalizedBusinessSourceSnapshot,
   sourceId: string,
   sourceOptions: MapBusinessSourceOptions,
-  options: CreateMapBusinessSourceOptions
+  options: CreateMapBusinessSourceOptions,
 ): void {
   // 统一保留 source 级配置透传能力，保证 lineMetrics、cluster 等原生能力不丢失。
   Object.assign(sourceProps, sourceOptions);
@@ -709,7 +770,9 @@ function syncBusinessSourceProps(
   sourceProps.data = snapshot.featureCollection;
 
   // 只有 `promoteId` 策略才需要向 `MglGeoJsonSource` 透传 `promoteId`。
-  sourceProps.promoteId = hasPromoteIdStrategy(options) ? options.promoteId : undefined;
+  sourceProps.promoteId = hasPromoteIdStrategy(options)
+    ? options.promoteId
+    : undefined;
 }
 
 /**
@@ -717,15 +780,22 @@ function syncBusinessSourceProps(
  * @param options 业务 source 配置
  * @returns 标准化后的业务 source 门面
  */
-export function createMapBusinessSource(options: CreateMapBusinessSourceOptions): MapBusinessSource {
-  const { sourceId, data, sourceOptions = {}, layers = [], propertyPolicy: sourcePropertyPolicy } =
-    options;
+export function createMapBusinessSource(
+  options: CreateMapBusinessSourceOptions,
+): MapBusinessSource {
+  const {
+    sourceId,
+    data,
+    sourceOptions = {},
+    layers = [],
+    propertyPolicy: sourcePropertyPolicy,
+  } = options;
   const protectedKeys = resolveBusinessSourceProtectedKeys(options);
   const sourceProps = reactive({}) as MapBusinessSourceProps;
   const snapshotRef = ref<NormalizedBusinessSourceSnapshot>(
-    normalizeBusinessSourceData(data.value, options)
+    normalizeBusinessSourceData(data.value, options),
   );
-  let lastValidationMessage = '';
+  let lastValidationMessage = "";
   let isInternalSyncing = false;
 
   /**
@@ -735,7 +805,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
     const validationMessage = snapshotRef.value.validationMessage;
 
     if (!validationMessage) {
-      lastValidationMessage = '';
+      lastValidationMessage = "";
       return;
     }
 
@@ -751,7 +821,13 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    */
   const commitSnapshot = (snapshot: NormalizedBusinessSourceSnapshot): void => {
     snapshotRef.value = snapshot;
-    syncBusinessSourceProps(sourceProps, snapshot, sourceId, sourceOptions, options);
+    syncBusinessSourceProps(
+      sourceProps,
+      snapshot,
+      sourceId,
+      sourceOptions,
+      options,
+    );
     syncValidationLog();
     isInternalSyncing = true;
     data.value = snapshot.featureCollection;
@@ -762,14 +838,29 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
     (nextCollection) => {
       if (isInternalSyncing) {
         isInternalSyncing = false;
-        syncBusinessSourceProps(sourceProps, snapshotRef.value, sourceId, sourceOptions, options);
+        syncBusinessSourceProps(
+          sourceProps,
+          snapshotRef.value,
+          sourceId,
+          sourceOptions,
+          options,
+        );
         syncValidationLog();
         return;
       }
 
-      const normalizedSnapshot = normalizeBusinessSourceData(nextCollection, options);
+      const normalizedSnapshot = normalizeBusinessSourceData(
+        nextCollection,
+        options,
+      );
       snapshotRef.value = normalizedSnapshot;
-      syncBusinessSourceProps(sourceProps, snapshotRef.value, sourceId, sourceOptions, options);
+      syncBusinessSourceProps(
+        sourceProps,
+        snapshotRef.value,
+        sourceId,
+        sourceOptions,
+        options,
+      );
       syncValidationLog();
 
       if (nextCollection == null) {
@@ -779,7 +870,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
         data.value = normalizedSnapshot.featureCollection;
       }
     },
-    { immediate: true }
+    { immediate: true },
   );
 
   /**
@@ -790,7 +881,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    */
   const matchesFeature = (
     feature: MapCommonFeature | null | undefined,
-    featureId: MapFeatureId
+    featureId: MapFeatureId,
   ): boolean => {
     if (!feature) {
       return false;
@@ -808,7 +899,9 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    * @param featureId 目标业务 ID
    * @returns 当前最新要素；找不到时返回 null
    */
-  const getCurrentFeature = (featureId: MapFeatureId | null): MapCommonFeature | null => {
+  const getCurrentFeature = (
+    featureId: MapFeatureId | null,
+  ): MapCommonFeature | null => {
     if (featureId === null || !snapshotRef.value.valid) {
       return null;
     }
@@ -830,7 +923,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    * @returns 最新快照
    */
   const buildNextSnapshotForLocalMutation = (
-    nextCollection: MapCommonFeatureCollection
+    nextCollection: MapCommonFeatureCollection,
   ): NormalizedBusinessSourceSnapshot => {
     // `promoteId / featureIdKey` 路径的业务 ID 依赖稳定字段，
     // 且这些字段已被保护，本地单要素属性写回不会改变索引拓扑。
@@ -871,7 +964,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    * @returns 命中的图层描述；找不到时返回 null
    */
   const getLayer = (
-    layerId: string | null | undefined
+    layerId: string | null | undefined,
   ): MapBusinessLayerDescriptor | null => {
     if (!layerId) {
       return null;
@@ -889,11 +982,11 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    * @returns 命中的属性治理规则；未声明时返回 null
    */
   const resolvePropertyPolicy = (
-    layerId: string | null | undefined
+    layerId: string | null | undefined,
   ): MapFeaturePropertyPolicy | null => {
     return mergeMapFeaturePropertyPolicy(
       sourcePropertyPolicy,
-      layerId ? getLayer(layerId)?.propertyPolicy || null : null
+      layerId ? getLayer(layerId)?.propertyPolicy || null : null,
     );
   };
 
@@ -902,7 +995,9 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    * @param featureId 目标业务 ID
    * @returns 命中的要素；未命中或当前 ID 校验失败时返回 null
    */
-  const resolveFeature = (featureId: MapFeatureId | null): MapCommonFeature | null => {
+  const resolveFeature = (
+    featureId: MapFeatureId | null,
+  ): MapCommonFeature | null => {
     syncValidationLog();
     const targetFeature = getCurrentFeature(featureId);
     return targetFeature ? clonePlainData(targetFeature) : null;
@@ -918,7 +1013,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    */
   const resolvePropertyPanelState = (
     featureId: MapFeatureId | null,
-    layerId?: string | null
+    layerId?: string | null,
   ): MapFeaturePropertyPanelState | null => {
     const targetFeature = getCurrentFeature(featureId);
     if (!targetFeature) {
@@ -937,10 +1032,21 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    * @returns 是否写回成功
    */
   const replaceFeatures = (nextFeatures: MapCommonFeature[]): boolean => {
-    const nextCollection = replaceFeatureCollectionFeatures(snapshotRef.value.featureCollection, nextFeatures);
-    const normalizedSnapshot = normalizeBusinessSourceData(nextCollection, options);
+    const nextCollection = replaceFeatureCollectionFeatures(
+      snapshotRef.value.featureCollection,
+      nextFeatures,
+    );
+    const normalizedSnapshot = normalizeBusinessSourceData(
+      nextCollection,
+      options,
+    );
 
-    // replace 是业务层显式提交的最新结果，这里直接把标准化后的集合写回本地数据引用。
+    if (!normalizedSnapshot.valid) {
+      console.warn(normalizedSnapshot.validationMessage);
+      return false;
+    }
+
+    // replace 是业务层显式提交的最新结果，只在索引有效时写回，避免进入“看得见但查不到”的无效状态。
     commitSnapshot(normalizedSnapshot);
     return true;
   };
@@ -956,14 +1062,14 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
   const saveProperties = (
     featureId: MapFeatureId,
     newProperties: FeatureProperties,
-    layerId?: string | null
+    layerId?: string | null,
   ): SaveFeaturePropertiesResult => {
     syncValidationLog();
 
     if (!snapshotRef.value.valid) {
       return {
         success: false,
-        target: 'map',
+        target: "map",
         featureId,
         message: snapshotRef.value.validationMessage,
       };
@@ -984,7 +1090,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
     if (!result.success || !result.data || !result.properties) {
       return {
         success: false,
-        target: 'map',
+        target: "map",
         featureId,
         message: result.message,
         blockedKeys: result.blockedKeys,
@@ -992,11 +1098,15 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
       };
     }
 
-    commitSnapshot(buildNextSnapshotForLocalMutation(result.data as MapCommonFeatureCollection));
+    commitSnapshot(
+      buildNextSnapshotForLocalMutation(
+        result.data as MapCommonFeatureCollection,
+      ),
+    );
 
     return {
       success: true,
-      target: 'map',
+      target: "map",
       featureId,
       properties: result.properties,
       message: result.message,
@@ -1016,14 +1126,14 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
   const removeProperties = (
     featureId: MapFeatureId,
     propertyKeys: readonly string[],
-    layerId?: string | null
+    layerId?: string | null,
   ): SaveFeaturePropertiesResult => {
     syncValidationLog();
 
     if (!snapshotRef.value.valid) {
       return {
         success: false,
-        target: 'map',
+        target: "map",
         featureId,
         message: snapshotRef.value.validationMessage,
       };
@@ -1044,7 +1154,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
     if (!result.success || !result.data || !result.properties) {
       return {
         success: false,
-        target: 'map',
+        target: "map",
         featureId,
         message: result.message,
         blockedKeys: result.blockedKeys,
@@ -1052,11 +1162,15 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
       };
     }
 
-    commitSnapshot(buildNextSnapshotForLocalMutation(result.data as MapCommonFeatureCollection));
+    commitSnapshot(
+      buildNextSnapshotForLocalMutation(
+        result.data as MapCommonFeatureCollection,
+      ),
+    );
 
     return {
       success: true,
-      target: 'map',
+      target: "map",
       featureId,
       properties: result.properties,
       message: result.message,
@@ -1072,7 +1186,7 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
    */
   const toFeatureRef = (
     featureId: MapFeatureId | null,
-    layerId?: string | null
+    layerId?: string | null,
   ): MapSourceFeatureRef | null => {
     return createMapSourceFeatureRef(sourceId, featureId, layerId);
   };
@@ -1096,31 +1210,93 @@ export function createMapBusinessSource(options: CreateMapBusinessSourceOptions)
 
 /**
  * 创建业务 source 注册表。
- * @param sources 当前页面需要统一管理的业务 source 列表
  * @returns 注册表门面
  */
-export function createMapBusinessSourceRegistry(
-  sources: MapBusinessSource[]
-): MapBusinessSourceRegistry {
-  const sourceMap = new Map<string, MapBusinessSource>();
+export function createMapBusinessSourceRegistry(): MapBusinessSourceRegistry {
+  const sourceMap = reactive(new Map()) as Map<string, MapBusinessSource>;
 
-  sources.forEach((source) => {
+  /**
+   * 生成重复 sourceId 的统一错误。
+   * @param sourceId 重复的 source ID
+   * @returns 统一错误对象
+   */
+  const createDuplicateSourceError = (sourceId: string): Error => {
+    return new Error(
+      `[createMapBusinessSourceRegistry] 检测到重复 sourceId：${sourceId}`,
+    );
+  };
+
+  /**
+   * 确认待注册 source ID 没有重复。
+   * @param sources 待检查 source 列表
+   */
+  const assertUniqueSources = (sources: MapBusinessSource[]): void => {
+    const nextSourceMap = new Map<string, MapBusinessSource>();
+
+    sources.forEach((source) => {
+      if (nextSourceMap.has(source.sourceId)) {
+        // 批量替换必须先完成去重校验，避免半数写入后才发现配置错误。
+        throw createDuplicateSourceError(source.sourceId);
+      }
+
+      nextSourceMap.set(source.sourceId, source);
+    });
+  };
+
+  /**
+   * 动态追加单个 source。
+   * @param source 待追加的业务 source
+   */
+  const addSource = (source: MapBusinessSource): void => {
     if (sourceMap.has(source.sourceId)) {
       // 重复 sourceId 会让后续查询和写回目标变得不确定，这里直接 fail-fast。
-      throw new Error(
-        `[createMapBusinessSourceRegistry] 检测到重复 sourceId：${source.sourceId}`
-      );
+      throw createDuplicateSourceError(source.sourceId);
     }
 
-    sourceMap.set(source.sourceId, source);
-  });
+    // source 门面自身已经管理内部响应式状态，注册表只需要追踪 Map 的增删。
+    sourceMap.set(source.sourceId, markRaw(source) as MapBusinessSource);
+  };
+
+  /**
+   * 批量替换全部 source。
+   * @param sources 最新业务 source 列表
+   */
+  const setSources = (sources: MapBusinessSource[]): void => {
+    assertUniqueSources(sources);
+    sourceMap.clear();
+    sources.forEach((source) => {
+      // 批量替换与 addSource 保持一致，避免调用方拿到被代理后的 source 门面。
+      sourceMap.set(source.sourceId, markRaw(source) as MapBusinessSource);
+    });
+  };
+
+  /**
+   * 动态移除指定 source。
+   * @param sourceId 目标 source ID
+   */
+  const removeSource = (sourceId: string | null | undefined): boolean => {
+    if (!sourceId) {
+      return false;
+    }
+
+    return sourceMap.delete(sourceId);
+  };
+
+  /**
+   * 清空全部 source。
+   */
+  const clearSources = (): void => {
+    sourceMap.clear();
+  };
 
   /**
    * 读取指定 source。
    * @param sourceId 目标 source ID
    * @returns 命中的业务 source；找不到时返回 null
    */
-  const getSource = (sourceId: string | null | undefined): MapBusinessSource | null => {
+  const getSource = (
+    sourceId: string | null | undefined,
+  ): MapBusinessSource | null => {
     if (!sourceId) {
       return null;
     }
@@ -1141,12 +1317,17 @@ export function createMapBusinessSourceRegistry(
    * @param featureRef 目标来源引用
    * @returns 命中的要素；找不到时返回 null
    */
-  const resolveFeature = (featureRef: MapSourceFeatureRef | null): MapCommonFeature | null => {
+  const resolveFeature = (
+    featureRef: MapSourceFeatureRef | null,
+  ): MapCommonFeature | null => {
     if (!featureRef?.sourceId || featureRef.featureId === null) {
       return null;
     }
 
-    return getSource(featureRef.sourceId)?.resolveFeature(featureRef.featureId) || null;
+    return (
+      getSource(featureRef.sourceId)?.resolveFeature(featureRef.featureId) ||
+      null
+    );
   };
 
   /**
@@ -1155,7 +1336,7 @@ export function createMapBusinessSourceRegistry(
    * @returns 命中的属性面板态；找不到时返回 null
    */
   const resolveFeaturePropertyPanelState = (
-    featureRef: MapSourceFeatureRef | null
+    featureRef: MapSourceFeatureRef | null,
   ): MapFeaturePropertyPanelState | null => {
     if (!featureRef?.sourceId || featureRef.featureId === null) {
       return null;
@@ -1164,7 +1345,7 @@ export function createMapBusinessSourceRegistry(
     return (
       getSource(featureRef.sourceId)?.resolvePropertyPanelState(
         featureRef.featureId,
-        featureRef.layerId
+        featureRef.layerId,
       ) || null
     );
   };
@@ -1175,7 +1356,10 @@ export function createMapBusinessSourceRegistry(
    * @param nextFeatures 最新要素数组
    * @returns 是否写回成功
    */
-  const replaceFeatures = (sourceId: string, nextFeatures: MapCommonFeature[]): boolean => {
+  const replaceFeatures = (
+    sourceId: string,
+    nextFeatures: MapCommonFeature[],
+  ): boolean => {
     return getSource(sourceId)?.replaceFeatures(nextFeatures) || false;
   };
 
@@ -1190,13 +1374,13 @@ export function createMapBusinessSourceRegistry(
     sourceId: string,
     featureId: MapFeatureId,
     newProperties: FeatureProperties,
-    layerId?: string | null
+    layerId?: string | null,
   ): SaveFeaturePropertiesResult => {
     const targetSource = getSource(sourceId);
     if (!targetSource) {
       return {
         success: false,
-        target: 'map',
+        target: "map",
         featureId,
         message: `未找到 sourceId 为 '${sourceId}' 的业务数据源`,
       };
@@ -1216,13 +1400,13 @@ export function createMapBusinessSourceRegistry(
     sourceId: string,
     featureId: MapFeatureId,
     propertyKeys: readonly string[],
-    layerId?: string | null
+    layerId?: string | null,
   ): SaveFeaturePropertiesResult => {
     const targetSource = getSource(sourceId);
     if (!targetSource) {
       return {
         success: false,
-        target: 'map',
+        target: "map",
         featureId,
         message: `未找到 sourceId 为 '${sourceId}' 的业务数据源`,
       };
@@ -1240,12 +1424,16 @@ export function createMapBusinessSourceRegistry(
   const createFeatureRef = (
     sourceId: string,
     featureId: MapFeatureId | null,
-    layerId?: string | null
+    layerId?: string | null,
   ): MapSourceFeatureRef | null => {
     return createMapSourceFeatureRef(sourceId, featureId, layerId);
   };
 
   return {
+    addSource,
+    setSources,
+    removeSource,
+    clearSources,
     getSource,
     listSources,
     resolveFeature,

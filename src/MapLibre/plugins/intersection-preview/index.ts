@@ -38,6 +38,8 @@ export {
 export {
   buildIntersectionCandidates,
   buildIntersectionCandidates as buildIntersectionCandidatesFromSources,
+  INTERSECTION_MATERIALIZED_KIND,
+  INTERSECTION_PREVIEW_KIND,
 } from '../../shared/map-intersection-tools';
 export type { IntersectionPreviewPluginDescriptor };
 export type {

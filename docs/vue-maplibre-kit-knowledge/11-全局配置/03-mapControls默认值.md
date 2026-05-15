@@ -406,6 +406,6 @@ mapControls: {
 - `id`、`type`、`source`、`filter` 等内部图层字段由库内默认配置固定维护，业务侧不能配置。
 - 全局默认和页面实例配置会按 `layout` / `paint` 内部字段合并，页面字段优先，未配置字段回落到全局默认。
 - `text-field` 这类 MapLibre 表达式数组按整体覆盖处理，不会按数组下标合并。
+- TerraDraw / Measure 的 `position`、`modeOptions` 和底层控件构造参数只在控件首次创建时读取。自动重建会清空临时绘制、测量和编辑状态；业务需要切换这类配置时，应先保存数据，再切换 `isUse` 或重新挂载地图容器。
 
 ---
-

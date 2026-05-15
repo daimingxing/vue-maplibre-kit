@@ -1,21 +1,22 @@
-import type { Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
+import type { ControlPosition, Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
 import type {
   TerradrawControlType,
   TerradrawSnapSharedOptions,
 } from '../../shared/mapLibre-controls-types';
-import type { MapFeatureSnapResult } from '../../shared/map-feature-snap-types';
+import type {
+  MapFeatureSnapGeometryType,
+  MapFeatureSnapMode,
+  MapFeatureSnapResult,
+} from '../../shared/map-feature-snap-types';
 
 export type {
+  MapFeatureSnapDrawnTargetOptions,
+  MapFeatureSnapGeometryType,
   MapFeatureSnapKind,
+  MapFeatureSnapMode,
   MapFeatureSnapResult,
   MapFeatureSnapSegmentInfo,
 } from '../../shared/map-feature-snap-types';
-
-/** 单条吸附规则可命中的几何类型。 */
-export type MapFeatureSnapGeometryType = 'Point' | 'LineString' | 'Polygon';
-
-/** 单条吸附规则支持的吸附方式。 */
-export type MapFeatureSnapMode = 'vertex' | 'segment';
 
 /** 单条吸附规则高级过滤上下文。 */
 export interface MapFeatureSnapRuleFilterContext {
@@ -37,8 +38,10 @@ export interface MapFeatureSnapRuleFilterContext {
 
 /** 单条普通图层吸附规则。 */
 export interface MapFeatureSnapRule {
-  /** 规则唯一标识。 */
-  id: string;
+  /** 规则唯一标识；不传时由系统根据来源和 layerIds 自动生成。 */
+  id?: string;
+  /** 规则展示名称；配置面板优先展示该名称，未传时展示 id。 */
+  label?: string;
   /** 是否启用当前规则。 */
   enabled?: boolean;
   /** 参与当前规则候选查询的图层 ID 集合。 */
@@ -71,24 +74,93 @@ export interface MapFeatureSnapPreviewOptions {
   lineWidth?: number;
 }
 
-/** 普通图层吸附配置。 */
-export interface MapFeatureSnapOrdinaryLayerOptions {
-  /** 是否启用普通图层吸附。 */
+/** 业务图层吸附配置。 */
+export interface MapFeatureSnapBusinessLayerOptions {
+  /** 是否启用业务图层吸附。 */
   enabled?: boolean;
-  /** 普通图层吸附规则集合。 */
+  /** 业务图层吸附规则集合。 */
   rules: MapFeatureSnapRule[];
+}
+
+/** 内置吸附目标配置。 */
+export interface MapFeatureSnapTargetOptions {
+  /** 是否启用当前内置吸附目标。 */
+  enabled?: boolean;
+  /** 当前内置目标命中优先级。 */
+  priority?: number;
+  /** 当前内置目标局部吸附范围。 */
+  tolerancePx?: number;
+  /** 当前内置目标允许采用的吸附方式。 */
+  snapTo?: MapFeatureSnapMode[];
+}
+
+/** 吸附右键面板插件目标标识。 */
+export type MapFeatureSnapPanelTargetKey = 'intersection' | 'polygonEdge' | 'terradraw';
+
+/** 吸附右键面板配置。 */
+export interface MapFeatureSnapControlPanelOptions {
+  /** 是否启用右键配置面板。 */
+  enabled?: boolean;
+  /** 是否展示业务图层吸附规则；默认 true。 */
+  businessLayers?: boolean;
+  /** 是否展示交点吸附目标开关；默认 true。 */
+  intersection?: boolean;
+  /** 是否展示面边线吸附目标开关；默认 true。 */
+  polygonEdge?: boolean;
+  /** 是否展示 TerraDraw 绘图/测量吸附目标开关；默认 true。 */
+  terradraw?: boolean;
+}
+
+/** 吸附右键面板项类型。 */
+export type MapFeatureSnapControlItemKind = 'rule' | 'target';
+
+/** 吸附右键面板单项。 */
+export interface MapFeatureSnapControlItem {
+  /** 面板项唯一标识。 */
+  id: string;
+  /** 面板项类别。 */
+  kind: MapFeatureSnapControlItemKind;
+  /** 面板展示名称。 */
+  label: string;
+  /** 当前运行期是否启用。 */
+  enabled: boolean;
+}
+
+/** 吸附右键面板分组。 */
+export interface MapFeatureSnapControlGroup {
+  /** 分组唯一标识。 */
+  id: string;
+  /** 分组展示名称。 */
+  label: string;
+  /** 分组中的面板项。 */
+  items: MapFeatureSnapControlItem[];
 }
 
 /** 地图吸附插件配置。 */
 export interface MapFeatureSnapOptions {
   /** 是否启用整个吸附插件。 */
   enabled?: boolean;
+  /** 吸附运行期开关控件配置。 */
+  control?: {
+    /** 是否显示吸附开关控件。 */
+    enabled?: boolean;
+    /** 控件显示位置。 */
+    position?: ControlPosition;
+    /** 控件可访问文本。 */
+    label?: string;
+    /** 右键配置面板；默认关闭。 */
+    panel?: boolean | MapFeatureSnapControlPanelOptions;
+  };
   /** 全局默认吸附范围。 */
   defaultTolerancePx?: number;
   /** 吸附预览配置。 */
   preview?: MapFeatureSnapPreviewOptions;
-  /** 普通图层吸附配置。 */
-  ordinaryLayers?: MapFeatureSnapOrdinaryLayerOptions;
+  /** 业务图层吸附配置。 */
+  businessLayers?: MapFeatureSnapBusinessLayerOptions;
+  /** 交点插件内置吸附目标配置。 */
+  intersection?: boolean | MapFeatureSnapTargetOptions;
+  /** 面边线插件内置吸附目标配置。 */
+  polygonEdge?: boolean | MapFeatureSnapTargetOptions;
   /** TerraDraw / Measure 吸附公共默认配置。 */
   terradraw?: {
     /** TerraDraw / Measure 共用默认值。 */
@@ -98,10 +170,35 @@ export interface MapFeatureSnapOptions {
     /** 测量控件默认值。 */
     measure?: TerradrawSnapSharedOptions | boolean;
   };
+  /**
+   * 组件内部注入的运行期上下文。
+   * 业务侧不需要传该字段，公开文档也不推荐业务直接使用。
+   */
+  internalContext?: {
+    /** TerraDraw / Measure 控件当前是否启用。 */
+    terradraw?: {
+      /** 绘图控件是否启用。 */
+      drawEnabled?: boolean;
+      /** 测量控件是否启用。 */
+      measureEnabled?: boolean;
+    };
+  };
 }
 
 /** 地图吸附插件 API。 */
 export interface MapFeatureSnapPluginApi {
+  /** 运行期开启吸附能力。 */
+  activate: () => void;
+  /** 运行期关闭吸附能力。 */
+  deactivate: () => void;
+  /** 运行期切换吸附能力。 */
+  toggle: () => void;
+  /** 设置插件吸附目标运行期开关。 */
+  setTargetEnabled: (targetId: MapFeatureSnapPanelTargetKey, enabled: boolean) => void;
+  /** 切换插件吸附目标运行期开关。 */
+  toggleTarget: (targetId: MapFeatureSnapPanelTargetKey) => void;
+  /** 读取当前运行期吸附是否开启。 */
+  isActive: () => boolean;
   /** 主动清空当前吸附预览。 */
   clearPreview: () => void;
   /** 根据普通地图事件解析吸附结果。 */
@@ -111,4 +208,10 @@ export interface MapFeatureSnapPluginApi {
     controlType: TerradrawControlType,
     localConfig: TerradrawSnapSharedOptions | boolean | null | undefined
   ) => import('../types').ResolvedTerradrawSnapOptions;
+}
+
+/** 地图吸附插件状态。 */
+export interface MapFeatureSnapState {
+  /** 当前吸附能力是否运行期开启。 */
+  isActive: boolean;
 }

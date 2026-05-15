@@ -55,6 +55,28 @@ export const MANAGED_PREVIEW_ORIGIN_LAYER_ID_PROPERTY = 'managedPreviewOriginLay
 /** 托管临时预览来源唯一键属性名 */
 export const MANAGED_PREVIEW_ORIGIN_KEY_PROPERTY = 'managedPreviewOriginKey';
 
+/** 插件生成要素分组 ID 属性名。 */
+export const GENERATED_GROUP_ID_PROPERTY = 'generatedGroupId';
+
+/** 插件生成要素来源 sourceId 属性名。 */
+export const GENERATED_PARENT_SOURCE_ID_PROPERTY = 'generatedParentSourceId';
+
+/** 插件生成要素来源 featureId 属性名。 */
+export const GENERATED_PARENT_FEATURE_ID_PROPERTY = 'generatedParentFeatureId';
+
+/** 插件生成要素来源 layerId 属性名。 */
+export const GENERATED_PARENT_LAYER_ID_PROPERTY = 'generatedParentLayerId';
+
+/** 插件生成要素属性构建配置。 */
+export interface BuildGeneratedFeaturePropertiesOptions {
+  /** 生成要素类型标识。 */
+  generatedKind: string;
+  /** 同一组生成要素的稳定分组 ID。 */
+  groupId?: string | null;
+  /** 来源正式业务要素引用。 */
+  parentRef?: MapSourceFeatureRef | null;
+}
+
 /** 线段命中结果 */
 export interface MapLineSegmentSelection {
   /** 命中的线段索引 */
@@ -379,6 +401,68 @@ export function buildManagedPreviewOriginProperties(
 }
 
 /**
+ * 构建插件生成要素的统一元数据属性。
+ * 当前仍同步写入旧托管预览来源字段，保证线草稿、属性治理和查询门面在迁移期不丢失来源。
+ *
+ * @param options 插件生成要素属性构建配置
+ * @returns 可写入 GeoJSON properties 的元数据对象
+ */
+export function buildGeneratedFeatureProperties(
+  options: BuildGeneratedFeaturePropertiesOptions
+): MapCommonProperties {
+  const { generatedKind, groupId = null, parentRef = null } = options;
+
+  return {
+    generatedKind,
+    ...(groupId ? { [GENERATED_GROUP_ID_PROPERTY]: groupId } : {}),
+    ...(parentRef?.sourceId ? { [GENERATED_PARENT_SOURCE_ID_PROPERTY]: parentRef.sourceId } : {}),
+    ...(parentRef?.featureId !== null && parentRef?.featureId !== undefined
+      ? { [GENERATED_PARENT_FEATURE_ID_PROPERTY]: parentRef.featureId }
+      : {}),
+    ...(parentRef?.layerId ? { [GENERATED_PARENT_LAYER_ID_PROPERTY]: parentRef.layerId } : {}),
+    ...buildManagedPreviewOriginProperties(parentRef),
+  };
+}
+
+/**
+ * 构建插件生成要素的稳定分组 ID。
+ * @param generatedKind 生成要素类型标识
+ * @param parentRef 来源正式业务要素引用
+ * @returns 稳定分组 ID；来源不完整时返回 null
+ */
+export function buildGeneratedGroupId(
+  generatedKind: string,
+  parentRef: MapSourceFeatureRef | null | undefined
+): string | null {
+  const parentKey = buildMapSourceFeatureRefKey(parentRef);
+  if (!parentKey) {
+    return null;
+  }
+
+  return `${generatedKind}::${parentKey}`;
+}
+
+/**
+ * 从插件生成要素属性中提取来源引用。
+ * 优先读取统一字段，缺失时兼容旧托管预览来源字段。
+ *
+ * @param properties 待解析的属性对象
+ * @returns 标准来源引用；字段不完整时返回 null
+ */
+export function extractGeneratedParentRef(
+  properties: MapCommonProperties | null | undefined
+): MapSourceFeatureRef | null {
+  const generatedParentRef = createMapSourceFeatureRef(
+    (properties?.[GENERATED_PARENT_SOURCE_ID_PROPERTY] as string | null | undefined) || null,
+    (properties?.[GENERATED_PARENT_FEATURE_ID_PROPERTY] as MapFeatureId | null | undefined) ??
+      null,
+    (properties?.[GENERATED_PARENT_LAYER_ID_PROPERTY] as string | null | undefined) || null
+  );
+
+  return generatedParentRef || extractManagedPreviewOriginFromProperties(properties);
+}
+
+/**
  * 线廊生成工具类。
  * 负责从中心线生成区域面，以及在要素集合中替换旧区域。
  */
@@ -437,12 +521,16 @@ export class MapLineCorridorTool {
       properties: {
         id: regionId,
         type: regionType,
-        generatedKind,
+        ...buildGeneratedFeatureProperties({
+          generatedKind,
+          groupId: buildGeneratedGroupId(
+            generatedKind,
+            extractGeneratedParentRef(lineFeature.properties || {})
+          ),
+          parentRef: extractGeneratedParentRef(lineFeature.properties || {}),
+        }),
         generatedFromLineId: lineId,
         widthMeters,
-        ...buildManagedPreviewOriginProperties(
-          extractManagedPreviewOriginFromProperties(lineFeature.properties || {})
-        ),
       },
       geometry: {
         type: 'Polygon',
@@ -810,12 +898,15 @@ export class MapLineExtensionTool {
       properties: {
         ...(lineFeature.properties || {}),
         id: temporaryLineId,
-        generatedKind: MapLineExtensionTool.TEMPORARY_EXTENSION_KIND,
+        ...buildGeneratedFeatureProperties({
+          generatedKind: MapLineExtensionTool.TEMPORARY_EXTENSION_KIND,
+          groupId: buildGeneratedGroupId(MapLineExtensionTool.TEMPORARY_EXTENSION_KIND, origin),
+          parentRef: origin,
+        }),
         generatedFromLineId: sourceLineId,
         generatedFromSegmentIndex: generatedSegmentIndex,
         extendLengthMeters,
         isTemporary: true,
-        ...buildManagedPreviewOriginProperties(origin),
       },
       geometry: {
         type: 'LineString',

@@ -1,5 +1,6 @@
 import { shallowRef } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
+import type { FeatureCollection } from 'geojson';
 import { useMapLayerActions } from './useMapLayerActions';
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
 
@@ -65,7 +66,7 @@ describe('useMapLayerActions', () => {
       setPaintProperty: vi.fn(),
     };
     const actions = useMapLayerActions(shallowRef(createMapExpose(rawMap)));
-    const data = {
+    const data: FeatureCollection = {
       type: 'FeatureCollection',
       features: [],
     };
@@ -120,6 +121,42 @@ describe('useMapLayerActions', () => {
     expect(actions.removeSource('missing-source').success).toBe(false);
   });
 
+  it('应把 MapLibre 原生 source 和 layer 异常转换为结构化失败结果', () => {
+    const rawMap = {
+      getLayer: vi.fn((layerId: string) => (layerId === 'runtime-layer' ? { id: layerId } : null)),
+      getSource: vi.fn((sourceId: string) => (sourceId === 'runtime-source' ? { id: sourceId } : null)),
+      addSource: vi.fn(() => {
+        throw new Error('style is not done loading');
+      }),
+      addLayer: vi.fn(() => {
+        throw new Error('layer spec is invalid');
+      }),
+      removeLayer: vi.fn(() => {
+        throw new Error('layer is locked');
+      }),
+      removeSource: vi.fn(() => {
+        throw new Error('Source is in use');
+      }),
+      setLayoutProperty: vi.fn(),
+      setPaintProperty: vi.fn(),
+    };
+    const actions = useMapLayerActions(shallowRef(createMapExpose(rawMap)));
+    const data: FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [],
+    };
+
+    expect(actions.addGeoJsonSource('new-source', data).success).toBe(false);
+    expect(actions.addGeoJsonSource('new-source', data).message).toContain(
+      'style is not done loading'
+    );
+    expect(actions.addLayer({ id: 'new-layer', type: 'circle', source: 'runtime-source' }).success).toBe(
+      false
+    );
+    expect(actions.removeLayer('runtime-layer').message).toContain('layer is locked');
+    expect(actions.removeSource('runtime-source').message).toContain('Source is in use');
+  });
+
   it('应支持图层显隐、样式和 feature-state 动作', () => {
     const setMapFeatureState = vi.fn(() => false);
     const rawMap = {
@@ -149,5 +186,47 @@ describe('useMapLayerActions', () => {
       },
       { active: true }
     );
+  });
+
+  it('应把 feature-state 异常转换为结构化失败结果', () => {
+    const setMapFeatureState = vi.fn(() => {
+      throw new Error('feature state target is invalid');
+    });
+    const rawMap = {
+      getLayer: vi.fn(),
+      getSource: vi.fn(),
+    };
+    const actions = useMapLayerActions(shallowRef(createMapExpose(rawMap, setMapFeatureState)));
+
+    const result = actions.setFeatureState('source-a', 'feature-a', { active: true });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('feature state target is invalid');
+  });
+
+  it('应把运行时图层属性异常转换为结构化失败结果', () => {
+    const rawMap = {
+      getLayer: vi.fn((layerId: string) => (layerId === 'line-layer' ? { id: layerId } : null)),
+      getSource: vi.fn(),
+      setLayoutProperty: vi.fn(() => {
+        throw new Error('layout property is invalid');
+      }),
+      setPaintProperty: vi.fn(() => {
+        throw new Error('paint expression is invalid');
+      }),
+      addSource: vi.fn(),
+      addLayer: vi.fn(),
+      removeLayer: vi.fn(),
+      removeSource: vi.fn(),
+    };
+    const actions = useMapLayerActions(shallowRef(createMapExpose(rawMap)));
+
+    const paintResult = actions.setPaint('line-layer', { 'line-color': ['bad-expression'] });
+    const layoutResult = actions.hide('line-layer');
+
+    expect(paintResult.success).toBe(false);
+    expect(paintResult.message).toContain('paint expression is invalid');
+    expect(layoutResult.success).toBe(false);
+    expect(layoutResult.message).toContain('layout property is invalid');
   });
 });

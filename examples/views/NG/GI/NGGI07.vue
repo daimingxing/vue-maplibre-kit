@@ -1,6 +1,7 @@
 <template>
   <section class="nggi-page">
     <MapLibreInit
+      ref="mapRef"
       :map-options="kit.mapOptions"
       :controls="kit.controls"
       :map-interactive="interactive"
@@ -12,19 +13,26 @@
     </MapLibreInit>
     <aside class="nggi-panel">
       <h3>NGGI07 snap</h3>
-      <p>绘图控件已开启点、线、面普通业务图层吸附。</p>
+      <p>绘图与测量控件已开启业务图层吸附，并允许已绘制点、线、面跨模式互相吸附。</p>
+      <button type="button" @click="toggleSnap">切换吸附</button>
+      <p>吸附：{{ businessMap.plugins.snap.isActive.value ? "已开启" : "已关闭" }}</p>
       <ul>
-        <li v-for="rule in snapRules" :key="rule.id">
-          {{ rule.name }}：{{ rule.summary }}
-        </li>
+        <li v-for="rule in snapRules" :key="rule.id">{{ rule.id }}：{{ rule.summary }}</li>
       </ul>
+      <p>先画点、线或面，再切换绘制模式，可吸附到刚刚绘制出的要素。</p>
     </aside>
   </section>
 </template>
 
 <script setup lang="ts">
-import { MapBusinessSourceLayers, MapLibreInit } from "vue-maplibre-kit/business";
-import { createBusinessPlugins, type MapFeatureSnapRule } from "vue-maplibre-kit/plugins";
+import { shallowRef } from "vue";
+import {
+  MapBusinessSourceLayers,
+  MapLibreInit,
+  useBusinessMap,
+  type MapLibreInitExpose,
+} from "vue-maplibre-kit/business";
+import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
 import {
   EXAMPLE_FILL_LAYER_ID,
   EXAMPLE_LINE_LAYER_ID,
@@ -33,15 +41,16 @@ import {
   createExampleKit,
 } from "./nggi-example.shared";
 
-// draw 控件预设会开启 TerraDraw 和测量控件；snap 插件会给这些绘制动作提供吸附能力。
-const kit = createExampleKit("draw");
+// 示例控件组合会开启测量控件；snap 插件会给测量绘制动作提供吸附能力。
+const kit = createExampleKit("measure");
+const mapRef = shallowRef<MapLibreInitExpose | null>(null);
+const businessMap = useBusinessMap({ mapRef: () => mapRef.value, sourceRegistry: kit.registry });
 // 吸附本身不依赖普通点击回调，这里保留 interactive 是为了示例结构和其他页面一致。
 const interactive = createExampleInteractive(() => {});
 // snapRules 是业务层最重要的声明：告诉插件“哪些图层、哪些几何、用什么方式吸附”。
 const snapRules = [
   {
-    id: "nggi-point-snap",
-    name: "巡检点",
+    id: "巡检点",
     summary: "命中点图层顶点，适合从既有节点开始绘制。",
     layerIds: [EXAMPLE_POINT_LAYER_ID],
     geometryTypes: ["Point"],
@@ -52,8 +61,7 @@ const snapRules = [
     tolerancePx: 14,
   },
   {
-    id: "nggi-line-snap",
-    name: "管线",
+    id: "管线",
     summary: "命中线图层顶点与线段，适合沿管线补绘。",
     layerIds: [EXAMPLE_LINE_LAYER_ID],
     geometryTypes: ["LineString"],
@@ -64,8 +72,7 @@ const snapRules = [
     tolerancePx: 12,
   },
   {
-    id: "nggi-fill-snap",
-    name: "作业面",
+    id: "作业面",
     summary: "命中面边界顶点与边线，适合贴合作业范围绘制。",
     layerIds: [EXAMPLE_FILL_LAYER_ID],
     geometryTypes: ["Polygon"],
@@ -75,13 +82,15 @@ const snapRules = [
     // 面边界吸附范围稍小，降低绘制时跨越边界误命中的概率。
     tolerancePx: 10,
   },
-] satisfies Array<MapFeatureSnapRule & { name: string; summary: string }>;
+] as const;
 const plugins = createBusinessPlugins({
   // snap 当前主要是注册型插件：配置写在 plugins prop，吸附结果由地图绘制交互即时使用。
   snap: {
-    layerIds: [EXAMPLE_POINT_LAYER_ID, EXAMPLE_LINE_LAYER_ID, EXAMPLE_FILL_LAYER_ID],
     // 全局默认范围兜底，具体业务规则仍可按类型覆盖。
     defaultTolerancePx: 12,
+    ruleDefaults: {
+      snapTo: ["vertex", "segment"],
+    },
     preview: {
       enabled: true,
       // 红色预览点用于区别示例业务点图层的橙色圆点。
@@ -93,14 +102,67 @@ const plugins = createBusinessPlugins({
       // 5px 略粗于业务线宽，确保命中线段可见。
       lineWidth: 5,
     },
-    ordinaryLayers: {
+    // 内置吸附按钮和面板按钮都会调用同一组运行期开关能力。
+    control: {
       enabled: true,
-      // ordinaryLayers.rules 表示从普通业务图层中提取可吸附目标。
-      // 如果项目还有自定义绘图图层，也可以继续扩展插件配置。
-      rules: snapRules,
+      position: "top-left",
+      panel: {
+        enabled: true,
+        businessLayers: true,
+        intersection: true,
+        polygonEdge: true,
+        terradraw: true,
+      },
+    },
+    businessLayers: {
+      // createBusinessPlugins 的简便写法中，key 会同时作为规则 id 和默认 label。
+      // 单条规则仍可覆写 snapTo、priority、tolerancePx 等精细配置。
+      巡检点: {
+        layerIds: [EXAMPLE_POINT_LAYER_ID],
+        geometryTypes: ["Point"],
+        snapTo: ["vertex"],
+        priority: 30,
+        tolerancePx: 14,
+      },
+      管线: {
+        layerIds: [EXAMPLE_LINE_LAYER_ID],
+        geometryTypes: ["LineString"],
+        priority: 20,
+      },
+      作业面: {
+        layerIds: [EXAMPLE_FILL_LAYER_ID],
+        geometryTypes: ["Polygon"],
+        priority: 10,
+        tolerancePx: 10,
+      },
+    },
+    terradraw: {
+      defaults: {
+        drawnTargets: {
+          geometryTypes: ["Point", "LineString", "Polygon"],
+          snapTo: ["vertex", "segment"],
+          // 已绘制图形比业务面优先级高，便于连续编辑时先命中刚画出的图形。
+          priority: 40,
+          // 已绘制图形示例使用 12px，与业务图层默认吸附范围保持一致。
+          tolerancePx: 12,
+        },
+      },
+      draw: {
+        drawnTargets: true,
+      },
+      measure: {
+        drawnTargets: true,
+      },
     },
   },
 });
+
+/**
+ * 切换吸附插件运行期状态。
+ */
+function toggleSnap(): void {
+  businessMap.plugins.snap.toggle();
+}
 </script>
 
 <style scoped>

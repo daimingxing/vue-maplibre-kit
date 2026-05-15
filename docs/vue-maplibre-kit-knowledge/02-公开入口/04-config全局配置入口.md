@@ -37,6 +37,7 @@ setMapGlobalConfig({
     snap: {},
     lineDraft: {},
     intersection: {},
+    polygonEdge: {},
     multiSelect: {},
     dxfExport: {},
   },
@@ -53,6 +54,7 @@ setMapGlobalConfig({
 ## 注意
 
 - 全局配置是应用级默认值，不是页面状态。
+- `plugins` 只配置插件启用后的默认行为，不决定插件是否注册或启用。
 - `setMapGlobalConfig()` 当前按整份替换处理。
 - 配置会被深拷贝并冻结。
 - 不建议传 Vue 响应式对象或 `ref`。

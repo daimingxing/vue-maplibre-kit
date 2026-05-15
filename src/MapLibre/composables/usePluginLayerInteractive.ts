@@ -1,7 +1,7 @@
 import { onBeforeUnmount, watch } from 'vue';
 import type { Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
 import type { MapInstance } from 'vue-maplibre-gl';
-import type { MapPluginLayerInteractiveOptions } from '../plugins/types';
+import type { MapPluginLayerInteractiveOptions, MapSnapBinding } from '../plugins/types';
 import type {
   MapLayerInteractiveContext,
   MapLayerInteractiveEventType,
@@ -13,13 +13,18 @@ import {
   isMapInteractiveEventHandled,
   markMapInteractiveEventHandled,
 } from './mapInteractiveEventHandled';
-import { sortLayerEntriesByHitPriority } from './useMapInteractive';
+import {
+  shouldSnapOverrideRawTarget,
+  sortLayerEntriesByHitPriority,
+} from './useMapInteractive';
 
 export interface UsePluginLayerInteractiveOptions {
   /** 地图实例引用。 */
   mapInstance: MapInstance;
   /** 读取当前插件托管图层交互配置。 */
   getInteractive: () => MapPluginLayerInteractiveOptions | null | undefined;
+  /** 读取当前地图吸附绑定。 */
+  getSnapBinding?: () => MapSnapBinding | null | undefined;
   /** 将渲染态要素转换为标准快照。 */
   toFeatureSnapshot: (feature: MapGeoJSONFeature | null | undefined) => MapCommonFeature | null;
 }
@@ -29,6 +34,15 @@ interface HoveredLayerTarget {
   feature: MapGeoJSONFeature;
   /** 当前命中的图层 ID。 */
   layerId: string;
+}
+
+interface EventTargetResolution {
+  /** 原始鼠标位置直接命中的目标。 */
+  rawTarget: HoveredLayerTarget | null;
+  /** 叠加吸附结果后的最终目标。 */
+  effectiveTarget: HoveredLayerTarget | null;
+  /** 当前事件需要透传给业务回调的指针上下文。 */
+  pointerContext: Partial<MapLayerInteractiveContext>;
 }
 
 interface PluginLayerInteractiveBinding {
@@ -80,7 +94,7 @@ function hasInteractiveLayers(interactive: MapPluginLayerInteractiveOptions): bo
  * @returns 插件图层交互能力集合
  */
 export function usePluginLayerInteractive(options: UsePluginLayerInteractiveOptions) {
-  const { mapInstance, getInteractive, toFeatureSnapshot } = options;
+  const { mapInstance, getInteractive, getSnapBinding, toFeatureSnapshot } = options;
   let binding: PluginLayerInteractiveBinding | null = null;
 
   /**
@@ -113,6 +127,7 @@ export function usePluginLayerInteractive(options: UsePluginLayerInteractiveOpti
     binding = createPluginLayerInteractiveBinding(
       mapInstance.map,
       getInteractive,
+      getSnapBinding,
       toFeatureSnapshot
     );
   };
@@ -153,6 +168,7 @@ export function usePluginLayerInteractive(options: UsePluginLayerInteractiveOpti
 function createPluginLayerInteractiveBinding(
   map: MaplibreMap,
   getInteractive: () => MapPluginLayerInteractiveOptions | null | undefined,
+  getSnapBinding: (() => MapSnapBinding | null | undefined) | undefined,
   toFeatureSnapshot: (feature: MapGeoJSONFeature | null | undefined) => MapCommonFeature | null
 ): PluginLayerInteractiveBinding {
   let hoveredTarget: HoveredLayerTarget | null = null;
@@ -598,6 +614,43 @@ function createPluginLayerInteractiveBinding(
   };
 
   /**
+   * 根据吸附结果解析插件图层的有效命中目标。
+   * 当鼠标没有精确压在线上，但已经吸附到插件图层时，也允许触发 hover、点击和选中。
+   *
+   * @param event 当前地图鼠标事件
+   * @returns 原始命中、最终命中与统一指针上下文
+   */
+  const resolveEventTarget = (event: MapMouseEvent): EventTargetResolution => {
+    const rawTarget = getEventTarget(event);
+    const snapResult = getSnapBinding?.()?.resolveMapEvent(event) || null;
+    let effectiveTarget = rawTarget;
+    const rawLayerConfig = getLayerConfig(rawTarget?.layerId || null);
+    const snapLayerConfig = getLayerConfig(snapResult?.targetLayerId || null);
+
+    if (
+      snapResult?.matched &&
+      snapResult.targetFeature &&
+      snapResult.targetLayerId &&
+      shouldSnapOverrideRawTarget(rawLayerConfig, snapLayerConfig)
+    ) {
+      effectiveTarget = {
+        feature: snapResult.targetFeature,
+        layerId: snapResult.targetLayerId,
+      };
+    }
+
+    return {
+      rawTarget,
+      effectiveTarget,
+      pointerContext: createPointerContext(event, {
+        ...(snapResult?.matched && snapResult.lngLat ? { lngLat: snapResult.lngLat } : {}),
+        hitFeature: rawTarget?.feature || null,
+        snapResult,
+      }),
+    };
+  };
+
+  /**
    * 统一处理 click / dblclick / contextmenu 三类插件图层事件。
    * @param event 当前地图鼠标事件
    * @param eventType 当前事件类型
@@ -612,10 +665,7 @@ function createPluginLayerInteractiveBinding(
       return;
     }
 
-    const target = getEventTarget(event);
-    const pointerContext = createPointerContext(event, {
-      hitFeature: target?.feature || null,
-    });
+    const { effectiveTarget: target, pointerContext } = resolveEventTarget(event);
 
     if (!target) {
       if (eventType === 'click') {
@@ -634,17 +684,14 @@ function createPluginLayerInteractiveBinding(
    * @param event 当前地图鼠标事件
    */
   const handleMouseMove = (event: MapMouseEvent): void => {
-    const pointerContext = createPointerContext(event, { hitFeature: null });
-
     if (isMapInteractiveEventHandled(event)) {
-      clearHoverState(true, pointerContext);
+      clearHoverState(true, createPointerContext(event, { hitFeature: null, snapResult: null }));
       return;
     }
 
-    const target = getEventTarget(event);
+    const { effectiveTarget: target, pointerContext } = resolveEventTarget(event);
     if (target) {
       markMapInteractiveEventHandled(event);
-      pointerContext.hitFeature = target.feature;
     }
 
     applyHoverTarget(target, pointerContext);

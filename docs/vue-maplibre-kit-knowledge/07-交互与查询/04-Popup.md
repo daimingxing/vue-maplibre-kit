@@ -6,6 +6,8 @@
 
 对应示例：[NGGI04](../../../examples/views/NG/GI/NGGI04.vue)。
 
+组件参数和 `options` 热更新说明见：[地图与控件/05-MglPopup](../03-地图与控件/05-MglPopup.md)。
+
 ## 基本写法
 
 ```vue

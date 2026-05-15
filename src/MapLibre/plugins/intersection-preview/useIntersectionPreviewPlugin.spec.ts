@@ -1,12 +1,19 @@
-import { ref } from 'vue';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MapPluginContext } from '../types';
-import type { MapLayerInteractiveContext } from '../../shared/mapLibre-controls-types';
-import type { MapCommonLineFeature, MapSourceFeatureRef } from '../../shared/map-common-tools';
-import { createMapBusinessSource, createMapBusinessSourceRegistry } from '../../facades/createMapBusinessSource';
-import { resetMapGlobalConfig, setMapGlobalConfig } from '../../../config';
-import { createLineBusinessLayer } from '../../facades/mapBusinessLayer';
-import type { IntersectionPreviewOptions } from './types';
+import { ref } from "vue";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { MapPluginContext } from "../types";
+import type { MapLayerInteractiveContext } from "../../shared/mapLibre-controls-types";
+import type {
+  MapCommonFeature,
+  MapCommonLineFeature,
+  MapSourceFeatureRef,
+} from "../../shared/map-common-tools";
+import {
+  createMapBusinessSource,
+  createMapBusinessSourceRegistry,
+} from "../../facades/createMapBusinessSource";
+import { resetMapGlobalConfig, setMapGlobalConfig } from "../../../config";
+import { createLineBusinessLayer } from "../../facades/mapBusinessLayer";
+import type { IntersectionPreviewOptions } from "./types";
 import {
   intersectionPreviewPlugin,
   INTERSECTION_PREVIEW_LAYER_ID,
@@ -15,14 +22,25 @@ import {
   INTERSECTION_MATERIALIZED_LAYER_ID,
   INTERSECTION_MATERIALIZED_SOURCE_ID,
   type IntersectionPreviewPluginDescriptor,
-} from './useIntersectionPreviewPlugin';
+} from "./useIntersectionPreviewPlugin";
 
-vi.mock('vue-maplibre-gl', () => ({
+type IntersectionRenderProps = {
+  sourceId?: string;
+  materializedSourceId?: string;
+  style: {
+    paint: Record<string, any>;
+  };
+  materializedStyle: {
+    paint: Record<string, any>;
+  };
+};
+
+vi.mock("vue-maplibre-gl", () => ({
   MglCircleLayer: {
-    name: 'MglCircleLayer',
+    name: "MglCircleLayer",
   },
   MglGeoJsonSource: {
-    name: 'MglGeoJsonSource',
+    name: "MglGeoJsonSource",
   },
 }));
 
@@ -36,16 +54,43 @@ afterEach(() => {
  * @param coordinates 线坐标串
  * @returns 标准线要素
  */
-function createLineFeature(id: string, coordinates: [number, number][]): MapCommonLineFeature {
+function createLineFeature(
+  id: string,
+  coordinates: [number, number][],
+): MapCommonLineFeature {
   return {
-    type: 'Feature',
+    type: "Feature",
     id,
     properties: {
       id,
       name: id,
     },
     geometry: {
-      type: 'LineString',
+      type: "LineString",
+      coordinates,
+    },
+  };
+}
+
+/**
+ * 创建测试用多线要素。
+ * @param id 多线要素 ID
+ * @param coordinates 多线坐标串
+ * @returns 标准多线要素
+ */
+function createMultiLineFeature(
+  id: string,
+  coordinates: [number, number][][],
+): MapCommonFeature {
+  return {
+    type: "Feature",
+    id,
+    properties: {
+      id,
+      name: id,
+    },
+    geometry: {
+      type: "MultiLineString",
       coordinates,
     },
   };
@@ -58,9 +103,9 @@ function createLineFeature(id: string, coordinates: [number, number][]): MapComm
  */
 function createFeatureRef(featureId: string): MapSourceFeatureRef {
   return {
-    sourceId: 'line-source',
+    sourceId: "line-source",
     featureId,
-    layerId: 'line-layer',
+    layerId: "line-layer",
   };
 }
 
@@ -72,27 +117,40 @@ function createPluginOptions(): IntersectionPreviewOptions {
   return {
     enabled: true,
     visible: true,
-    scope: 'all',
-    targetSourceIds: ['line-source'],
-    targetLayerIds: ['line-layer'],
+    scope: "all",
+    targetSourceIds: ["line-source"],
+    targetLayerIds: ["line-layer"],
     includeEndpoint: true,
     coordDigits: 6,
     getCandidates: () => [
       {
-        feature: createLineFeature('line-a', [
+        feature: createLineFeature("line-a", [
           [0, 0],
           [10, 10],
         ]),
-        ref: createFeatureRef('line-a'),
+        ref: createFeatureRef("line-a"),
       },
       {
-        feature: createLineFeature('line-b', [
+        feature: createLineFeature("line-b", [
           [0, 10],
           [10, 0],
         ]),
-        ref: createFeatureRef('line-b'),
+        ref: createFeatureRef("line-b"),
       },
     ],
+  };
+}
+
+/**
+ * 创建测试用插件配置引用，避免 Vue ref 对复杂插件配置做过深类型展开。
+ * @param options 插件配置
+ * @returns 插件配置引用
+ */
+function createOptionsRef(
+  options: IntersectionPreviewOptions = createPluginOptions(),
+): { value: IntersectionPreviewOptions } {
+  return {
+    value: options,
   };
 }
 
@@ -102,21 +160,21 @@ function createPluginOptions(): IntersectionPreviewOptions {
  */
 function createSourceRegistry() {
   const primarySource = createMapBusinessSource({
-    sourceId: 'line-source',
+    sourceId: "line-source",
     data: ref({
-      type: 'FeatureCollection',
+      type: "FeatureCollection",
       features: [
-        createLineFeature('line-a', [
+        createLineFeature("line-a", [
           [0, 0],
           [10, 10],
         ]),
       ],
     }),
-    promoteId: 'id',
+    promoteId: "id",
     layers: [
       createLineBusinessLayer({
-        layerId: 'line-layer',
-        geometryTypes: ['LineString'],
+        layerId: "line-layer",
+        geometryTypes: ["LineString"],
         style: {
           layout: {},
           paint: {},
@@ -125,21 +183,21 @@ function createSourceRegistry() {
     ],
   });
   const secondarySource = createMapBusinessSource({
-    sourceId: 'line-source-2',
+    sourceId: "line-source-2",
     data: ref({
-      type: 'FeatureCollection',
+      type: "FeatureCollection",
       features: [
-        createLineFeature('line-b', [
+        createLineFeature("line-b", [
           [0, 10],
           [10, 0],
         ]),
       ],
     }),
-    promoteId: 'id',
+    promoteId: "id",
     layers: [
       createLineBusinessLayer({
-        layerId: 'line-layer-2',
-        geometryTypes: ['LineString'],
+        layerId: "line-layer-2",
+        geometryTypes: ["LineString"],
         style: {
           layout: {},
           paint: {},
@@ -148,7 +206,10 @@ function createSourceRegistry() {
     ],
   });
 
-  return createMapBusinessSourceRegistry([primarySource, secondarySource]);
+  const sourceRegistry = createMapBusinessSourceRegistry();
+  sourceRegistry.setSources([primarySource, secondarySource]);
+
+  return sourceRegistry;
 }
 
 /**
@@ -158,11 +219,15 @@ function createSourceRegistry() {
  */
 function createPluginContext(
   optionsRef: { value: IntersectionPreviewOptions },
-  getSelectedFeatureContext: () => MapLayerInteractiveContext | null = () => null
-): MapPluginContext<typeof INTERSECTION_PREVIEW_PLUGIN_TYPE, IntersectionPreviewOptions> {
+  getSelectedFeatureContext: () => MapLayerInteractiveContext | null = () =>
+    null,
+): MapPluginContext<
+  typeof INTERSECTION_PREVIEW_PLUGIN_TYPE,
+  IntersectionPreviewOptions
+> {
   return {
     descriptor: {
-      id: 'intersectionPreview',
+      id: "intersectionPreview",
       type: INTERSECTION_PREVIEW_PLUGIN_TYPE,
       options: optionsRef.value,
       plugin: intersectionPreviewPlugin,
@@ -176,119 +241,146 @@ function createPluginContext(
     clearSelectedFeature: () => undefined,
     clearPluginHoverState: () => undefined,
     clearPluginSelectedFeature: () => undefined,
+    listPlugins: () => [],
     toFeatureSnapshot: () => null,
   };
 }
 
-describe('intersectionPreviewPlugin', () => {
-  it('应在插件内部同时声明预览层与正式交点层，并通过插件专用交互通道暴露图层交互', () => {
-    const optionsRef = ref(createPluginOptions());
-    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+describe("intersectionPreviewPlugin", () => {
+  it("应在插件内部同时声明预览层与正式交点层，并通过插件专用交互通道暴露图层交互", () => {
+    const optionsRef = createOptionsRef();
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
     const renderItems = pluginInstance.getRenderItems?.() || [];
     const patch = pluginInstance.getMapInteractivePatch?.();
-    const pluginLayerPatch = (pluginInstance as any).getPluginLayerInteractivePatch?.();
+    const pluginLayerPatch = (
+      pluginInstance as any
+    ).getPluginLayerInteractivePatch?.();
     const pluginApi = pluginInstance.getApi?.();
 
     expect(renderItems).toHaveLength(1);
     expect(renderItems[0].props.sourceId).toBe(INTERSECTION_PREVIEW_SOURCE_ID);
-    expect(renderItems[0].props.materializedSourceId).toBe(INTERSECTION_MATERIALIZED_SOURCE_ID);
-    expect(typeof pluginApi?.materialize).toBe('function');
-    expect(typeof pluginApi?.clearMaterialized).toBe('function');
+    expect(renderItems[0].props.materializedSourceId).toBe(
+      INTERSECTION_MATERIALIZED_SOURCE_ID,
+    );
+    expect(typeof pluginApi?.materialize).toBe("function");
+    expect(typeof pluginApi?.clearMaterialized).toBe("function");
     expect(patch?.layers).toBeUndefined();
-    expect(pluginLayerPatch?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]).toBeTruthy();
-    expect(pluginLayerPatch?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]).toBeTruthy();
-    expect(pluginLayerPatch?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]?.hitPriority).toBeGreaterThan(0);
-    expect(pluginLayerPatch?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]?.hitPriority).toBeGreaterThan(0);
+    expect(
+      pluginLayerPatch?.layers?.[INTERSECTION_PREVIEW_LAYER_ID],
+    ).toBeTruthy();
+    expect(
+      pluginLayerPatch?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID],
+    ).toBeTruthy();
+    expect(
+      pluginLayerPatch?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]?.hitPriority,
+    ).toBeGreaterThan(0);
+    expect(
+      pluginLayerPatch?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]
+        ?.hitPriority,
+    ).toBeGreaterThan(0);
   });
 
-  it('点击预览交点后应自动生成正式点要素', () => {
-    const optionsRef = ref(createPluginOptions());
-    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+  it("点击预览交点后应自动生成正式点要素", () => {
+    const optionsRef = createOptionsRef();
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
     const pluginApi = pluginInstance.getApi?.();
     if (!pluginApi) {
-      throw new Error('未获取到交点插件 API');
+      throw new Error("未获取到交点插件 API");
     }
 
     const [previewFeature] = pluginApi.getData().features;
     if (!previewFeature?.id) {
-      throw new Error('当前预览交点为空，无法继续断言');
+      throw new Error("当前预览交点为空，无法继续断言");
     }
 
     (pluginInstance as any)
       .getPluginLayerInteractivePatch?.()
-      ?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]
-      ?.onClick?.({
+      ?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]?.onClick?.({
         featureId: previewFeature.id,
       } as any);
 
     const materializedData = pluginApi.getMaterializedData();
 
     expect(materializedData.features).toHaveLength(1);
-    expect(materializedData.features[0].properties?.generatedKind).toBe('intersection-materialized');
+    expect(materializedData.features[0].properties?.generatedKind).toBe(
+      "intersection-materialized",
+    );
     expect(materializedData.features[0].properties?.id).toBe(previewFeature.id);
   });
 
-  it('预览点与正式点共存时，选中正式点应返回正式点上下文，并支持显式分层查询', () => {
-    const optionsRef = ref(createPluginOptions());
-    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+  it("预览点与正式点共存时，选中正式点应返回正式点上下文，并支持显式分层查询", () => {
+    const optionsRef = createOptionsRef();
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
     const pluginApi = pluginInstance.getApi?.();
     if (!pluginApi) {
-      throw new Error('未获取到交点插件 API');
+      throw new Error("未获取到交点插件 API");
     }
 
     const [previewFeature] = pluginApi.getData().features;
     if (!previewFeature?.id) {
-      throw new Error('当前预览交点为空，无法继续断言');
+      throw new Error("当前预览交点为空，无法继续断言");
     }
 
     (pluginInstance as any)
       .getPluginLayerInteractivePatch?.()
-      ?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]
-      ?.onClick?.({
+      ?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]?.onClick?.({
         featureId: previewFeature.id,
       } as any);
 
     const materializedFeature = pluginApi.getMaterializedData().features[0];
     if (!materializedFeature?.id) {
-      throw new Error('当前正式交点为空，无法继续断言');
+      throw new Error("当前正式交点为空，无法继续断言");
     }
 
     (pluginInstance as any)
       .getPluginLayerInteractivePatch?.()
-      ?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]
-      ?.onClick?.({
+      ?.layers?.[INTERSECTION_MATERIALIZED_LAYER_ID]?.onClick?.({
         featureId: materializedFeature.id,
       } as any);
 
     const selectedContext = pluginApi.getSelected();
     const previewContext = pluginApi.getPreviewById(String(previewFeature.id));
-    const materializedContext = pluginApi.getMaterializedById(String(materializedFeature.id));
+    const materializedContext = pluginApi.getMaterializedById(
+      String(materializedFeature.id),
+    );
 
-    expect(previewContext?.feature?.properties?.generatedKind).toBe('intersection-preview');
-    expect(materializedContext?.feature?.properties?.generatedKind).toBe('intersection-materialized');
-    expect(selectedContext?.feature?.properties?.generatedKind).toBe('intersection-materialized');
+    expect(previewContext?.feature?.properties?.generatedKind).toBe(
+      "intersection-preview",
+    );
+    expect(materializedContext?.feature?.properties?.generatedKind).toBe(
+      "intersection-materialized",
+    );
+    expect(selectedContext?.feature?.properties?.generatedKind).toBe(
+      "intersection-materialized",
+    );
   });
 
-  it('selected 模式下切换选中线后应自动刷新交点', () => {
-    const optionsRef = ref<IntersectionPreviewOptions>({
+  it("selected 模式下切换选中线后应自动刷新交点", () => {
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
-      scope: 'selected',
+      scope: "selected",
     });
     let selectedFeatureContext: MapLayerInteractiveContext | null = null;
     const pluginInstance = intersectionPreviewPlugin.createInstance(
-      createPluginContext(optionsRef, () => selectedFeatureContext)
+      createPluginContext(optionsRef, () => selectedFeatureContext),
     );
     const pluginApi = pluginInstance.getApi?.();
     if (!pluginApi) {
-      throw new Error('未获取到交点插件 API');
+      throw new Error("未获取到交点插件 API");
     }
 
     expect(pluginApi.getData().features).toHaveLength(0);
 
     selectedFeatureContext = {
-      featureId: 'line-a',
-      sourceId: 'line-source',
-      layerId: 'line-layer',
+      featureId: "line-a",
+      sourceId: "line-source",
+      layerId: "line-layer",
     } as MapLayerInteractiveContext;
 
     pluginInstance.getMapInteractivePatch?.()?.onSelectionChange?.({} as any);
@@ -296,30 +388,30 @@ describe('intersectionPreviewPlugin', () => {
     expect(pluginApi.getData().features).toHaveLength(1);
   });
 
-  it('selected 模式下切到插件内部交点图层时不应清空当前预览', () => {
-    const optionsRef = ref<IntersectionPreviewOptions>({
+  it("selected 模式下切到插件内部交点图层时不应清空当前预览", () => {
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
-      scope: 'selected',
+      scope: "selected",
     });
     let selectedFeatureContext: MapLayerInteractiveContext | null = null;
     const pluginInstance = intersectionPreviewPlugin.createInstance(
-      createPluginContext(optionsRef, () => selectedFeatureContext)
+      createPluginContext(optionsRef, () => selectedFeatureContext),
     );
     const pluginApi = pluginInstance.getApi?.();
     if (!pluginApi) {
-      throw new Error('未获取到交点插件 API');
+      throw new Error("未获取到交点插件 API");
     }
 
     selectedFeatureContext = {
-      featureId: 'line-a',
-      sourceId: 'line-source',
-      layerId: 'line-layer',
+      featureId: "line-a",
+      sourceId: "line-source",
+      layerId: "line-layer",
     } as MapLayerInteractiveContext;
     pluginInstance.getMapInteractivePatch?.()?.onSelectionChange?.({} as any);
 
     const [previewFeature] = pluginApi.getData().features;
     if (!previewFeature?.id) {
-      throw new Error('未生成预览交点，无法继续断言');
+      throw new Error("未生成预览交点，无法继续断言");
     }
 
     selectedFeatureContext = {
@@ -332,136 +424,292 @@ describe('intersectionPreviewPlugin', () => {
     expect(pluginApi.getData().features).toHaveLength(1);
   });
 
-  it('未传 getCandidates 时应自动从 sourceRegistry 提取目标线', () => {
-    const optionsRef = ref<IntersectionPreviewOptions>({
+  it("未传 getCandidates 时应自动从 sourceRegistry 提取目标线", () => {
+    const optionsRef = createOptionsRef({
       enabled: true,
       visible: true,
-      scope: 'all',
+      scope: "all",
       sourceRegistry: createSourceRegistry(),
-      targetSourceIds: ['line-source', 'line-source-2'],
-      targetLayerIds: ['line-layer', 'line-layer-2'],
+      targetSourceIds: ["line-source", "line-source-2"],
+      targetLayerIds: ["line-layer", "line-layer-2"],
     });
 
-    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
     const pluginApi = pluginInstance.getApi?.();
     if (!pluginApi) {
-      throw new Error('未获取到交点插件 API');
+      throw new Error("未获取到交点插件 API");
     }
 
     expect(pluginApi.getData().features).toHaveLength(1);
   });
 
-  it('应允许覆写预览层和正式交点层样式', () => {
-    const optionsRef = ref<IntersectionPreviewOptions>({
+  it("未传 getCandidates 时应把目标 MultiLineString 拆成候选线", () => {
+    const sourceRegistry = createMapBusinessSourceRegistry();
+    sourceRegistry.addSource(
+      createMapBusinessSource({
+        sourceId: "line-source",
+        data: ref({
+          type: "FeatureCollection",
+          features: [
+            createMultiLineFeature("multi-line-a", [
+              [
+                [0, 0],
+                [10, 10],
+              ],
+              [
+                [20, 20],
+                [30, 30],
+              ],
+            ]),
+            createLineFeature("line-b", [
+              [0, 10],
+              [10, 0],
+            ]),
+          ],
+        }),
+        promoteId: "id",
+        layers: [
+          createLineBusinessLayer({
+            layerId: "line-layer",
+            geometryTypes: ["MultiLineString"],
+            style: {
+              layout: {},
+              paint: {},
+            },
+          }),
+        ],
+      }),
+    );
+    const optionsRef = createOptionsRef({
+      enabled: true,
+      visible: true,
+      scope: "all",
+      sourceRegistry,
+      targetSourceIds: ["line-source"],
+      targetLayerIds: ["line-layer"],
+      includeEndpoint: true,
+    });
+
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error("未获取到交点插件 API");
+    }
+
+    expect(pluginApi.getData().features).toHaveLength(1);
+  });
+
+  it("应允许覆写预览层和正式交点层样式", () => {
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
       previewStyleOverrides: {
         paint: {
-          'circle-color': '#111111',
+          "circle-color": "#111111",
         },
       },
       materializedStyleOverrides: {
         paint: {
-          'circle-radius': 12,
+          "circle-radius": 12,
         },
       },
     });
 
-    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
     const renderItems = pluginInstance.getRenderItems?.() || [];
-    const renderProps = renderItems[0]?.props;
+    const renderProps = renderItems[0]?.props as IntersectionRenderProps;
 
-    expect(renderProps.style.paint['circle-color']).toBe('#111111');
-    expect(renderProps.materializedStyle.paint['circle-radius']).toBe(12);
+    expect(renderProps.style.paint["circle-color"]).toBe("#111111");
+    expect(renderProps.materializedStyle.paint["circle-radius"]).toBe(12);
   });
 
-  it('应合并全局交点样式与实例样式，且实例优先级更高', () => {
+  it("应合并全局交点样式与实例样式，且实例优先级更高", () => {
     setMapGlobalConfig({
       plugins: {
         intersection: {
           previewStateStyles: {
             selected: {
-              color: '#333333',
+              color: "#333333",
             },
           },
           previewStyleOverrides: {
             paint: {
-              'circle-color': '#222222',
-              'circle-radius': 8,
+              "circle-color": "#222222",
+              "circle-radius": 8,
             },
           },
           materializedStyleOverrides: {
             paint: {
-              'circle-radius': 9,
+              "circle-radius": 9,
             },
           },
         },
       },
     });
 
-    const optionsRef = ref<IntersectionPreviewOptions>({
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
       previewStyleOverrides: {
         paint: {
-          'circle-color': '#111111',
+          "circle-color": "#111111",
         },
       },
     });
 
-    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
     const renderItems = pluginInstance.getRenderItems?.() || [];
-    const renderProps = renderItems[0]?.props;
+    const renderProps = renderItems[0]?.props as IntersectionRenderProps;
 
-    expect(renderProps.style.paint['circle-color']).toBe('#111111');
-    expect(renderProps.style.paint['circle-radius']).toBe(8);
-    expect(renderProps.materializedStyle.paint['circle-color'][2]).toBe('#0958d9');
-    expect(renderProps.materializedStyle.paint['circle-radius']).toBe(9);
+    expect(renderProps.style.paint["circle-color"]).toBe("#111111");
+    expect(renderProps.style.paint["circle-radius"]).toBe(8);
+    expect(renderProps.materializedStyle.paint["circle-color"][2]).toBe(
+      "#0958d9",
+    );
+    expect(renderProps.materializedStyle.paint["circle-radius"]).toBe(9);
   });
 
-  it('应支持通过状态样式配置覆写交点 selected 颜色', () => {
-    const optionsRef = ref<IntersectionPreviewOptions>({
-      ...createPluginOptions(),
-      previewStateStyles: {
-        selected: {
-          color: '#ffcc00',
-        },
-      },
-      materializedStateStyles: {
-        selected: {
-          color: '#00aaff',
+  it("应继承全局交点行为默认值，并允许实例局部单项覆写", () => {
+    setMapGlobalConfig({
+      plugins: {
+        intersection: {
+          visible: false,
+          materializeOnClick: false,
+          scope: "selected",
+          includeEndpoint: true,
+          coordDigits: 4,
+          ignoreSelf: true,
         },
       },
     });
-
-    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
-    const renderItems = pluginInstance.getRenderItems?.() || [];
-    const renderProps = renderItems[0]?.props;
-
-    expect(renderProps.style.paint['circle-color'][2]).toBe('#ffcc00');
-    expect(renderProps.materializedStyle.paint['circle-color'][2]).toBe('#00aaff');
-  });
-
-  it('应支持交点 hover enter / leave 回调，并通过插件交互配置触发', () => {
-    const onHoverEnter = vi.fn();
-    const onHoverLeave = vi.fn();
-    const optionsRef = ref<IntersectionPreviewOptions>({
+    const optionsRef = createOptionsRef({
       ...createPluginOptions(),
-      onHoverEnter,
-      onHoverLeave,
+      visible: undefined,
+      scope: "all",
+      coordDigits: 6,
     });
-    const pluginInstance = intersectionPreviewPlugin.createInstance(createPluginContext(optionsRef));
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
     const pluginApi = pluginInstance.getApi?.();
     if (!pluginApi) {
-      throw new Error('未获取到交点插件 API');
+      throw new Error("未获取到交点插件 API");
+    }
+
+    expect(pluginInstance.state?.value.visible).toBe(false);
+    expect(pluginInstance.state?.value.scope).toBe("all");
+    expect(pluginApi.getData().features).toHaveLength(1);
+  });
+
+  it("setScope 应更新运行期范围且不修改原始插件配置对象", () => {
+    const optionsRef = createOptionsRef({
+      ...createPluginOptions(),
+      scope: "all",
+    });
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error("未获取到交点插件 API");
+    }
+
+    pluginApi.setScope("selected");
+
+    expect(optionsRef.value.scope).toBe("all");
+    expect(pluginInstance.state?.value.scope).toBe("selected");
+  });
+
+  it("全局 materializeOnClick 默认值应影响预览交点点击行为", () => {
+    setMapGlobalConfig({
+      plugins: {
+        intersection: {
+          materializeOnClick: false,
+        },
+      },
+    });
+    const optionsRef = createOptionsRef();
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error("未获取到交点插件 API");
     }
 
     const [previewFeature] = pluginApi.getData().features;
     if (!previewFeature?.id) {
-      throw new Error('当前预览交点为空，无法继续断言');
+      throw new Error("当前预览交点为空，无法继续断言");
     }
 
-    const previewLayerConfig = (pluginInstance as any)
+    (pluginInstance as any)
       .getPluginLayerInteractivePatch?.()
-      ?.layers?.[INTERSECTION_PREVIEW_LAYER_ID];
+      ?.layers?.[INTERSECTION_PREVIEW_LAYER_ID]?.onClick?.({
+        featureId: previewFeature.id,
+      } as any);
+
+    expect(pluginApi.getMaterializedData().features).toHaveLength(0);
+  });
+
+  it("应支持通过状态样式配置覆写交点 selected 颜色", () => {
+    const optionsRef = createOptionsRef({
+      ...createPluginOptions(),
+      previewStateStyles: {
+        selected: {
+          color: "#ffcc00",
+        },
+      },
+      materializedStateStyles: {
+        selected: {
+          color: "#00aaff",
+        },
+      },
+    });
+
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
+    const renderItems = pluginInstance.getRenderItems?.() || [];
+    const renderProps = renderItems[0]?.props as IntersectionRenderProps;
+
+    expect(renderProps.style.paint["circle-color"][2]).toBe("#ffcc00");
+    expect(renderProps.materializedStyle.paint["circle-color"][2]).toBe(
+      "#00aaff",
+    );
+  });
+
+  it("应支持交点 hover enter / leave 回调，并通过插件交互配置触发", () => {
+    const onHoverEnter = vi.fn();
+    const onHoverLeave = vi.fn();
+    const optionsRef = createOptionsRef({
+      ...createPluginOptions(),
+      onHoverEnter,
+      onHoverLeave,
+    });
+    const pluginInstance = intersectionPreviewPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error("未获取到交点插件 API");
+    }
+
+    const [previewFeature] = pluginApi.getData().features;
+    if (!previewFeature?.id) {
+      throw new Error("当前预览交点为空，无法继续断言");
+    }
+
+    const previewLayerConfig = (
+      pluginInstance as any
+    ).getPluginLayerInteractivePatch?.()?.layers?.[
+      INTERSECTION_PREVIEW_LAYER_ID
+    ];
 
     previewLayerConfig?.onHoverEnter?.({
       featureId: previewFeature.id,

@@ -2,6 +2,7 @@ import {
   buildIntersectionPointFeature,
   buildMaterializedIntersectionFeature,
   collectLineIntersections,
+  INTERSECTION_PREVIEW_KIND,
   type IntersectionScope,
 } from '../../shared/map-intersection-tools';
 import type { MapCommonFeature, MapCommonProperties } from '../../shared/map-common-tools';
@@ -65,7 +66,7 @@ function createPreviewIntersectionContext(
   return {
     ...intersection,
     feature: buildIntersectionPointFeature(intersection, {
-      generatedKind: 'intersection-preview',
+      generatedKind: INTERSECTION_PREVIEW_KIND,
     }) as MapCommonFeature,
   };
 }
@@ -526,17 +527,12 @@ export function useIntersectionPreviewController(
 
   /**
    * 切换当前求交范围。
-   * 当前实现会同步回写外部描述对象上的 scope，
-   * 这样插件宿主、门面与运行时控制器会始终读取到同一份最新范围。
+   * 插件层通过 setScope 接管运行期范围，避免修改业务层传入的原始配置对象。
    *
    * @param nextScope 目标范围
    */
   const setScope = (nextScope: IntersectionScope): void => {
-    const pluginOptions = options.getOptions();
-    if (pluginOptions) {
-      pluginOptions.scope = nextScope;
-    }
-
+    options.setScope?.(nextScope);
     refresh();
   };
 

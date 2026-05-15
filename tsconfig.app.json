@@ -20,6 +20,9 @@
       "vue-maplibre-kit/plugins/intersection-preview": [
         "./src/plugins/intersection-preview.ts"
       ],
+      "vue-maplibre-kit/plugins/polygon-edge-preview": [
+        "./src/plugins/polygon-edge-preview.ts"
+      ],
       "vue-maplibre-kit/plugins/map-feature-multi-select": [
         "./src/plugins/map-feature-multi-select.ts"
       ],

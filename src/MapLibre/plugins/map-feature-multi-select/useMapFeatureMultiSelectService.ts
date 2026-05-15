@@ -26,7 +26,7 @@ function normalizeMapFeatureMultiSelectOptions(
   const globalDefaults = getMapGlobalMultiSelectDefaults();
 
   return {
-    enabled: rawOptions?.enabled ?? globalDefaults?.enabled ?? true,
+    enabled: rawOptions?.enabled ?? true,
     position: rawOptions?.position ?? globalDefaults?.position ?? 'top-right',
     deactivateBehavior:
       rawOptions?.deactivateBehavior ?? globalDefaults?.deactivateBehavior ?? 'clear',

@@ -1,4 +1,4 @@
-import type { FeatureCollection, Geometry } from 'geojson';
+import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import type { Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
 import { ref } from 'vue';
 import type { TerraDrawMouseEvent } from 'terra-draw';
@@ -20,9 +20,25 @@ interface ScreenPoint {
   y: number;
 }
 
+type ResolvedMapFeatureSnapRule = MapFeatureSnapRule & {
+  /** 系统归一化后的规则 ID。 */
+  id: string;
+};
+
+type SnapFeatureBase = Feature<Geometry, Record<string, any> | null>;
+
+type SnapFeatureLike = SnapFeatureBase & {
+  /** MapLibre 渲染要素 source ID。 */
+  source?: string;
+  /** MapLibre 渲染要素 source-layer。 */
+  sourceLayer?: string;
+  /** MapLibre 渲染要素所在图层。 */
+  layer?: { id?: string };
+};
+
 interface SnapCandidate {
-  rule: MapFeatureSnapRule;
-  feature: MapGeoJSONFeature;
+  rule: ResolvedMapFeatureSnapRule;
+  feature: SnapFeatureLike;
   layerId: string;
   sourceId: string | null;
   coordinate: [number, number];
@@ -54,6 +70,8 @@ const INTERSECTION_PREVIEW_LAYER_ID = 'intersection-preview-layer';
 const INTERSECTION_MATERIALIZED_LAYER_ID = 'intersection-materialized-layer';
 const INTERSECTION_PREVIEW_SNAP_PRIORITY = 100;
 const INTERSECTION_MATERIALIZED_SNAP_PRIORITY = 110;
+const POLYGON_EDGE_PREVIEW_LAYER_ID = 'polygonEdgePreviewLineLayer';
+const POLYGON_EDGE_SNAP_PRIORITY = 90;
 
 const DEFAULT_TOLERANCE_PX = 16;
 const DEFAULT_SNAP_MODES: MapFeatureSnapMode[] = ['vertex', 'segment'];
@@ -112,7 +130,7 @@ function isLngLatCoordinate(coordinate: unknown): coordinate is [number, number]
  * @returns 当前规则最终生效的吸附方式集合
  */
 function getResolvedSnapModes(
-  rule: MapFeatureSnapRule,
+  rule: ResolvedMapFeatureSnapRule,
   geometryType: MapFeatureSnapGeometryType
 ): MapFeatureSnapMode[] {
   const snapModes = rule.snapTo?.length ? [...rule.snapTo] : [...DEFAULT_SNAP_MODES];
@@ -129,7 +147,10 @@ function getResolvedSnapModes(
  * @param defaultTolerancePx 全局默认吸附范围
  * @returns 当前规则最终生效的吸附范围
  */
-function getResolvedTolerancePx(rule: MapFeatureSnapRule, defaultTolerancePx: number): number {
+function getResolvedTolerancePx(
+  rule: MapFeatureSnapRule,
+  defaultTolerancePx: number
+): number {
   return rule.tolerancePx ?? defaultTolerancePx;
 }
 
@@ -201,7 +222,7 @@ function projectPointToScreenSegment(
  * @param feature 候选渲染要素
  * @returns sourceId；不存在时返回 null
  */
-function getFeatureSourceId(feature: MapGeoJSONFeature): string | null {
+function getFeatureSourceId(feature: SnapFeatureLike): string | null {
   return typeof feature.source === 'string' ? feature.source : null;
 }
 
@@ -211,7 +232,7 @@ function getFeatureSourceId(feature: MapGeoJSONFeature): string | null {
  * @param rule 当前规则
  * @returns 是否通过浅层属性匹配
  */
-function matchesRuleWhere(feature: MapGeoJSONFeature, rule: MapFeatureSnapRule): boolean {
+function matchesRuleWhere(feature: SnapFeatureLike, rule: MapFeatureSnapRule): boolean {
   if (!rule.where) {
     return true;
   }
@@ -233,7 +254,7 @@ function matchesRuleWhere(feature: MapGeoJSONFeature, rule: MapFeatureSnapRule):
 function matchesRuleFilter(
   map: MaplibreMap,
   feature: MapGeoJSONFeature,
-  rule: MapFeatureSnapRule,
+  rule: ResolvedMapFeatureSnapRule,
   layerId: string
 ): boolean {
   if (!matchesRuleWhere(feature, rule)) {
@@ -320,7 +341,7 @@ function getPointGeometryCoordinates(geometry: Geometry): [number, number][] {
  * @param feature 当前候选渲染要素
  * @returns 归一化后的几何类型；不支持时返回 null
  */
-function resolveFeatureGeometryType(feature: MapGeoJSONFeature): MapFeatureSnapGeometryType | null {
+function resolveFeatureGeometryType(feature: SnapFeatureLike): MapFeatureSnapGeometryType | null {
   const geometryType = feature.geometry?.type;
   if (geometryType === 'Point' || geometryType === 'MultiPoint') {
     return 'Point';
@@ -349,8 +370,8 @@ function resolveFeatureGeometryType(feature: MapGeoJSONFeature): MapFeatureSnapG
 function buildPointCandidates(
   map: MaplibreMap,
   pointerPoint: ScreenPoint,
-  feature: MapGeoJSONFeature,
-  rule: MapFeatureSnapRule,
+  feature: SnapFeatureLike,
+  rule: ResolvedMapFeatureSnapRule,
   layerId: string
 ): SnapCandidate[] {
   const featureGeometryType = resolveFeatureGeometryType(feature);
@@ -401,8 +422,8 @@ function buildPointCandidates(
 function buildPathCandidates(
   map: MaplibreMap,
   pointerPoint: ScreenPoint,
-  feature: MapGeoJSONFeature,
-  rule: MapFeatureSnapRule,
+  feature: SnapFeatureLike,
+  rule: ResolvedMapFeatureSnapRule,
   layerId: string
 ): SnapCandidate[] {
   const featureGeometryType = resolveFeatureGeometryType(feature);
@@ -521,6 +542,29 @@ function shouldReplaceCandidate(current: SnapCandidate | null, next: SnapCandida
 }
 
 /**
+ * 创建系统生成的业务吸附规则 ID。
+ * @param rule 原始规则
+ * @param index 当前规则序号
+ * @returns 稳定规则 ID
+ */
+export function createGeneratedRuleId(rule: MapFeatureSnapRule, index: number): string {
+  const layerKey = rule.layerIds.length ? rule.layerIds.join(',') : `rule-${index}`;
+  return `business-layer:${index}:${layerKey}`;
+}
+
+/**
+ * 归一化业务规则，补齐系统生成 ID。
+ * @param rules 原始规则集合
+ * @returns 已补齐 ID 的规则集合
+ */
+function normalizeSnapRules(rules: MapFeatureSnapRule[]): ResolvedMapFeatureSnapRule[] {
+  return rules.map((rule, index) => ({
+    ...rule,
+    id: rule.id || createGeneratedRuleId(rule, index),
+  }));
+}
+
+/**
  * 根据规则和候选要素列表解析当前最佳吸附结果。
  * @param map 当前地图实例
  * @param rules 当前启用的规则集合
@@ -529,7 +573,7 @@ function shouldReplaceCandidate(current: SnapCandidate | null, next: SnapCandida
  */
 function resolveSnapCandidate(
   map: MaplibreMap,
-  rules: MapFeatureSnapRule[],
+  rules: ResolvedMapFeatureSnapRule[],
   pointer: ResolvePointerOptions
 ): SnapCandidate | null {
   if (!rules.length) {
@@ -622,7 +666,7 @@ function toSnapResult(candidate: SnapCandidate | null): MapFeatureSnapResult {
     distancePx: candidate.distancePx,
     snapKind: candidate.snapKind,
     ruleId: candidate.rule.id,
-    targetFeature: candidate.feature,
+    targetFeature: candidate.feature.layer ? (candidate.feature as MapGeoJSONFeature) : null,
     targetLayerId: candidate.layerId,
     targetSourceId: candidate.sourceId,
     targetCoordinate: candidate.coordinate,
@@ -640,26 +684,98 @@ function isSnapPluginEnabled(options: MapFeatureSnapOptions | null | undefined):
 }
 
 /**
+ * 判断内置吸附目标是否启用。
+ * @param targetOptions 内置吸附目标配置
+ * @returns 是否启用
+ */
+function isBuiltInTargetEnabled(
+  targetOptions: MapFeatureSnapOptions['intersection'] | MapFeatureSnapOptions['polygonEdge']
+): boolean {
+  if (targetOptions === false) {
+    return false;
+  }
+
+  if (targetOptions && typeof targetOptions === 'object') {
+    return targetOptions.enabled !== false;
+  }
+
+  return true;
+}
+
+/**
+ * 读取内置吸附目标的局部覆写配置。
+ * @param targetOptions 内置吸附目标配置
+ * @returns 局部覆写配置
+ */
+function getBuiltInTargetPatch(
+  targetOptions: MapFeatureSnapOptions['intersection'] | MapFeatureSnapOptions['polygonEdge']
+) {
+  return targetOptions && typeof targetOptions === 'object' ? targetOptions : {};
+}
+
+/**
  * 创建交点图层内置吸附规则。
- * 插件内部交点点位应始终可被吸附，因此这里不要求业务层额外声明规则。
+ * 插件内部交点点位默认可被吸附，业务层可通过 snap.intersection 显式关闭或调整规则。
  *
+ * @param options 地图吸附插件配置
  * @returns 交点预览层与正式点层的内置吸附规则
  */
-function createBuiltInIntersectionSnapRules(): MapFeatureSnapRule[] {
+function createBuiltInIntersectionSnapRules(
+  options: MapFeatureSnapOptions | null | undefined
+): MapFeatureSnapRule[] {
+  if (!isBuiltInTargetEnabled(options?.intersection)) {
+    return [];
+  }
+
+  const targetPatch = getBuiltInTargetPatch(options?.intersection);
+  const snapTo: MapFeatureSnapMode[] =
+    targetPatch.snapTo?.includes('vertex') === false ? [] : ['vertex'];
+  if (!snapTo.length) {
+    return [];
+  }
+
   return [
     {
       id: 'intersection-preview-snap',
       layerIds: [INTERSECTION_PREVIEW_LAYER_ID],
-      priority: INTERSECTION_PREVIEW_SNAP_PRIORITY,
+      priority: targetPatch.priority ?? INTERSECTION_PREVIEW_SNAP_PRIORITY,
+      tolerancePx: targetPatch.tolerancePx,
       geometryTypes: ['Point'],
-      snapTo: ['vertex'],
+      snapTo,
     },
     {
       id: 'intersection-materialized-snap',
       layerIds: [INTERSECTION_MATERIALIZED_LAYER_ID],
-      priority: INTERSECTION_MATERIALIZED_SNAP_PRIORITY,
+      priority: targetPatch.priority ?? INTERSECTION_MATERIALIZED_SNAP_PRIORITY,
+      tolerancePx: targetPatch.tolerancePx,
       geometryTypes: ['Point'],
-      snapTo: ['vertex'],
+      snapTo,
+    },
+  ];
+}
+
+/**
+ * 创建面边线图层内置吸附规则。
+ * @param options 地图吸附插件配置
+ * @returns 面边线插件临时线图层的内置吸附规则
+ */
+function createBuiltInPolygonEdgeSnapRules(
+  options: MapFeatureSnapOptions | null | undefined
+): MapFeatureSnapRule[] {
+  if (!isBuiltInTargetEnabled(options?.polygonEdge)) {
+    return [];
+  }
+
+  const targetPatch = getBuiltInTargetPatch(options?.polygonEdge);
+  const snapTo = targetPatch.snapTo?.length ? targetPatch.snapTo : DEFAULT_SNAP_MODES;
+  return [
+    {
+      id: 'polygon-edge-preview-snap',
+      layerIds: [POLYGON_EDGE_PREVIEW_LAYER_ID],
+      priority: targetPatch.priority ?? POLYGON_EDGE_SNAP_PRIORITY,
+      tolerancePx: targetPatch.tolerancePx,
+      geometryTypes: ['LineString'],
+      snapTo,
     },
   ];
 }
@@ -676,18 +792,21 @@ function getEnabledSnapRules(
     return [];
   }
 
-  const builtInRules = createBuiltInIntersectionSnapRules();
-  const ordinaryLayerOptions = options?.ordinaryLayers;
-  if (!ordinaryLayerOptions?.rules?.length) {
+  const builtInRules = [
+    ...createBuiltInIntersectionSnapRules(options),
+    ...createBuiltInPolygonEdgeSnapRules(options),
+  ];
+  const businessLayerOptions = options?.businessLayers;
+  if (!businessLayerOptions?.rules?.length) {
     return builtInRules;
   }
 
-  if (ordinaryLayerOptions.enabled === false) {
+  if (businessLayerOptions.enabled === false) {
     return builtInRules;
   }
 
   return [
-    ...ordinaryLayerOptions.rules.filter((rule) => rule.enabled !== false),
+    ...businessLayerOptions.rules.filter((rule) => rule.enabled !== false),
     ...builtInRules,
   ];
 }
@@ -734,6 +853,55 @@ function buildPreviewData(result: MapFeatureSnapResult): PreviewFeatureCollectio
     type: 'FeatureCollection',
     features,
   };
+}
+
+/**
+ * 从给定要素集合中解析吸附结果。
+ * 该函数用于 TerraDraw 已绘制要素等非 MapLibre 渲染图层的候选吸附。
+ *
+ * @param options 解析上下文
+ * @returns 吸附结果
+ */
+export function resolveFeatureSnapResult(options: {
+  map: MaplibreMap;
+  pointer: ResolvePointerOptions;
+  rule: MapFeatureSnapRule;
+  features: SnapFeatureLike[];
+}): MapFeatureSnapResult {
+  const normalizedRule = normalizeSnapRules([options.rule])[0];
+  const ruleWithTolerance: ResolvedMapFeatureSnapRule = {
+    ...normalizedRule,
+    tolerancePx: getResolvedTolerancePx(normalizedRule, DEFAULT_TOLERANCE_PX),
+  };
+  const candidates = options.features.flatMap((feature) => {
+    const layerId = feature.layer?.id || options.rule.layerIds[0] || '__feature_snap__';
+    const featureGeometryType = resolveFeatureGeometryType(feature);
+
+    if (!featureGeometryType) {
+      return [];
+    }
+
+    if (
+      ruleWithTolerance.geometryTypes?.length &&
+      !ruleWithTolerance.geometryTypes.includes(featureGeometryType)
+    ) {
+      return [];
+    }
+
+    if (!matchesRuleWhere(feature, ruleWithTolerance)) {
+      return [];
+    }
+
+    return featureGeometryType === 'Point'
+      ? buildPointCandidates(options.map, options.pointer.point, feature, ruleWithTolerance, layerId)
+      : buildPathCandidates(options.map, options.pointer.point, feature, ruleWithTolerance, layerId);
+  });
+
+  const bestCandidate = candidates.reduce<SnapCandidate | null>((current, next) => {
+    return shouldReplaceCandidate(current, next) ? next : current;
+  }, null);
+
+  return toSnapResult(bestCandidate);
 }
 
 /**
@@ -793,7 +961,7 @@ export function createMapFeatureSnapBinding(options: {
     }
 
     const defaultTolerancePx = snapOptions?.defaultTolerancePx ?? DEFAULT_TOLERANCE_PX;
-    const normalizedRules = enabledRules.map((rule) => ({
+    const normalizedRules = normalizeSnapRules(enabledRules).map((rule) => ({
       ...rule,
       tolerancePx: getResolvedTolerancePx(rule, defaultTolerancePx),
     }));

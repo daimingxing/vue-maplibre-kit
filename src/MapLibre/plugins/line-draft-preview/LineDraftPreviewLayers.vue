@@ -23,7 +23,7 @@
       :filter="[
         'all',
         ['==', '$type', 'LineString'],
-        ['==', 'generatedKind', MapLineExtensionTool.TEMPORARY_EXTENSION_KIND],
+        ['==', 'generatedKind', LINE_DRAFT_PREVIEW_EXTENSION_KIND],
       ]"
     />
   </mgl-geo-json-source>
@@ -36,12 +36,10 @@
  */
 import { type PropType } from 'vue';
 import { MglGeoJsonSource, MglFillLayer, MglLineLayer } from 'vue-maplibre-gl';
-import {
-  MapLineExtensionTool,
-  type MapCommonFeatureCollection,
-} from '../../shared/map-common-tools';
+import { type MapCommonFeatureCollection } from '../../shared/map-common-tools';
 import {
   LINE_DRAFT_PREVIEW_CORRIDOR_KIND,
+  LINE_DRAFT_PREVIEW_EXTENSION_KIND,
   LINE_DRAFT_PREVIEW_FILL_LAYER_ID,
   LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
   LINE_DRAFT_PREVIEW_SOURCE_ID,

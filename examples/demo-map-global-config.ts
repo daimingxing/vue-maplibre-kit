@@ -67,7 +67,6 @@ export const demoMapGlobalConfig = defineMapGlobalConfig({
       },
     },
     multiSelect: {
-      enabled: true,
       position: 'top-right',
       deactivateBehavior: 'retain',
     },
@@ -77,7 +76,7 @@ export const demoMapGlobalConfig = defineMapGlobalConfig({
         targetCrs: 'EPSG:3857',
       },
       control: {
-        label: '导出CAD',
+        // label: '导出CAD',
         position: 'top-right',
       },
     },

@@ -2,7 +2,7 @@ import { createApp } from 'vue';
 import App from './App.vue';
 import ElementPlus from 'element-plus';
 import 'element-plus/dist/index.css';
-import { applyDemoMapGlobalConfig } from './demo-map-global-config';
+import { applyDemoMapGlobalConfig } from '../examples/demo-map-global-config';
 
 /**
  * 应用启动前先注册 demo 全局默认配置。

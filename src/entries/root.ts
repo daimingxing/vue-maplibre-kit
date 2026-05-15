@@ -161,6 +161,21 @@ export { withFeatureState } from '../MapLibre/composables/useMapEffect';
 /** feature properties 等值比较表达式工具。需要按业务字段快速写条件时使用。 */
 export { whenFeaturePropertyEquals } from '../MapLibre/shared/map-feature-property-expression';
 
+/** feature properties 读取表达式工具。需要把业务字段作为表达式值时使用。 */
+export { getFeatureProperty } from '../MapLibre/shared/map-feature-property-expression';
+
+/** feature properties 颜色表达式工具。需要从业务字段读取颜色时使用。 */
+export { getFeatureColor } from '../MapLibre/shared/map-feature-property-expression';
+
+/** feature properties 数值表达式工具。需要从业务字段读取宽度、半径、透明度时使用。 */
+export { getFeatureNumber } from '../MapLibre/shared/map-feature-property-expression';
+
+/** feature properties 字符串表达式工具。需要从业务字段读取标签文本时使用。 */
+export { getFeatureString } from '../MapLibre/shared/map-feature-property-expression';
+
+/** feature properties 布尔表达式工具。需要从业务字段读取开关值时使用。 */
+export { getFeatureBoolean } from '../MapLibre/shared/map-feature-property-expression';
+
 /** feature properties 多值命中表达式工具。多个业务字段值共用同一结果时使用。 */
 export { whenFeaturePropertyIn } from '../MapLibre/shared/map-feature-property-expression';
 

@@ -14,6 +14,7 @@ import type {
 } from '@watergis/maplibre-gl-terradraw';
 import type { TerraDraw, GeoJSONStoreFeatures, GeoJSONStoreGeometries } from 'terra-draw';
 import type {
+  MapFeatureSnapDrawnTargetOptions,
   MapFeatureSnapKind,
   MapFeatureSnapResult,
   MapFeatureSnapSegmentInfo,
@@ -34,7 +35,12 @@ export type TerradrawFeature = GeoJSONStoreFeatures<GeoJSONStoreGeometries>;
 /** TerraDraw 要素 ID 类型 */
 export type TerradrawFeatureId = string | number;
 
-export type { MapFeatureSnapKind, MapFeatureSnapResult, MapFeatureSnapSegmentInfo };
+export type {
+  MapFeatureSnapDrawnTargetOptions,
+  MapFeatureSnapKind,
+  MapFeatureSnapResult,
+  MapFeatureSnapSegmentInfo,
+};
 
 /** 仅允许业务层覆写 MapLibre 图层 layout / paint 的样式片段。 */
 export interface MeasureLayerStyleOverrides<Layout, Paint> {
@@ -258,6 +264,8 @@ export interface TerradrawSnapSharedOptions {
   useNative?: boolean;
   /** 是否启用普通图层候选吸附；默认 true */
   useMapTargets?: boolean;
+  /** 是否吸附当前 TerraDraw / Measure 控件内已经绘制出的要素。 */
+  drawnTargets?: boolean | MapFeatureSnapDrawnTargetOptions;
 }
 
 /** 普通 MapLibre 图层交互事件类型 */

@@ -8,27 +8,46 @@
       <template #dataSource>
         <MapBusinessSourceLayers :source="kit.source" :layers="kit.layers" />
       </template>
-      <MglPopup v-model:visible="popupVisible" :lng-lat="popupLngLat">
-        <strong>{{ popupTitle }}</strong>
-        <pre>{{ popupProperties }}</pre>
+      <MglPopup
+        v-model:visible="popupVisible"
+        :lng-lat="popupLngLat"
+        :options="popupOptions"
+      >
+        <div class="popup-body" :class="{ 'is-wide': popupWide }">
+          <strong>{{ popupTitle }}</strong>
+          <pre>{{ popupProperties }}</pre>
+        </div>
       </MglPopup>
     </MapLibreInit>
     <aside class="nggi-panel">
       <h3>NGGI04 交互和 MglPopup</h3>
       <p>{{ message }}</p>
+      <div class="popup-options">
+        <button type="button" @click="toggleWidePopup">
+          {{ popupWide ? "窄弹窗" : "宽弹窗" }}
+        </button>
+        <button type="button" @click="toggleCloseButton">
+          {{ popupCloseButton ? "隐藏关闭按钮" : "显示关闭按钮" }}
+        </button>
+      </div>
+      <p>弹窗宽度：{{ popupMaxWidth }}</p>
     </aside>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import {
   MapBusinessSourceLayers,
   MapLibreInit,
   MglPopup,
   type MapLayerInteractiveContext,
 } from "vue-maplibre-kit/business";
-import { createExampleInteractive, createExampleKit } from "./nggi-example.shared";
+import type { PopupOptions } from "maplibre-gl";
+import {
+  createExampleInteractive,
+  createExampleKit,
+} from "./nggi-example.shared";
 
 // 本页演示最常见的业务交互：点击地图要素 -> 打开弹窗 -> 展示该要素 properties。
 const kit = createExampleKit("basic");
@@ -38,13 +57,23 @@ const popupProperties = ref("暂无属性");
 const popupVisible = ref(false);
 // MglPopup 需要经纬度数组；没有命中要素时用 null 表示不显示定位。
 const popupLngLat = ref<[number, number] | null>(null);
+const popupWide = ref(false);
+const popupCloseButton = ref(true);
+const popupMaxWidth = computed(() => (popupWide.value ? "420px" : "260px"));
+const popupOptions = computed<PopupOptions>(() => ({
+  closeButton: popupCloseButton.value,
+  closeOnClick: true,
+  maxWidth: popupMaxWidth.value,
+}));
 
 /**
  * 将要素属性转换为可读文本。
  * @param properties 当前要素属性
  * @returns 格式化后的属性文本
  */
-function formatProperties(properties: MapLayerInteractiveContext["properties"]): string {
+function formatProperties(
+  properties: MapLayerInteractiveContext["properties"]
+): string {
   if (!properties) {
     return "暂无属性";
   }
@@ -69,6 +98,20 @@ function showPopup(context: MapLayerInteractiveContext): void {
   // MapLibre 事件里 lngLat 是对象；MglPopup 入参统一使用 [lng, lat]。
   popupLngLat.value = [context.lngLat.lng, context.lngLat.lat];
   popupVisible.value = true;
+}
+
+/**
+ * 切换弹窗最大宽度。
+ */
+function toggleWidePopup(): void {
+  popupWide.value = !popupWide.value;
+}
+
+/**
+ * 切换弹窗关闭按钮显示状态。
+ */
+function toggleCloseButton(): void {
+  popupCloseButton.value = !popupCloseButton.value;
 }
 
 const interactive = {
@@ -115,5 +158,32 @@ pre {
   margin: 8px 0 0;
   font-size: 12px;
   white-space: pre-wrap;
+}
+
+.popup-options {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.popup-options button {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #1f2937;
+  cursor: pointer;
+}
+.popup-body {
+  width: 240px;
+}
+
+.popup-body.is-wide {
+  width: 400px;
+}
+
+.popup-body pre {
+  max-width: 100%;
 }
 </style>

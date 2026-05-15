@@ -184,4 +184,65 @@ describe('usePluginLayerInteractive', () => {
 
     binding.destroy();
   });
+
+  it('点击吸附到插件图层时应按吸附结果触发选中和点击回调', () => {
+    const onClick = vi.fn();
+    const onFeatureSelect = vi.fn();
+    const mapHarness = createMockMapHarness();
+    const snapFeature = createRenderedFeature('edgeLayer', 'edge-1');
+    const binding = usePluginLayerInteractive({
+      mapInstance: {
+        isLoaded: true,
+        map: mapHarness.map,
+      } as any,
+      getInteractive: () => ({
+        layers: {
+          edgeLayer: {
+            onClick,
+            onFeatureSelect,
+          },
+        },
+      }),
+      getSnapBinding: () =>
+        ({
+          resolveMapEvent: () => ({
+            matched: true,
+            lngLat: {
+              lng: 120,
+              lat: 30,
+            },
+            distancePx: 6,
+            snapKind: 'segment',
+            ruleId: 'polygon-edge-preview-snap',
+            targetFeature: snapFeature,
+            targetLayerId: 'edgeLayer',
+            targetSourceId: 'plugin-source',
+            targetCoordinate: [120, 30],
+            segment: null,
+          }),
+        }) as any,
+      toFeatureSnapshot: (feature) => {
+        return feature
+          ? ({
+              type: 'Feature',
+              id: feature.id,
+              properties: feature.properties,
+              geometry: feature.geometry,
+            } as any)
+          : null;
+      },
+    });
+
+    mapHarness.setFeatures([]);
+    const event = createMapEvent();
+    mapHarness.handlers.click(event);
+
+    expect((event.originalEvent as any).__mapInteractiveHandled__).toBe(true);
+    expect(binding.getSelectedFeature()?.id).toBe('edge-1');
+    expect(onFeatureSelect).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClick.mock.calls[0][0].snapResult?.ruleId).toBe('polygon-edge-preview-snap');
+
+    binding.destroy();
+  });
 });

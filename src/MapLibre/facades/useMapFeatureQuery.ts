@@ -13,7 +13,7 @@ import {
 import type { LineDraftPreviewPluginApi } from '../plugins/line-draft-preview/useLineDraftPreviewController';
 import {
   createMapSourceFeatureRef,
-  extractManagedPreviewOriginFromProperties,
+  extractGeneratedParentRef,
   type MapCommonFeature,
   type MapCommonLineFeature,
   type MapSourceFeatureRef,
@@ -380,7 +380,7 @@ export function useMapFeatureQuery(options: UseMapFeatureQueryOptions): UseMapFe
       return null;
     }
 
-    const originRef = extractManagedPreviewOriginFromProperties(targetFeature.properties || {});
+    const originRef = extractGeneratedParentRef(targetFeature.properties || {});
     const originSource = originRef?.sourceId ? sourceRegistry.getSource(originRef.sourceId) : null;
 
     return resolveMapFeaturePropertyPanelState(targetFeature.properties || {}, {

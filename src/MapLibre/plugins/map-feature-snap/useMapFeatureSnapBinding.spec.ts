@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createMapFeatureSnapBinding } from './useMapFeatureSnapBinding';
+import {
+  createMapFeatureSnapBinding,
+  resolveFeatureSnapResult,
+} from './useMapFeatureSnapBinding';
 
 const INTERSECTION_PREVIEW_LAYER_ID = 'intersection-preview-layer';
 const INTERSECTION_MATERIALIZED_LAYER_ID = 'intersection-materialized-layer';
+const POLYGON_EDGE_PREVIEW_LAYER_ID = 'polygonEdgePreviewLineLayer';
 
 /**
  * 创建测试用地图桩对象。
@@ -21,7 +25,8 @@ function createMapStub() {
     getLayer: vi.fn((layerId: string) => {
       if (
         layerId === INTERSECTION_PREVIEW_LAYER_ID ||
-        layerId === INTERSECTION_MATERIALIZED_LAYER_ID
+        layerId === INTERSECTION_MATERIALIZED_LAYER_ID ||
+        layerId === POLYGON_EDGE_PREVIEW_LAYER_ID
       ) {
         return { id: layerId };
       }
@@ -69,7 +74,7 @@ function createMapStub() {
 }
 
 describe('createMapFeatureSnapBinding', () => {
-  it('应在未声明 ordinaryLayers 时也自动把交点层纳入吸附候选', () => {
+  it('应在未声明 businessLayers 时也自动把交点层纳入吸附候选', () => {
     const map = createMapStub();
     const binding = createMapFeatureSnapBinding({
       map: map as any,
@@ -127,7 +132,7 @@ describe('createMapFeatureSnapBinding', () => {
       map: map as any,
       getOptions: () => ({
         enabled: true,
-        ordinaryLayers: {
+        businessLayers: {
           rules: [
             {
               id: 'business-rule',
@@ -160,5 +165,243 @@ describe('createMapFeatureSnapBinding', () => {
 
     binding.destroy();
     errorSpy.mockRestore();
+  });
+
+  it('应支持通过 businessLayers 配置业务图层吸附', () => {
+    const map = {
+      ...createMapStub(),
+      getLayer: vi.fn(() => ({ id: 'business-line-layer' })),
+      queryRenderedFeatures: vi.fn(() => [
+        {
+          id: 'line-a',
+          source: 'business-source',
+          properties: {
+            id: 'line-a',
+          },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [0, 0],
+              [10, 0],
+            ],
+          },
+          layer: {
+            id: 'business-line-layer',
+          },
+        },
+      ]),
+    };
+    const binding = createMapFeatureSnapBinding({
+      map: map as any,
+      getOptions: () => ({
+        enabled: true,
+        businessLayers: {
+          rules: [
+            {
+              id: 'business-rule',
+              layerIds: ['business-line-layer'],
+              snapTo: ['segment'],
+            },
+          ],
+        },
+      }),
+    });
+
+    const result = binding.resolvePointer({
+      point: {
+        x: 5,
+        y: 0,
+      },
+      lngLat: {
+        lng: 5,
+        lat: 0,
+      },
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.ruleId).toBe('business-rule');
+    expect(result.snapKind).toBe('segment');
+
+    binding.destroy();
+  });
+
+  it('业务图层吸附规则未传 id 时应自动生成稳定 ruleId', () => {
+    const map = {
+      ...createMapStub(),
+      getLayer: vi.fn(() => ({ id: 'business-line-layer' })),
+      queryRenderedFeatures: vi.fn(() => [
+        {
+          id: 'line-a',
+          source: 'business-source',
+          properties: {
+            id: 'line-a',
+          },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [0, 0],
+              [10, 0],
+            ],
+          },
+          layer: {
+            id: 'business-line-layer',
+          },
+        },
+      ]),
+    };
+    const binding = createMapFeatureSnapBinding({
+      map: map as any,
+      getOptions: () => ({
+        enabled: true,
+        businessLayers: {
+          rules: [
+            {
+              layerIds: ['business-line-layer'],
+              snapTo: ['segment'],
+            },
+          ],
+        },
+      }),
+    });
+
+    const result = binding.resolvePointer({
+      point: {
+        x: 5,
+        y: 0,
+      },
+      lngLat: {
+        lng: 5,
+        lat: 0,
+      },
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.ruleId).toBe('business-layer:0:business-line-layer');
+
+    binding.destroy();
+  });
+
+  it('应支持从 TerraDraw 已绘制要素集合解析吸附结果', () => {
+    const result = resolveFeatureSnapResult({
+      map: createMapStub() as any,
+      pointer: {
+        point: {
+          x: 5,
+          y: 5,
+        },
+        lngLat: {
+          lng: 5,
+          lat: 5,
+        },
+      },
+      rule: {
+        id: 'terradraw-drawn-targets',
+        layerIds: ['__terradraw_drawn__'],
+        priority: 20,
+        tolerancePx: 16,
+        geometryTypes: ['Point', 'LineString', 'Polygon'],
+        snapTo: ['vertex', 'segment'],
+      },
+      features: [
+        {
+          type: 'Feature',
+          id: 'drawn-point-1',
+          properties: {
+            mode: 'point',
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: [5, 5],
+          },
+        },
+      ],
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.ruleId).toBe('terradraw-drawn-targets');
+    expect(result.targetFeature).toBeNull();
+    expect(result.targetCoordinate).toEqual([5, 5]);
+  });
+
+  it('应允许关闭交点内置吸附目标', () => {
+    const map = createMapStub();
+    const binding = createMapFeatureSnapBinding({
+      map: map as any,
+      getOptions: () => ({
+        enabled: true,
+        intersection: {
+          enabled: false,
+        },
+        polygonEdge: {
+          enabled: false,
+        },
+      }),
+    });
+
+    const result = binding.resolvePointer({
+      point: {
+        x: 5,
+        y: 5,
+      },
+      lngLat: {
+        lng: 5,
+        lat: 5,
+      },
+    });
+
+    expect(result.matched).toBe(false);
+    expect(map.queryRenderedFeatures).not.toHaveBeenCalled();
+
+    binding.destroy();
+  });
+
+  it('应允许关闭面边线内置吸附目标', () => {
+    const map = {
+      ...createMapStub(),
+      queryRenderedFeatures: vi.fn(() => [
+        {
+          id: 'edge-a',
+          source: 'polygon-edge-source',
+          properties: {
+            id: 'edge-a',
+          },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [0, 0],
+              [10, 0],
+            ],
+          },
+          layer: {
+            id: POLYGON_EDGE_PREVIEW_LAYER_ID,
+          },
+        },
+      ]),
+    };
+    const binding = createMapFeatureSnapBinding({
+      map: map as any,
+      getOptions: () => ({
+        enabled: true,
+        intersection: {
+          enabled: false,
+        },
+        polygonEdge: false,
+      }),
+    });
+
+    const result = binding.resolvePointer({
+      point: {
+        x: 5,
+        y: 0,
+      },
+      lngLat: {
+        lng: 5,
+        lat: 0,
+      },
+    });
+
+    expect(result.matched).toBe(false);
+
+    binding.destroy();
   });
 });

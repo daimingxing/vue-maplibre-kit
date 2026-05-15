@@ -53,6 +53,10 @@
       "types": "./dist/plugins/intersection-preview.d.ts",
       "import": "./dist/plugins/intersection-preview.js"
     },
+    "./plugins/polygon-edge-preview": {
+      "types": "./dist/plugins/polygon-edge-preview.d.ts",
+      "import": "./dist/plugins/polygon-edge-preview.js"
+    },
     "./plugins/map-feature-multi-select": {
       "types": "./dist/plugins/map-feature-multi-select.d.ts",
       "import": "./dist/plugins/map-feature-multi-select.js"
@@ -66,7 +70,8 @@
     "dev": "vite",
     "build": "vite build && vue-tsc -p tsconfig.build.json",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ts:check": "npx vue-tsc -p tsconfig.app.json --noEmit --pretty false && npx vue-tsc -p tsconfig.build.json --noEmit --pretty false"
   },
   "dependencies": {
     "@tarikjabiri/dxf": "^2.8.9",

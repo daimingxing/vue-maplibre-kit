@@ -132,6 +132,33 @@ describe('config', () => {
             label: '导出CAD',
           },
         },
+        polygonEdge: {
+          style: {
+            normal: {
+              color: '#409eff',
+              width: 3,
+            },
+          },
+        },
+        snap: {
+          control: {
+            enabled: true,
+            position: 'top-left',
+            label: '吸附',
+          },
+          polygonEdge: {
+            enabled: true,
+            snapTo: ['vertex', 'segment'],
+          },
+          terradraw: {
+            defaults: {
+              drawnTargets: {
+                geometryTypes: ['Point', 'LineString', 'Polygon'],
+                snapTo: ['vertex', 'segment'],
+              },
+            },
+          },
+        },
       },
     });
 
@@ -143,6 +170,33 @@ describe('config', () => {
         dxfExport: {
           control: {
             label: '导出CAD',
+          },
+        },
+        polygonEdge: {
+          style: {
+            normal: {
+              color: '#409eff',
+              width: 3,
+            },
+          },
+        },
+        snap: {
+          control: {
+            enabled: true,
+            position: 'top-left',
+            label: '吸附',
+          },
+          polygonEdge: {
+            enabled: true,
+            snapTo: ['vertex', 'segment'],
+          },
+          terradraw: {
+            defaults: {
+              drawnTargets: {
+                geometryTypes: ['Point', 'LineString', 'Polygon'],
+                snapTo: ['vertex', 'segment'],
+              },
+            },
           },
         },
       },

@@ -182,8 +182,51 @@ function unbindMapStyleLoad(map: MaplibreMap): void {
     return;
   }
 
-  map.off('style.load', handleMapStyleLoad);
+  try {
+    map.off('style.load', handleMapStyleLoad);
+  } catch (error) {
+    console.warn('[TerradrawStretchRasterItem] 解绑样式监听失败', error);
+  }
   hasBoundStyleLoad = false;
+}
+
+/**
+ * 判断地图样式对象是否仍可被安全访问。
+ * MapLibre 销毁阶段会先释放内部 style，再触发子组件卸载；此时剩余图层会由地图销毁流程统一释放。
+ * @param map 当前地图实例
+ * @returns 当前地图样式是否仍适合执行 source/layer 清理
+ */
+function canAccessMapStyle(map: MaplibreMap): boolean {
+  const mapState = map as MaplibreMap & {
+    /** MapLibre 内部销毁标记；公开 API 没有等价字段，只在卸载兼容处理中探测。 */
+    _removed?: boolean;
+    /** MapLibre 内部样式对象；销毁期可能先于 Vue 子组件卸载被置空。 */
+    style?: unknown;
+  };
+
+  return mapState._removed !== true && Boolean(mapState.style);
+}
+
+/**
+ * 安全执行地图资源清理动作。
+ * MapLibre 销毁过程中可能已经释放 style，此时 getLayer/getSource 会从内部抛错。
+ * @param map 当前地图实例
+ * @param action 当前清理动作
+ */
+function runMapCleanup(map: MaplibreMap, action: () => void): void {
+  if (!canAccessMapStyle(map)) {
+    return;
+  }
+
+  try {
+    action();
+  } catch (error) {
+    if (!canAccessMapStyle(map)) {
+      return;
+    }
+
+    console.warn('[TerradrawStretchRasterItem] 清理地图资源失败', error);
+  }
 }
 
 /**
@@ -191,9 +234,16 @@ function unbindMapStyleLoad(map: MaplibreMap): void {
  * @param map 当前地图实例
  */
 function removeRasterLayer(map: MaplibreMap): void {
-  if (map.getLayer(props.layerId)) {
-    map.removeLayer(props.layerId);
+  // 切换地图或销毁过程中，宿主可能已回收掉部分地图方法，先做能力探测再清理。
+  if (typeof map.getLayer !== 'function' || typeof map.removeLayer !== 'function') {
+    return;
   }
+
+  runMapCleanup(map, () => {
+    if (map.getLayer(props.layerId)) {
+      map.removeLayer(props.layerId);
+    }
+  });
 }
 
 /**
@@ -201,12 +251,19 @@ function removeRasterLayer(map: MaplibreMap): void {
  * @param map 当前地图实例
  */
 function removeImageSource(map: MaplibreMap): void {
-  const imageSource = getImageSource(map);
-  destroyImageSourceTexture(imageSource);
-
-  if (map.getSource(props.sourceId)) {
-    map.removeSource(props.sourceId);
+  // 与 raster layer 同步，卸载阶段地图对象可能已不完整，需先确认 source 能力仍可用。
+  if (typeof map.getSource !== 'function' || typeof map.removeSource !== 'function') {
+    return;
   }
+
+  runMapCleanup(map, () => {
+    const imageSource = getImageSource(map);
+    destroyImageSourceTexture(imageSource);
+
+    if (map.getSource(props.sourceId)) {
+      map.removeSource(props.sourceId);
+    }
+  });
 
   lastAppliedUrl = '';
 }

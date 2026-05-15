@@ -1,0 +1,81 @@
+## 2026-05-11 动态业务 source 与 layer 声明边界记录
+
+- 状态：设计确认并同步知识库
+- 问题：业务文档里曾把 `createMapBusinessSourceRegistry([source])` 或空数组初始化当成常规写法，容易让动态 source 管理和动态 layer 管理混在一起。
+- 处理：知识库统一改为 `createMapBusinessSourceRegistry()` 无参创建注册表，再通过 `addSource(source)`、`setSources(sources)`、`removeSource(sourceId)`、`clearSources()` 管理动态 source。
+- 边界：动态 source 由 registry 管理；动态 layer 由 `createMapBusinessSource({ layers })` 管理，`layers` 可使用 `ref`、`computed` 或 getter，不新增 layer registry。
+- 经验：`createLayerGroup({ sourceId, layers })` 的 `sourceId` 是完整图层 id 的前缀，`LayerGroupItem.id` 只表示 source 内逻辑图层名，最终 layerId 形如 `pipe-source-line`。
+
+## 2026-05-07 snap 运行期开关记录
+
+- 状态：已解决
+- 问题：snap 插件新增预览图层和按钮两个不同 Vue 组件渲染项时，`getRenderItems()` 数组会被 TypeScript 按首个预览组件推断成窄类型，导致后续按钮组件的 `props` 被误判为预览图层参数。
+- 处理：把局部 `renderItems` 显式标注为 `MapPluginRenderItem[]`，让插件宿主按通用渲染项接收不同组件。
+- 经验：同一个插件如果返回多个不同组件，渲染项数组必须显式使用宿主通用类型，避免组件 props 推断相互污染。
+
+## 2026-05-06 样式表达式 helper 设计
+
+- 问题：业务层需要根据 GeoJSON `properties.color`、`properties.width` 等字段动态控制样式，但业务开发者不熟悉 MapLibre 原生表达式。
+- 确认：MapLibre 原生表达式支持 `get` 读取属性，支持 `coalesce` 提供默认值，支持 `to-color`、`to-number`、`to-string`、`to-boolean` 做类型转换。
+- 处理：新增 `getFeatureColor`、`getFeatureNumber`、`getFeatureString`、`getFeatureBoolean` 等业务 helper，并让 `createSimple*Style` 支持表达式值。
+- 边界：原生表达式仍作为逃生通道保留在知识库中；常见样式场景优先使用业务 helper，避免业务页直接堆复杂数组表达式。
+
+## 2026-04-30 代码风险修复与契约边界记录
+
+- 状态：本轮确认边界并修复已确认风险
+- 问题：TerraDraw / Measure 的 `position`、`modeOptions` 和控件构造参数被审查反复识别为“配置变化不自动重建”。
+- 处理：这不是本轮 bug。控件构造期配置只在首次创建时读取，避免自动重建清空临时绘制、测量和编辑状态；需要热切换时由业务侧保存数据后切换 `isUse` 或重新挂载。
+- 问题：插件初始化失败会被宿主跳过，业务侧看到的是插件能力不可用。
+- 处理：保留插件隔离策略，避免单插件拖垮地图；通过控制台错误和文档说明定位配置错误，暂不新增 diagnostics / onPluginError API。
+- 问题：插件配置变更只按 descriptor/options 顶层引用触发同步。
+- 处理：保留顶层引用监听策略；动态配置应使用 `computed(() => createBusinessPlugins(...))` 或替换 options 引用，不支持原地改写嵌套对象作为稳定契约。
+- 问题：intersection 预设校验、`MultiLineString` 自动候选、`replaceFeatures()` 无效快照提交和运行时 source/layer 原生异常会影响外部项目排障。
+- 处理：本轮用失败测试锁定后分别修复，后续审查应优先看对应测试是否仍覆盖这些契约。
+
+## 2026-04-29 Popup 与 TerraDraw 配置热更新记录
+
+- 状态：已解决
+- 问题：`MglPopup` 初始创建后没有响应 `options` 变化，业务运行时修改 `closeButton`、`closeOnClick`、`maxWidth` 等配置不会同步到原生 Popup。
+- 处理：把 Popup 生命周期抽到 `useMglPopupLifecycle()`，监听 `options` 变化后重建原生 Popup，并在内部重建时屏蔽 `close` 事件向外同步，避免误改 `v-model:visible`。
+- 经验：MapLibre Popup 的部分配置涉及事件绑定和内部 DOM，统一重建比逐项补丁更稳定；重建时必须恢复当前 `visible` 和 `lngLat`。
+
+- 状态：设计确认不改
+- 问题：TerraDraw / Measure 控件的 `position`、`modes`、`modeOptions` 等构造期配置只在首次创建时读取。
+- 处理：不做构造期配置热更新和控件重建，避免重建导致临时绘制、测量要素和当前编辑状态丢失。`interactive`、`lineDecoration`、`snapping` 继续沿用现有独立 watcher。
+- 经验：绘图控件的构造期配置应尽量在启用前确定；如需切换大块构造配置，业务侧应先保存临时数据，再通过 `isUse` 显式销毁和重新启用控件。
+
+## 2026-04-28 polygonEdge 类型检查记录
+
+- 状态：已解决
+- 问题：面边线图层样式表达式使用数组字面量时，TypeScript 会推断成普通数组，无法满足 MapLibre 的 `ExpressionSpecification` 类型。
+- 处理：把表达式构建函数返回值显式标注为 `ExpressionSpecification`，并对可选颜色、宽度、透明度补默认值。
+- 经验：后续新增 MapLibre 表达式时，复杂表达式建议集中到函数中构建，并显式声明返回类型，避免在图层 `paint` 对象里被推断成宽泛数组。
+
+- 状态：已解决
+- 问题：snap 内置目标的 `snapTo` 默认值 `["vertex"]` 被推断成 `string[]`，无法赋值给 `MapFeatureSnapMode[]`。
+- 处理：为局部变量显式标注 `MapFeatureSnapMode[]`。
+- 经验：插件配置里的字面量数组如果会与联合字符串类型混用，优先给变量或常量加明确类型。
+
+## 2026-04-28 polygonEdge 示例补充记录
+
+- 状态：已解决
+- 问题：`tsconfig.app.json` 会同时检查示例与 spec 文件，当前 spec 文件存在一批历史类型噪声，直接运行会掩盖新增示例是否有问题。
+- 处理：先用 `Select-String` 过滤 `NGGI00.vue`、`NGGI06.vue`、`NGGI12.vue`、`src/App.vue` 的 app 类型检查输出，确认新增示例文件无新增类型错误；再执行库构建类型检查、全量测试和构建。
+- 经验：示例页改动后，除了库构建检查，还需要单独关注示例文件名过滤结果；后续可以考虑给示例单独拆一份不包含 spec 的 tsconfig。
+
+- 状态：已解决
+- 问题：全量测试中 `businessPreset.spec.ts` 首个动态 import 用例在并发负载下偶发超过 Vitest 默认 5 秒超时。
+- 处理：给该用例单独设置 10 秒超时，避免测试结果受机器瞬时负载影响。
+- 经验：依赖动态导入较重模块的测试，如果全量运行时接近默认超时，应给用例设置局部超时，不要扩大全局测试超时。
+
+## 2026-04-28 TerraDraw 已绘制要素吸附记录
+
+- 状态：已解决
+- 问题：Draw / Measure 控件注册的 TerraDraw 模式不一定完全一致，同步点、线、面吸附配置时，部分控件可能没有某个模式，`updateModeOptions()` 会抛出缺失模式异常。
+- 处理：同步吸附配置时仍统一尝试 `point`、`linestring`、`polygon` 三类模式，但对缺失模式异常静默跳过，只保留真正异常的告警。
+- 经验：TerraDraw 模式配置同步要按“能力存在就增强”的思路处理，不能假设 Draw 与 Measure 的模式集合完全相同。
+
+- 状态：已解决
+- 问题：TerraDraw 已绘制要素吸附和业务图层吸附都可能命中，单纯返回坐标无法判断谁更近。
+- 处理：自定义吸附解析器改为接收完整 `MapFeatureSnapResult`，按 `distancePx` 选择最近的命中结果，再把坐标交给 TerraDraw。
+- 经验：跨来源吸附目标需要保留完整命中元数据，避免过早降级成坐标导致优先级和距离信息丢失。

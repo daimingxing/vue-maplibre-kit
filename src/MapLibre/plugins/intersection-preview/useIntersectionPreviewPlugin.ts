@@ -11,6 +11,7 @@ import type {
   IntersectionPreviewContext,
   IntersectionPreviewOptions,
   IntersectionPreviewPluginApi,
+  IntersectionPreviewScope,
   IntersectionPreviewState,
   IntersectionPreviewStateStyles,
   IntersectionPreviewStyleOverrides,
@@ -125,6 +126,33 @@ function resolveIntersectionStateStyles(
       ...(localStyles?.selected || {}),
     },
   };
+}
+
+/**
+ * 合并交点插件行为配置。
+ * 全局只托管默认行为和算法参数，页面局部仍负责数据范围、业务对象和回调。
+ *
+ * @param localOptions 页面局部交点插件配置
+ * @returns 合并全局默认值后的交点插件配置
+ */
+function resolveIntersectionOptions(
+  localOptions: IntersectionPreviewOptions | null | undefined
+): IntersectionPreviewOptions | null | undefined {
+  const globalDefaults = getMapGlobalIntersectionDefaults();
+  if (!globalDefaults && !localOptions) {
+    return localOptions;
+  }
+
+  return {
+    ...(localOptions || {}),
+    visible: localOptions?.visible ?? globalDefaults?.visible,
+    materializeOnClick:
+      localOptions?.materializeOnClick ?? globalDefaults?.materializeOnClick,
+    scope: localOptions?.scope ?? globalDefaults?.scope,
+    includeEndpoint: localOptions?.includeEndpoint ?? globalDefaults?.includeEndpoint,
+    coordDigits: localOptions?.coordDigits ?? globalDefaults?.coordDigits,
+    ignoreSelf: localOptions?.ignoreSelf ?? globalDefaults?.ignoreSelf,
+  } as IntersectionPreviewOptions;
 }
 
 /**
@@ -283,6 +311,34 @@ function matchesLayerWhere(feature: MapCommonFeature, layer: MapBusinessLayerDes
 }
 
 /**
+ * 将业务线要素拆成自动求交候选支持的 LineString 要素。
+ * @param feature 当前业务要素
+ * @returns 可参与求交计算的线要素列表
+ */
+function toLineCandidateFeatures(feature: MapCommonFeature): MapCommonLineFeature[] {
+  if (feature.geometry?.type === 'LineString') {
+    return [feature as MapCommonLineFeature];
+  }
+
+  if (feature.geometry?.type !== 'MultiLineString') {
+    return [];
+  }
+
+  return feature.geometry.coordinates.map((coordinates, index) => ({
+    ...feature,
+    id: feature.id === undefined ? feature.id : `${String(feature.id)}::${index}`,
+    properties: {
+      ...(feature.properties || {}),
+      multiLineIndex: index,
+    },
+    geometry: {
+      type: 'LineString',
+      coordinates,
+    },
+  })) as MapCommonLineFeature[];
+}
+
+/**
  * 从业务 source 注册表中自动提取交点候选线。
  * 业务层只需声明 sourceRegistry + targetSourceIds + targetLayerIds，
  * 插件会自行把最新业务线数据转换成求交候选集合。
@@ -333,12 +389,12 @@ function buildCandidatesFromSourceRegistry(
               type: 'FeatureCollection',
               // 自动模式只托管常见 line + where 场景；
               // 更复杂的 raw filter 仍交给 getCandidates 手动兜底。
-              features: (sourceData.features || []).filter((feature) => {
-                if ((feature as MapCommonFeature).geometry?.type !== 'LineString') {
-                  return false;
+              features: (sourceData.features || []).flatMap((feature) => {
+                if (!matchesLayerWhere(feature as MapCommonFeature, layer)) {
+                  return [];
                 }
 
-                return matchesLayerWhere(feature as MapCommonFeature, layer);
+                return toLineCandidateFeatures(feature as MapCommonFeature);
               }) as MapCommonLineFeature[],
             },
           },
@@ -359,9 +415,27 @@ export const intersectionPreviewPlugin = defineMapPlugin<
 >({
   type: INTERSECTION_PREVIEW_PLUGIN_TYPE,
   createInstance(context) {
+    const scopePatch = ref<IntersectionPreviewScope | null>(null);
+
+    /**
+     * 读取合并全局默认值后的交点插件配置。
+     * @returns 最终用于运行期行为的交点配置
+     */
+    const getResolvedOptions = () => {
+      const resolvedOptions = resolveIntersectionOptions(context.getOptions());
+      if (!resolvedOptions || scopePatch.value == null) {
+        return resolvedOptions;
+      }
+
+      return {
+        ...resolvedOptions,
+        scope: scopePatch.value,
+      };
+    };
+
     const pluginState = ref<IntersectionPreviewState>({
-      visible: context.getOptions()?.visible !== false,
-      scope: context.getOptions()?.scope || 'all',
+      visible: getResolvedOptions()?.visible !== false,
+      scope: getResolvedOptions()?.scope || 'all',
       count: 0,
       materializedCount: 0,
       selectedId: null,
@@ -422,9 +496,9 @@ export const intersectionPreviewPlugin = defineMapPlugin<
       );
     };
     const controller = useIntersectionPreviewController({
-      getOptions: () => context.getOptions(),
+      getOptions: getResolvedOptions,
       getCandidates: () => {
-        const pluginOptions = context.getOptions();
+        const pluginOptions = getResolvedOptions();
         if (pluginOptions?.getCandidates) {
           return pluginOptions.getCandidates();
         }
@@ -432,6 +506,9 @@ export const intersectionPreviewPlugin = defineMapPlugin<
         return buildCandidatesFromSourceRegistry(pluginOptions);
       },
       getSelectedFeatureContext: context.getSelectedFeatureContext,
+      setScope: (scope) => {
+        scopePatch.value = scope;
+      },
       onStateChange: (stateSnapshot) => {
         pluginState.value = stateSnapshot;
       },
@@ -507,7 +584,7 @@ export const intersectionPreviewPlugin = defineMapPlugin<
      * @returns 当前是否需要跟随选中态刷新交点
      */
     const shouldRefreshBySelectionChange = (): boolean => {
-      if ((context.getOptions()?.scope || 'all') !== 'selected') {
+      if ((getResolvedOptions()?.scope || 'all') !== 'selected') {
         return false;
       }
 
@@ -540,11 +617,11 @@ export const intersectionPreviewPlugin = defineMapPlugin<
         enableFeatureStateSelected: true,
         onHoverEnter: (contextSnapshot: { featureId: string | number | null }) => {
           const intersection = resolveIntersectionContext(contextSnapshot.featureId, layerId);
-          intersection && context.getOptions()?.onHoverEnter?.(intersection);
+          intersection && getResolvedOptions()?.onHoverEnter?.(intersection);
         },
         onHoverLeave: (contextSnapshot: { featureId: string | number | null }) => {
           const intersection = resolveIntersectionContext(contextSnapshot.featureId, layerId);
-          intersection && context.getOptions()?.onHoverLeave?.(intersection);
+          intersection && getResolvedOptions()?.onHoverLeave?.(intersection);
         },
         onFeatureSelect: (contextSnapshot: { featureId: string | number | null }) => {
           syncSelectedIntersection(
@@ -561,12 +638,12 @@ export const intersectionPreviewPlugin = defineMapPlugin<
           if (shouldMaterializeOnClick && intersection) {
             controller.materialize(intersection.intersectionId);
           }
-          intersection && context.getOptions()?.onClick?.(intersection);
+          intersection && getResolvedOptions()?.onClick?.(intersection);
         },
         onContextMenu: (contextSnapshot: { featureId: string | number | null }) => {
           const intersection = resolveIntersectionContext(contextSnapshot.featureId, layerId);
           syncSelectedIntersection(intersection, layerId);
-          intersection && context.getOptions()?.onContextMenu?.(intersection);
+          intersection && getResolvedOptions()?.onContextMenu?.(intersection);
         },
       };
     };
@@ -660,7 +737,7 @@ export const intersectionPreviewPlugin = defineMapPlugin<
         layers: {
           [INTERSECTION_PREVIEW_LAYER_ID]: createIntersectionLayerInteractiveConfig(
             INTERSECTION_PREVIEW_LAYER_ID,
-            context.getOptions()?.materializeOnClick !== false
+            getResolvedOptions()?.materializeOnClick !== false
           ),
           [INTERSECTION_MATERIALIZED_LAYER_ID]: createIntersectionLayerInteractiveConfig(
             INTERSECTION_MATERIALIZED_LAYER_ID,

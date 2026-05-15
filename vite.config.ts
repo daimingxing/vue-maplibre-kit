@@ -32,6 +32,10 @@ function resolveAssetFileName(assetInfo: { names?: string[]; name?: string }) {
     return "style.css";
   }
 
+  if (sourceName.endsWith(".svg")) {
+    return "assets/svg/[name]-[hash][extname]";
+  }
+
   return "assets/[name]-[hash][extname]";
 }
 
@@ -54,6 +58,9 @@ function resolveLibraryEntries() {
     ),
     "plugins/intersection-preview": fileURLToPath(
       new URL("./src/plugins/intersection-preview.ts", import.meta.url)
+    ),
+    "plugins/polygon-edge-preview": fileURLToPath(
+      new URL("./src/plugins/polygon-edge-preview.ts", import.meta.url)
     ),
     "plugins/map-feature-multi-select": fileURLToPath(
       new URL("./src/plugins/map-feature-multi-select.ts", import.meta.url)
@@ -111,6 +118,12 @@ function resolveDevAliases() {
       ),
     },
     {
+      find: /^vue-maplibre-kit\/plugins\/polygon-edge-preview$/,
+      replacement: fileURLToPath(
+        new URL("./src/plugins/polygon-edge-preview.ts", import.meta.url)
+      ),
+    },
+    {
       find: /^vue-maplibre-kit\/plugins\/map-feature-multi-select$/,
       replacement: fileURLToPath(
         new URL("./src/plugins/map-feature-multi-select.ts", import.meta.url)
@@ -139,6 +152,8 @@ export default defineConfig(({ command }) => {
 
   return {
     plugins: [vue(), geojsonPlugin()],
+    // 组件库构建不复制 public，避免 demo 静态资源进入 npm 包。
+    publicDir: isBuildCommand ? false : "public",
     resolve: {
       alias: resolveDevAliases(),
     },

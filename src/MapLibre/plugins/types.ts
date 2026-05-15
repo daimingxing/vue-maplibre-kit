@@ -4,6 +4,7 @@ import type { TerraDrawMouseEvent } from 'terra-draw';
 import type { Component, Ref } from 'vue';
 import type { MapInstance } from 'vue-maplibre-gl';
 import type {
+  MapFeatureSnapDrawnTargetOptions,
   MapFeatureSnapResult,
   MapLayerInteractiveContext,
   MapLayerInteractiveLayerOptions,
@@ -44,10 +45,17 @@ export interface ResolvedTerradrawSnapOptions {
   useNative: boolean;
   /** 是否启用普通图层候选吸附。 */
   useMapTargets: boolean;
+  /** TerraDraw 已绘制要素吸附目标配置。 */
+  drawnTargets: Required<
+    Pick<MapFeatureSnapDrawnTargetOptions, 'enabled' | 'geometryTypes' | 'snapTo'>
+  > &
+    Pick<MapFeatureSnapDrawnTargetOptions, 'priority' | 'tolerancePx'>;
 }
 
 /** 地图吸附服务统一接口。 */
 export interface MapSnapService {
+  /** 读取当前吸附能力是否运行期开启。 */
+  isActive?: () => boolean;
   /** 读取当前吸附绑定。 */
   getBinding: () => MapSnapBinding | null;
   /** 解析控件最终吸附配置。 */
@@ -97,6 +105,8 @@ export interface MapSelectionService {
 export interface MapPluginRenderItem {
   /** 当前渲染项唯一标识。 */
   id: string;
+  /** 渲染优先级；数值越大越靠后渲染，也就越容易显示在上层。 */
+  renderPriority?: number;
   /** 当前渲染项对应的组件。 */
   component: Component;
   /** 透传给组件的属性。 */
@@ -168,6 +178,8 @@ export interface MapPluginContext<TType extends string = string, TOptions = unkn
   getMap: () => MaplibreMap | null | undefined;
   /** 读取当前地图实例包装对象。 */
   getMapInstance: () => MapInstance;
+  /** 列出当前已注册插件。 */
+  listPlugins: () => Array<{ id: string; type: string }>;
   /** 读取业务层原始普通图层交互配置。 */
   getBaseMapInteractive: () => MapLayerInteractiveOptions | null | undefined;
   /** 读取普通图层当前选中上下文。 */

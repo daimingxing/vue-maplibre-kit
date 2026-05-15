@@ -12,12 +12,21 @@ import type {
   MapSelectionDeactivateBehavior,
   TerradrawSnapSharedOptions,
 } from '../MapLibre/shared/mapLibre-controls-types';
-import type { MapFeatureSnapPreviewOptions } from '../MapLibre/plugins/map-feature-snap/types';
+import type {
+  MapFeatureSnapOptions,
+  MapFeatureSnapPreviewOptions,
+  MapFeatureSnapTargetOptions,
+} from '../MapLibre/plugins/map-feature-snap/types';
 import type { LineDraftPreviewStyleOverrides } from '../MapLibre/plugins/line-draft-preview/types';
 import type {
   IntersectionPreviewStateStyles,
   IntersectionPreviewStyleOverrides,
+  IntersectionPreviewScope,
 } from '../MapLibre/plugins/intersection-preview/types';
+import type {
+  PolygonEdgePreviewStateStyles,
+  PolygonEdgePreviewStyleRule,
+} from '../MapLibre/plugins/polygon-edge-preview/types';
 import type { MapDxfExportTaskOptions } from '../MapLibre/plugins/map-dxf-export/types';
 import type { MapLayerStyleOverrides } from '../MapLibre/shared/map-layer-style-config';
 import { cloneDeep } from 'lodash-es';
@@ -63,8 +72,14 @@ export type MapRasterLayerStyleDefaults = MapLayerStyleOverrides<
 export interface MapFeatureSnapGlobalDefaults {
   /** 全局默认吸附范围。 */
   defaultTolerancePx?: number;
+  /** 全局吸附开关控件默认配置。 */
+  control?: MapFeatureSnapOptions['control'];
   /** 全局吸附预览样式。 */
   preview?: MapFeatureSnapPreviewOptions;
+  /** 交点插件内置吸附目标默认配置。 */
+  intersection?: boolean | MapFeatureSnapTargetOptions;
+  /** 面边线插件内置吸附目标默认配置。 */
+  polygonEdge?: boolean | MapFeatureSnapTargetOptions;
   /** TerraDraw / Measure 吸附默认值。 */
   terradraw?: {
     /** Draw / Measure 共用默认值。 */
@@ -84,6 +99,18 @@ export interface LineDraftPreviewGlobalDefaults {
 
 /** 交点预览插件全局默认配置。 */
 export interface IntersectionPreviewGlobalDefaults {
+  /** 当前交点层默认是否可见。 */
+  visible?: boolean;
+  /** 点击预览交点时是否自动生成正式交点点要素。 */
+  materializeOnClick?: boolean;
+  /** 当前求交范围。 */
+  scope?: IntersectionPreviewScope;
+  /** 是否保留端点交点。 */
+  includeEndpoint?: boolean;
+  /** 交点坐标归一化小数位。 */
+  coordDigits?: number;
+  /** 是否忽略同一条线自交。 */
+  ignoreSelf?: boolean;
   /** 全局预览交点状态样式配置。 */
   previewStateStyles?: IntersectionPreviewStateStyles;
   /** 全局正式交点状态样式配置。 */
@@ -94,10 +121,16 @@ export interface IntersectionPreviewGlobalDefaults {
   materializedStyleOverrides?: IntersectionPreviewStyleOverrides;
 }
 
+/** 面边线预览插件全局默认配置。 */
+export interface PolygonEdgePreviewGlobalDefaults {
+  /** 全局面边线状态样式。 */
+  style?: PolygonEdgePreviewStateStyles;
+  /** 全局面边线来源面样式规则。 */
+  styleRules?: PolygonEdgePreviewStyleRule[];
+}
+
 /** 要素多选插件全局默认配置。 */
 export interface MapFeatureMultiSelectGlobalDefaults {
-  /** 是否启用多选插件。 */
-  enabled?: boolean;
   /** 控件显示位置。 */
   position?: ControlPosition;
   /** 退出多选后的处理策略。 */
@@ -135,6 +168,8 @@ export interface MapKitGlobalConfig {
     lineDraft?: LineDraftPreviewGlobalDefaults;
     /** 交点预览插件全局默认配置。 */
     intersection?: IntersectionPreviewGlobalDefaults;
+    /** 面边线预览插件全局默认配置。 */
+    polygonEdge?: PolygonEdgePreviewGlobalDefaults;
     /** 多选插件全局默认配置。 */
     multiSelect?: MapFeatureMultiSelectGlobalDefaults;
     /** DXF 插件全局默认配置。 */

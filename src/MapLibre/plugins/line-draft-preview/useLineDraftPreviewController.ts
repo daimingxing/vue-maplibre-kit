@@ -10,7 +10,7 @@ import type {
 import type { MapFeaturePropertyPolicy } from '../../shared/map-feature-data';
 import {
   createMapSourceFeatureRef,
-  extractManagedPreviewOriginFromProperties,
+  extractGeneratedParentRef,
   type MapCommonFeature,
   type MapCommonFeatureCollection,
   type MapCommonLineFeature,
@@ -251,7 +251,7 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
           ((feature?.id as MapFeatureId | null | undefined) ?? null)),
       sourceId: LINE_DRAFT_PREVIEW_SOURCE_ID,
       layerId: LINE_DRAFT_PREVIEW_LINE_LAYER_ID,
-      originRef: extractManagedPreviewOriginFromProperties(feature?.properties || {}),
+      originRef: extractGeneratedParentRef(feature?.properties || {}),
       generatedKind:
         typeof feature?.properties?.generatedKind === 'string'
           ? feature.properties.generatedKind
@@ -335,7 +335,7 @@ export function useLineDraftPreviewController(options: UseLineDraftPreviewContro
       return normalizedExplicitOrigin;
     }
 
-    const featureOrigin = extractManagedPreviewOriginFromProperties(lineFeature.properties || {});
+    const featureOrigin = extractGeneratedParentRef(lineFeature.properties || {});
     if (featureOrigin) {
       return featureOrigin;
     }

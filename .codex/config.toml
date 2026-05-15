@@ -1,0 +1,8 @@
+sandbox_mode = "danger-full-access"
+[projects.'\\?\E:\Project\vue-maplibre-kit']
+trust_level = "trusted"
+
+[mcp_servers]
+[mcp_servers.serena-codex-9123]
+type = "streamable-http"
+url = "http://127.0.0.1:9123/mcp"
