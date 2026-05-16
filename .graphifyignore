@@ -1,0 +1,30 @@
+# only index src/, ignore everything else
+
+*
+!src/
+!src/**
+!docs/
+docs/*
+!docs/file-index.md
+!docs/vue-maplibre-kit-knowledge/
+!docs/vue-maplibre-kit-knowledge/**
+!examples/
+!examples/**
+
+# ignore test files
+*.spec.ts
+*.spec.tsx
+*.spec.js
+*.spec.jsx
+*.test.ts
+*.test.tsx
+*.test.js
+*.test.jsx
+**/*.spec.ts
+**/*.spec.tsx
+**/*.spec.js
+**/*.spec.jsx
+**/*.test.ts
+**/*.test.tsx
+**/*.test.js
+**/*.test.jsx
