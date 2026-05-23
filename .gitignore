@@ -25,3 +25,6 @@ dist-ssr
 .codebuddy
 .playwright-cli
 .serena
+graphify-out/manifest.json
+graphify-out/cost.json
+graphify-out/cache/
