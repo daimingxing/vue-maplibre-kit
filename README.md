@@ -61,15 +61,15 @@
 | 几何计算 | `vue-maplibre-kit/geometry` | 几何工具、来源引用工具 |
 | 常用插件注册 | `vue-maplibre-kit/plugins` | 聚合入口，推荐用 `createBusinessPlugins()` 注册 snap、line-draft、intersection、multi-select、dxf-export |
 | 单插件高级用法 | `vue-maplibre-kit/plugins/*` | 插件子路径公开入口，仅用于深度定制、常量和高级类型 |
-| 地图控件样式 | `vue-maplibre-kit/style.css` | MapLibre、Vue MapLibre、TerraDraw 控件样式 |
 
 ### 最小导入示例
 
 ```ts
-import 'vue-maplibre-kit/style.css';
 import { MapLibreInit, useBusinessMap } from 'vue-maplibre-kit/business';
 import { createBusinessPlugins } from 'vue-maplibre-kit/plugins';
 ```
+
+css 样式会随 `MapLibreInit` 组件自动加载，无需手动 import。
 
 业务插件建议只记两步：注册插件用 `createBusinessPlugins()`，读取插件状态和动作统一用 `useBusinessMap().plugins.*`。
 例如 `businessMap.plugins.lineDraft`、`businessMap.plugins.intersection`、`businessMap.plugins.multiSelect`、`businessMap.plugins.snap`、`businessMap.plugins.dxfExport`。

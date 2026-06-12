@@ -8,7 +8,7 @@
 
 ## 推荐路径
 
-1. 安装包、导入 `vue-maplibre-kit/style.css`。
+1. 安装包。
 2. 用 `MapLibreInit` 挂载第一张地图。
 3. 用 `vue-maplibre-kit/business` 接入业务 source、图层和 `useBusinessMap`。
 4. 第一个业务数据源继续读：[业务数据源](../04-业务数据源/index.md)。
@@ -27,7 +27,6 @@
 ```ts
 import { MapLibreInit, MapBusinessSourceLayers, useBusinessMap } from "vue-maplibre-kit/business";
 import { createBusinessPlugins } from "vue-maplibre-kit/plugins";
-import "vue-maplibre-kit/style.css";
 ```
 
-普通业务页面优先使用公开包名路径，不需要了解组件库内部目录结构。
+普通业务页面优先使用公开包名路径，不需要了解组件库内部目录结构。地图控件 css 由 `MapLibreInit` 自动加载，无需手动 import 样式文件。
