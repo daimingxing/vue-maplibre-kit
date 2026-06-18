@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createMapBusinessSourceRegistry } from "./createMapBusinessSource";
+import { ref } from "vue";
+import {
+  createMapBusinessSource,
+  createMapBusinessSourceRegistry,
+} from "./createMapBusinessSource";
 import type * as BusinessPresetModule from "./businessPreset";
 import {
   getFeatureColor,
@@ -217,6 +221,80 @@ describe("businessPreset", () => {
     expect((plugins[3].options as any).enabled).toBe(true);
     expect((plugins[5].options as any).sourceRegistry).toBe(sourceRegistry);
     expect((plugins[5].options as any).control.enabled).toBe(false);
+  });
+
+  it("应给 snap 自动注入基于 sourceRegistry 的完整预览要素解析器", async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+    const sourceRegistry = createMapBusinessSourceRegistry();
+    sourceRegistry.addSource(
+      createMapBusinessSource({
+        sourceId: "business-source",
+        data: ref({
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              id: "line-a",
+              properties: {
+                id: "line-a",
+              },
+              geometry: {
+                type: "LineString",
+                coordinates: [
+                  [0, 0],
+                  [10, 0],
+                  [20, 0],
+                ],
+              },
+            },
+          ],
+        }),
+        featureIdKey: "id",
+      }),
+    );
+    const plugins = createBusinessPlugins({
+      sourceRegistry,
+      snap: {
+        businessLayers: {
+          管线: "pipe-line",
+        },
+      },
+    });
+
+    const resolver = (plugins[0].options as any).previewFeatureResolver;
+    const resolvedFeature = resolver({
+      targetSourceId: "business-source",
+      targetLayerId: "pipe-line",
+      targetFeature: {
+        id: "line-a",
+      },
+    });
+
+    expect(typeof resolver).toBe("function");
+    expect(resolvedFeature.geometry.coordinates).toEqual([
+      [0, 0],
+      [10, 0],
+      [20, 0],
+    ]);
+  });
+
+  it("用户显式传入 snap.previewFeatureResolver 时不应被默认解析器覆盖", async () => {
+    const businessPreset = await loadBusinessPreset();
+    const { createBusinessPlugins } = businessPreset;
+    const sourceRegistry = createMapBusinessSourceRegistry();
+    const previewFeatureResolver = () => null;
+    const plugins = createBusinessPlugins({
+      sourceRegistry,
+      snap: {
+        previewFeatureResolver,
+        businessLayers: {
+          管线: "pipe-line",
+        },
+      } as any,
+    });
+
+    expect((plugins[0].options as any).previewFeatureResolver).toBe(previewFeatureResolver);
   });
 
   it("应支持顶层 sourceRegistry 复用和 dxfExport 布尔简写", async () => {

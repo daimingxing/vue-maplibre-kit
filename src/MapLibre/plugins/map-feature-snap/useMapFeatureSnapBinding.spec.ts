@@ -16,6 +16,9 @@ function createMapStub() {
   const eventMap = new Map<string, (...args: any[]) => void>();
 
   return {
+    emit: (eventName: string, eventPayload: unknown) => {
+      eventMap.get(eventName)?.(eventPayload);
+    },
     on: vi.fn((eventName: string, handler: (...args: any[]) => void) => {
       eventMap.set(eventName, handler);
     }),
@@ -71,6 +74,39 @@ function createMapStub() {
       };
     }),
   };
+}
+
+/**
+ * 创建吸附预览刷新使用的鼠标事件。
+ * @param x 鼠标屏幕横坐标
+ * @param y 鼠标屏幕纵坐标
+ * @returns MapLibre 鼠标事件最小桩
+ */
+function createMouseMoveEvent(x: number, y: number) {
+  return {
+    point: {
+      x,
+      y,
+    },
+    lngLat: {
+      lng: x,
+      lat: y,
+    },
+  };
+}
+
+/**
+ * 读取吸附预览中的线要素坐标。
+ * @param binding 当前吸附绑定
+ * @returns 预览线坐标；不存在时返回 null
+ */
+function getPreviewLineCoordinates(binding: ReturnType<typeof createMapFeatureSnapBinding>) {
+  const lineFeature = binding.previewData.value.features.find((feature) => {
+    return feature.properties?.kind === 'line';
+  });
+  return lineFeature?.geometry.type === 'LineString'
+    ? lineFeature.geometry.coordinates
+    : null;
 }
 
 describe('createMapFeatureSnapBinding', () => {
@@ -223,6 +259,150 @@ describe('createMapFeatureSnapBinding', () => {
     expect(result.snapKind).toBe('segment');
 
     binding.destroy();
+  });
+
+  it('应保留命中段数据并使用 resolver 返回的完整线要素生成预览线', () => {
+    vi.useFakeTimers();
+    const map = {
+      ...createMapStub(),
+      getLayer: vi.fn(() => ({ id: 'business-line-layer' })),
+      queryRenderedFeatures: vi.fn(() => [
+        {
+          id: 'line-a',
+          source: 'business-source',
+          properties: {
+            id: 'line-a',
+          },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [0, 0],
+              [10, 0],
+            ],
+          },
+          layer: {
+            id: 'business-line-layer',
+          },
+        },
+      ]),
+    };
+    const binding = createMapFeatureSnapBinding({
+      map: map as any,
+      getOptions: () => ({
+        enabled: true,
+        previewFeatureResolver: () => ({
+          type: 'Feature',
+          id: 'line-a',
+          properties: {
+            id: 'line-a',
+          },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [0, 0],
+              [10, 0],
+              [20, 0],
+            ],
+          },
+        }),
+        businessLayers: {
+          rules: [
+            {
+              id: 'business-rule',
+              layerIds: ['business-line-layer'],
+              snapTo: ['segment'],
+            },
+          ],
+        },
+      } as any),
+    });
+
+    const result = binding.resolvePointer({
+      point: {
+        x: 5,
+        y: 0,
+      },
+      lngLat: {
+        lng: 5,
+        lat: 0,
+      },
+    });
+    map.emit('mousemove', createMouseMoveEvent(5, 0));
+    vi.runOnlyPendingTimers();
+
+    expect(result.segment).toMatchObject({
+      segmentIndex: 0,
+      startCoordinate: [0, 0],
+      endCoordinate: [10, 0],
+    });
+    expect(binding.previewData.value.features.find((feature) => feature.properties?.kind === 'point')?.geometry)
+      .toEqual({
+        type: 'Point',
+        coordinates: [5, 0],
+      });
+    expect(getPreviewLineCoordinates(binding)).toEqual([
+      [0, 0],
+      [10, 0],
+      [20, 0],
+    ]);
+
+    binding.destroy();
+    vi.useRealTimers();
+  });
+
+  it('未配置 resolver 时应使用命中渲染要素几何生成预览线', () => {
+    vi.useFakeTimers();
+    const map = {
+      ...createMapStub(),
+      getLayer: vi.fn(() => ({ id: 'business-line-layer' })),
+      queryRenderedFeatures: vi.fn(() => [
+        {
+          id: 'line-a',
+          source: 'business-source',
+          properties: {
+            id: 'line-a',
+          },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [0, 0],
+              [10, 0],
+              [20, 0],
+            ],
+          },
+          layer: {
+            id: 'business-line-layer',
+          },
+        },
+      ]),
+    };
+    const binding = createMapFeatureSnapBinding({
+      map: map as any,
+      getOptions: () => ({
+        enabled: true,
+        businessLayers: {
+          rules: [
+            {
+              id: 'business-rule',
+              layerIds: ['business-line-layer'],
+              snapTo: ['segment'],
+            },
+          ],
+        },
+      }),
+    });
+
+    map.emit('mousemove', createMouseMoveEvent(5, 0));
+    vi.runOnlyPendingTimers();
+
+    expect(getPreviewLineCoordinates(binding)).toEqual([
+      [0, 0],
+      [10, 0],
+      [20, 0],
+    ]);
+
+    binding.destroy();
+    vi.useRealTimers();
   });
 
   it('业务图层吸附规则未传 id 时应自动生成稳定 ruleId', () => {

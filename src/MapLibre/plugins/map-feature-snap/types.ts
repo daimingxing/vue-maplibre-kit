@@ -1,3 +1,4 @@
+import type { Feature, Geometry } from 'geojson';
 import type { ControlPosition, Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
 import type {
   TerradrawControlType,
@@ -68,11 +69,28 @@ export interface MapFeatureSnapPreviewOptions {
   pointColor?: string;
   /** 吸附点半径。 */
   pointRadius?: number;
-  /** 命中线段高亮颜色。 */
+  /** 命中线要素高亮颜色。 */
   lineColor?: string;
-  /** 命中线段高亮宽度。 */
+  /** 命中线要素高亮宽度。 */
   lineWidth?: number;
 }
+
+/** 吸附预览完整要素解析上下文。 */
+export interface MapFeatureSnapPreviewResolveContext {
+  /** 当前命中的渲染要素。 */
+  targetFeature: MapGeoJSONFeature | null;
+  /** 当前命中的目标图层 ID。 */
+  targetLayerId: string | null;
+  /** 当前命中的目标 source ID。 */
+  targetSourceId: string | null;
+  /** 当前命中的规则 ID。 */
+  ruleId: string | null;
+}
+
+/** 吸附预览完整要素解析器。 */
+export type MapFeatureSnapPreviewFeatureResolver = (
+  context: MapFeatureSnapPreviewResolveContext
+) => Feature<Geometry, Record<string, any> | null> | null | undefined;
 
 /** 业务图层吸附配置。 */
 export interface MapFeatureSnapBusinessLayerOptions {
@@ -155,6 +173,8 @@ export interface MapFeatureSnapOptions {
   defaultTolerancePx?: number;
   /** 吸附预览配置。 */
   preview?: MapFeatureSnapPreviewOptions;
+  /** 吸附线预览完整要素解析器；业务 source 场景优先用它回源读取完整 GeoJSON。 */
+  previewFeatureResolver?: MapFeatureSnapPreviewFeatureResolver;
   /** 业务图层吸附配置。 */
   businessLayers?: MapFeatureSnapBusinessLayerOptions;
   /** 交点插件内置吸附目标配置。 */

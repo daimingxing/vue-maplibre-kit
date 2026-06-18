@@ -4,7 +4,7 @@
       :layer-id="MAP_FEATURE_SNAP_PREVIEW_LINE_LAYER_ID"
       :layout="lineStyle.layout"
       :paint="lineStyle.paint"
-      :filter="['==', 'kind', 'segment']"
+      :filter="['==', 'kind', 'line']"
       :interactive="false"
     />
     <mgl-circle-layer
@@ -20,7 +20,7 @@
 <script setup lang="ts">
 /**
  * 吸附预览图层组件。
- * 负责渲染统一吸附插件维护的“吸附点 + 命中线段”预览，不向业务层暴露内部 source/layer 结构。
+ * 负责渲染统一吸附插件维护的“吸附点 + 命中线要素”预览，不向业务层暴露内部 source/layer 结构。
  */
 import { MglCircleLayer, MglGeoJsonSource, MglLineLayer } from 'vue-maplibre-gl';
 import { type PropType } from 'vue';
@@ -51,7 +51,7 @@ defineProps({
     >,
     required: true,
   },
-  /** 命中线段高亮图层样式。 */
+  /** 命中线要素高亮图层样式。 */
   lineStyle: {
     type: Object as PropType<
       MapLayerStyle<LineLayerSpecification['layout'], LineLayerSpecification['paint']>

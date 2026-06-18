@@ -63,6 +63,12 @@ export type { MapFeatureSnapPluginApi } from '../MapLibre/plugins/map-feature-sn
 /** 吸附预览配置类型。覆盖吸附点线预览样式时使用。 */
 export type { MapFeatureSnapPreviewOptions } from '../MapLibre/plugins/map-feature-snap';
 
+/** 吸附预览完整要素解析器类型。需要从业务 source 回源生成整线高亮时使用。 */
+export type { MapFeatureSnapPreviewFeatureResolver } from '../MapLibre/plugins/map-feature-snap';
+
+/** 吸附预览完整要素解析上下文类型。实现自定义预览解析器时使用。 */
+export type { MapFeatureSnapPreviewResolveContext } from '../MapLibre/plugins/map-feature-snap';
+
 /** 吸附结果类型。读取一次吸附命中结果时使用。 */
 export type { MapFeatureSnapResult } from '../MapLibre/plugins/map-feature-snap';
 

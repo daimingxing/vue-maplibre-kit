@@ -1339,6 +1339,20 @@ const mapFeatureSnapOptions = {
     lineWidth: 4,
   },
 
+  // 单插件高级写法不会经过 createBusinessPlugins 的自动注入，因此这里显式回源读取完整要素。
+  previewFeatureResolver: (context) => {
+    const featureId = context.targetFeature?.id ?? context.targetFeature?.properties?.id ?? null;
+    if (!context.targetSourceId || featureId === null || featureId === undefined) {
+      return null;
+    }
+
+    return businessSourceRegistry.resolveFeature({
+      sourceId: context.targetSourceId,
+      featureId,
+      layerId: context.targetLayerId,
+    });
+  },
+
   // 业务图层吸附规则。
   businessLayers: {
     enabled: true,

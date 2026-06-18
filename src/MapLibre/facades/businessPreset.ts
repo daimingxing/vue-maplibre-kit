@@ -10,6 +10,7 @@ import {
   createMapFeatureSnapPlugin,
   type MapFeatureSnapBusinessLayerOptions,
   type MapFeatureSnapOptions,
+  type MapFeatureSnapPreviewFeatureResolver,
   type MapFeatureSnapRule,
 } from "../plugins/map-feature-snap";
 import {
@@ -413,6 +414,32 @@ function resolveBusinessSnapLayers(
 }
 
 /**
+ * 创建业务 source 驱动的完整吸附预览要素解析器。
+ * @param sourceRegistry 当前页面业务 source 注册表
+ * @returns 完整预览要素解析器；没有 registry 时返回 undefined
+ */
+function createBusinessSnapPreviewResolver(
+  sourceRegistry: MapBusinessSourceRegistry | undefined,
+): MapFeatureSnapPreviewFeatureResolver | undefined {
+  if (!sourceRegistry) {
+    return undefined;
+  }
+
+  return (context) => {
+    const featureId = context.targetFeature?.id ?? context.targetFeature?.properties?.id ?? null;
+    if (!context.targetSourceId || featureId === null || featureId === undefined) {
+      return null;
+    }
+
+    return sourceRegistry.resolveFeature({
+      sourceId: context.targetSourceId,
+      featureId,
+      layerId: context.targetLayerId,
+    });
+  };
+}
+
+/**
  * 创建业务图层组。
  * @param options 图层组配置
  * @returns 标准业务图层描述数组
@@ -453,11 +480,14 @@ export function createLayerGroup(
  * @returns 标准吸附插件配置
  */
 function resolveSnapOptions(
+  context: BusinessPluginsOptions,
   options: true | BusinessSnapPresetOptions,
 ): MapFeatureSnapOptions {
+  const defaultPreviewFeatureResolver = createBusinessSnapPreviewResolver(context.sourceRegistry);
   if (options === true) {
     return {
       enabled: true,
+      previewFeatureResolver: defaultPreviewFeatureResolver,
     };
   }
 
@@ -476,6 +506,7 @@ function resolveSnapOptions(
   return {
     enabled: true,
     ...restOptions,
+    previewFeatureResolver: restOptions.previewFeatureResolver ?? defaultPreviewFeatureResolver,
     businessLayers,
   };
 }
@@ -571,7 +602,7 @@ export function createBusinessPlugins(
   const plugins: MapPluginDescriptor[] = [];
 
   if (options.snap) {
-    plugins.push(createMapFeatureSnapPlugin(resolveSnapOptions(options.snap)));
+    plugins.push(createMapFeatureSnapPlugin(resolveSnapOptions(options, options.snap)));
   }
 
   if (options.lineDraft) {

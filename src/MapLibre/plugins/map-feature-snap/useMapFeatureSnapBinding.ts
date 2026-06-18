@@ -8,6 +8,7 @@ import type {
   MapFeatureSnapKind,
   MapFeatureSnapMode,
   MapFeatureSnapOptions,
+  MapFeatureSnapPreviewFeatureResolver,
   MapFeatureSnapResult,
   MapFeatureSnapRule,
   MapFeatureSnapSegmentInfo,
@@ -107,6 +108,20 @@ function createEmptyPreviewFeatureCollection(): PreviewFeatureCollection {
     type: 'FeatureCollection',
     features: [],
   };
+}
+
+/**
+ * 判断当前几何是否适合用线图层展示完整命中要素。
+ * @param geometry 待判断的 GeoJSON 几何
+ * @returns 是否为线或面类几何
+ */
+function isLinePreviewGeometry(geometry: Geometry | null | undefined): geometry is Geometry {
+  return (
+    geometry?.type === 'LineString' ||
+    geometry?.type === 'MultiLineString' ||
+    geometry?.type === 'Polygon' ||
+    geometry?.type === 'MultiPolygon'
+  );
 }
 
 /**
@@ -675,6 +690,36 @@ function toSnapResult(candidate: SnapCandidate | null): MapFeatureSnapResult {
 }
 
 /**
+ * 通过业务解析器读取完整预览要素几何。
+ * @param result 当前吸附结果
+ * @param resolver 完整预览要素解析器
+ * @returns 可用于线预览的完整几何；解析失败或几何不适合时返回 null
+ */
+function resolvePreviewFeatureGeometry(
+  result: MapFeatureSnapResult,
+  resolver?: MapFeatureSnapPreviewFeatureResolver
+): Geometry | null {
+  if (resolver) {
+    try {
+      const resolvedFeature = resolver({
+        targetFeature: result.targetFeature,
+        targetLayerId: result.targetLayerId,
+        targetSourceId: result.targetSourceId,
+        ruleId: result.ruleId,
+      });
+      if (isLinePreviewGeometry(resolvedFeature?.geometry)) {
+        return resolvedFeature.geometry;
+      }
+    } catch (error) {
+      // resolver 属于业务侧输入，异常时退回渲染要素几何，避免预览刷新中断鼠标交互。
+      console.error('[MapFeatureSnap] 吸附预览完整要素解析失败，已退回渲染要素几何', error);
+    }
+  }
+
+  return isLinePreviewGeometry(result.targetFeature?.geometry) ? result.targetFeature.geometry : null;
+}
+
+/**
  * 判断当前吸附插件是否启用。
  * @param options 地图吸附插件配置
  * @returns 是否启用
@@ -816,7 +861,10 @@ function getEnabledSnapRules(
  * @param result 当前吸附结果
  * @returns 可直接喂给 GeoJSONSource 的预览数据
  */
-function buildPreviewData(result: MapFeatureSnapResult): PreviewFeatureCollection {
+function buildPreviewData(
+  result: MapFeatureSnapResult,
+  resolver?: MapFeatureSnapPreviewFeatureResolver
+): PreviewFeatureCollection {
   if (!result.matched || !result.targetCoordinate) {
     return createEmptyPreviewFeatureCollection();
   }
@@ -835,17 +883,15 @@ function buildPreviewData(result: MapFeatureSnapResult): PreviewFeatureCollectio
     },
   ];
 
-  if (result.segment) {
+  const previewGeometry = resolvePreviewFeatureGeometry(result, resolver);
+  if (previewGeometry) {
     features.push({
       type: 'Feature',
-      id: 'map-feature-snap-preview-segment',
+      id: 'map-feature-snap-preview-line',
       properties: {
-        kind: 'segment',
+        kind: 'line',
       },
-      geometry: {
-        type: 'LineString',
-        coordinates: [result.segment.startCoordinate, result.segment.endCoordinate],
-      },
+      geometry: previewGeometry,
     });
   }
 
@@ -1023,7 +1069,7 @@ export function createMapFeatureSnapBinding(options: {
       return;
     }
 
-    previewData.value = buildPreviewData(resolveMapEvent(latestEvent));
+    previewData.value = buildPreviewData(resolveMapEvent(latestEvent), snapOptions?.previewFeatureResolver);
   }
 
   /**

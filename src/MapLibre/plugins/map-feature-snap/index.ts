@@ -60,6 +60,8 @@ export type {
   MapFeatureSnapDrawnTargetOptions,
   MapFeatureSnapPluginApi,
   MapFeatureSnapPreviewOptions,
+  MapFeatureSnapPreviewFeatureResolver,
+  MapFeatureSnapPreviewResolveContext,
   MapFeatureSnapResult,
   MapFeatureSnapRule,
   MapFeatureSnapRuleFilterContext,
