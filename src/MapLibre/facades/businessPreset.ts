@@ -21,7 +21,7 @@ import {
   createPolygonEdgePreviewPlugin,
   type PolygonEdgePreviewOptions,
 } from "../plugins/polygon-edge-preview";
-import type { MapPluginDescriptor } from "../plugins/types";
+import type { AnyMapPluginDescriptor } from "../plugins/types";
 import {
   createCircleLayerStyle,
   createFillLayerStyle,
@@ -598,8 +598,8 @@ function resolveDxfOptions(
  */
 export function createBusinessPlugins(
   options: BusinessPluginsOptions,
-): MapPluginDescriptor[] {
-  const plugins: MapPluginDescriptor[] = [];
+): AnyMapPluginDescriptor[] {
+  const plugins: AnyMapPluginDescriptor[] = [];
 
   if (options.snap) {
     plugins.push(createMapFeatureSnapPlugin(resolveSnapOptions(options, options.snap)));
