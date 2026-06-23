@@ -49,6 +49,10 @@ const props = defineProps<Props>();
  * 响应控件点击，触发 DXF 导出。
  */
 const handleExport = (): void => {
+  if (props.isExporting) {
+    return;
+  }
+
   void props.onExport();
 };
 </script>

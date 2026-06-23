@@ -200,6 +200,60 @@ describe("mapDxfExportPlugin", () => {
     expect(pluginInstance.state?.value.isExporting).toBe(false);
   });
 
+  it("应在导出未完成前阻止重复触发真实导出任务", async () => {
+    const optionsRef = ref(createPluginOptions());
+    const pluginInstance = mapDxfExportPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error("未获取到 DXF 导出插件 API");
+    }
+    const featureFilter = vi.fn(() => true);
+
+    const firstPromise = pluginApi.exportDxf({ featureFilter });
+    const secondPromise = pluginApi.exportDxf({ featureFilter });
+
+    expect(pluginInstance.state?.value.isExporting).toBe(true);
+
+    const [firstResult, secondResult] = await Promise.all([
+      firstPromise,
+      secondPromise,
+    ]);
+
+    expect(firstResult).toBe(secondResult);
+    expect(featureFilter).toHaveBeenCalledTimes(1);
+    expect(pluginInstance.state?.value.isExporting).toBe(false);
+  });
+
+  it("应在导出失败后恢复状态并允许再次导出", async () => {
+    const optionsRef = ref(createPluginOptions());
+    const pluginInstance = mapDxfExportPlugin.createInstance(
+      createPluginContext(optionsRef),
+    );
+    const pluginApi = pluginInstance.getApi?.();
+    if (!pluginApi) {
+      throw new Error("未获取到 DXF 导出插件 API");
+    }
+
+    await expect(
+      pluginApi.exportDxf({
+        sourceIds: ["missing-source"],
+      }),
+    ).rejects.toThrowError("未找到以下 sourceId：missing-source");
+
+    expect(pluginInstance.state?.value.isExporting).toBe(false);
+    expect(pluginInstance.state?.value.lastError).toBe(
+      "未找到以下 sourceId：missing-source",
+    );
+
+    const result = await pluginApi.exportDxf();
+
+    expect(result.fileName).toBe("map-export.dxf");
+    expect(pluginInstance.state?.value.isExporting).toBe(false);
+    expect(pluginInstance.state?.value.lastError).toBeNull();
+  });
+
   it("应在导出成功后更新状态并触发下载", async () => {
     const optionsRef = ref(createPluginOptions());
     const pluginInstance = mapDxfExportPlugin.createInstance(

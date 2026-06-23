@@ -124,6 +124,8 @@ export function useMapDxfExportService(
     ...defaultDxfExportState,
   });
   const resolvedOptions = computed(() => normalizeMapDxfExportOptions(getOptions()));
+  // 复用同一个导出 Promise，避免连续点击或门面并发调用重复生成 DXF。
+  let inFlightPromise: Promise<MapDxfExportResult> | null = null;
 
   /**
    * 读取本次最终生效的导出任务配置。
@@ -165,13 +167,17 @@ export function useMapDxfExportService(
   };
 
   /**
-   * 生成 DXF 文本。
-   * @param overrides 业务层局部覆写
+   * 执行受保护的 DXF 导出任务。
+   * @param task 真实导出任务
    * @returns DXF 导出结果
    */
-  const exportDxf = async (
-    overrides?: MapDxfExportTaskOptions
+  const runExportTask = async (
+    task: () => MapDxfExportResult
   ): Promise<MapDxfExportResult> => {
+    if (inFlightPromise) {
+      return inFlightPromise;
+    }
+
     if (!resolvedOptions.value.enabled) {
       throw new Error('当前 DXF 导出插件已禁用');
     }
@@ -182,19 +188,38 @@ export function useMapDxfExportService(
       lastError: null,
     };
 
-    try {
-      // 先让界面有机会渲染“导出中”状态，再执行同步 DXF 生成。
-      await nextTick();
-      const result = exportBusinessSourcesToDxf({
+    inFlightPromise = (async () => {
+      try {
+        // 先让界面有机会渲染“导出中”状态，再执行同步 DXF 生成。
+        await nextTick();
+        const result = task();
+        syncSuccessState(result);
+        return result;
+      } catch (error) {
+        syncErrorState(error);
+        throw error;
+      } finally {
+        inFlightPromise = null;
+      }
+    })();
+
+    return inFlightPromise;
+  };
+
+  /**
+   * 生成 DXF 文本。
+   * @param overrides 业务层局部覆写
+   * @returns DXF 导出结果
+   */
+  const exportDxf = async (
+    overrides?: MapDxfExportTaskOptions
+  ): Promise<MapDxfExportResult> => {
+    return runExportTask(() =>
+      exportBusinessSourcesToDxf({
         sourceRegistry: resolvedOptions.value.sourceRegistry,
         taskOptions: getResolvedOptions(overrides),
-      });
-      syncSuccessState(result);
-      return result;
-    } catch (error) {
-      syncErrorState(error);
-      throw error;
-    }
+      })
+    );
   };
 
   /**
@@ -205,14 +230,14 @@ export function useMapDxfExportService(
   const downloadDxf = async (
     overrides?: MapDxfExportTaskOptions
   ): Promise<MapDxfExportResult> => {
-    try {
-      const result = await exportDxf(overrides);
+    return runExportTask(() => {
+      const result = exportBusinessSourcesToDxf({
+        sourceRegistry: resolvedOptions.value.sourceRegistry,
+        taskOptions: getResolvedOptions(overrides),
+      });
       downloadDxfFile(result);
       return result;
-    } catch (error) {
-      syncErrorState(error);
-      throw error;
-    }
+    });
   };
 
   return {

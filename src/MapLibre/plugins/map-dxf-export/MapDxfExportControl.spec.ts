@@ -16,4 +16,13 @@ describe('MapDxfExportControl', () => {
     expect(source).not.toContain('box-shadow: 0 1px 4px');
     expect(source).not.toContain('dxf-export-control__label.is-visible');
   });
+
+  it('应在导出中禁用按钮并阻止重复触发回调', () => {
+    const source = readFileSync(resolve(__dirname, './MapDxfExportControl.vue'), 'utf-8');
+
+    expect(source).toContain(':disabled="isExporting"');
+    expect(source).toContain(":title=\"isExporting ? 'DXF 导出中' : label\"");
+    expect(source).toContain("{{ isExporting ? '导出中...' : label }}");
+    expect(source).toContain('if (props.isExporting)');
+  });
 });

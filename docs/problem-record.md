@@ -1,3 +1,17 @@
+## 2026-06-23 DXF 导出重复触发保护记录
+
+- 状态：已解决
+- 问题：DXF 导出按钮和业务门面都可能在上一次导出未完成时再次触发，导致重复读取 source、重复生成 DXF 和重复下载。
+- 处理：在 DXF 导出服务内复用同一个 in-flight Promise 作为并发锁；control 点击时也根据 `isExporting` 早退，并继续通过 disabled、title 和文案暴露导出中状态。
+- 经验：PowerShell 命令如果外层使用双引号，内部的 `$_.Name` 会被提前展开；包含脚本块的查询要改用单引号包裹命令，或直接使用 `rg` 规避转义问题。
+
+## 2026-06-23 mapFeatureMultiSelect 未激活接管记录
+
+- 状态：已解决
+- 问题：`mapFeatureMultiSelect` 插件已注册但 control 未激活时，普通图层 click 仍会退回 `useMapInteractive` 的单选路径，写入 `feature-state.selected` 并触发 `onSelectionChange`。
+- 处理：普通 click 分支区分“多选服务存在”和“多选模式激活”。服务存在但未激活时，跳过单选和空白清选；服务不存在时保留原单选行为；服务激活时仍由多选追加、反选和 Shift 框选接管。
+- 经验：`useMapInteractive` 这类 Node 环境下的交互测试需要补齐最小地图容器、`globalThis` 事件和框选浮层替身，否则红灯会先落在 `document is not defined`，而不是选择行为本身。
+
 ## 2026-05-11 动态业务 source 与 layer 声明边界记录
 
 - 状态：设计确认并同步知识库

@@ -406,6 +406,14 @@ function createMapInteractiveBinding(
   };
 
   /**
+   * 判断普通图层选择行为是否已由多选服务接管。
+   * @returns 已注册多选服务时返回 true
+   */
+  const hasSelectionService = (): boolean => {
+    return Boolean(selectionService);
+  };
+
+  /**
    * 读取当前生效的多选工具配置。
    * @returns 多选工具配置；未注册服务时返回关闭态默认值
    */
@@ -1790,15 +1798,17 @@ const applyHoverTarget = (
         return;
       }
 
-      if (target) {
-        applySingleSelectedTarget(target, pointerContext);
-      } else {
-        clearSelectionState({
-          shouldNotifyDeselect: true,
-          shouldEmitSelectionChange: true,
-          reason: 'click',
-          extraContext: pointerContext,
-        });
+      if (!hasSelectionService()) {
+        if (target) {
+          applySingleSelectedTarget(target, pointerContext);
+        } else {
+          clearSelectionState({
+            shouldNotifyDeselect: true,
+            shouldEmitSelectionChange: true,
+            reason: 'click',
+            extraContext: pointerContext,
+          });
+        }
       }
     }
 
