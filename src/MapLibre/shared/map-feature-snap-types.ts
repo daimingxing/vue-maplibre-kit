@@ -1,13 +1,18 @@
+import type { Feature, LineString, MultiLineString } from 'geojson';
 import type { MapGeoJSONFeature } from 'maplibre-gl';
 
 /** 地图吸附类型。 */
-export type MapFeatureSnapKind = 'vertex' | 'segment';
+export type MapFeatureSnapKind = MapFeatureSnapMode;
 
 /** 单条吸附规则可命中的几何类型。 */
 export type MapFeatureSnapGeometryType = 'Point' | 'LineString' | 'Polygon';
 
 /** 单条吸附规则支持的吸附方式。 */
-export type MapFeatureSnapMode = 'vertex' | 'segment';
+export type MapFeatureSnapMode =
+  | 'vertex'
+  | 'segment'
+  | 'sameLayerIntersect'
+  | 'crossLayerIntersect';
 
 /** TerraDraw 已绘制要素吸附目标配置。 */
 export interface MapFeatureSnapDrawnTargetOptions {
@@ -37,6 +42,20 @@ export interface MapFeatureSnapSegmentInfo {
   endCoordinate: [number, number];
 }
 
+/** 交点候选对应的一条完整真实父线。 */
+export interface MapFeatureSnapParent {
+  /** 父线所属规则 ID。 */
+  ruleId: string;
+  /** 父线所属 source ID。 */
+  sourceId: string | null;
+  /** vector source 时父线所属的 source-layer。 */
+  sourceLayer?: string;
+  /** 父线命中的 layer ID。 */
+  layerId: string | null;
+  /** 未经过渲染裁剪的完整线要素。 */
+  feature: Feature<LineString | MultiLineString, Record<string, any> | null>;
+}
+
 /** 统一吸附结果。 */
 export interface MapFeatureSnapResult {
   /** 当前是否命中吸附。 */
@@ -59,4 +78,6 @@ export interface MapFeatureSnapResult {
   targetCoordinate: [number, number] | null;
   /** 当前命中的线段信息。 */
   segment: MapFeatureSnapSegmentInfo | null;
+  /** 交点候选实际参与求交的完整真实父线；普通 vertex/segment 可省略。 */
+  parents?: MapFeatureSnapParent[];
 }

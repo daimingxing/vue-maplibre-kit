@@ -1,4 +1,4 @@
-import type { Feature, Geometry } from 'geojson';
+import type { Feature, LineString, MultiLineString } from 'geojson';
 import type { ControlPosition, Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
 import type {
   TerradrawControlType,
@@ -7,6 +7,7 @@ import type {
 import type {
   MapFeatureSnapGeometryType,
   MapFeatureSnapMode,
+  MapFeatureSnapParent,
   MapFeatureSnapResult,
 } from '../../shared/map-feature-snap-types';
 
@@ -15,6 +16,7 @@ export type {
   MapFeatureSnapGeometryType,
   MapFeatureSnapKind,
   MapFeatureSnapMode,
+  MapFeatureSnapParent,
   MapFeatureSnapResult,
   MapFeatureSnapSegmentInfo,
 } from '../../shared/map-feature-snap-types';
@@ -59,7 +61,33 @@ export interface MapFeatureSnapRule {
   where?: Record<string, unknown>;
   /** 业务层高级过滤函数。 */
   filter?: (context: MapFeatureSnapRuleFilterContext) => boolean;
+  /** 运行期读取当前规则是否可见；显隐只过滤候选，不参与交点几何签名。 */
+  isVisible?: () => boolean;
 }
+
+/** 完整 source resolver 返回的单条线要素。 */
+export interface MapFeatureSnapResolvedFeature {
+  /** 未经过 MapLibre tile 裁剪的完整线要素。 */
+  feature: Feature<LineString | MultiLineString, Record<string, any> | null>;
+  /** 要素所属 source ID。 */
+  sourceId: string;
+  /** vector source 时要素所属的 source-layer。 */
+  sourceLayer?: string;
+  /** 要素命中的业务 layer ID。 */
+  layerId: string;
+}
+
+/** 完整业务线要素 resolver 的地图运行态上下文。 */
+export interface MapFeatureSnapFeatureResolverContext {
+  /** 当前地图 zoom，用于计算 source 与 layer filter。 */
+  zoom: number;
+}
+
+/** 按单条 snap rule 读取完整业务线要素的 resolver。 */
+export type MapFeatureSnapFeatureResolver = (
+  rule: MapFeatureSnapRule,
+  context?: MapFeatureSnapFeatureResolverContext
+) => MapFeatureSnapResolvedFeature[];
 
 /** 吸附预览图层配置。 */
 export interface MapFeatureSnapPreviewOptions {
@@ -69,28 +97,28 @@ export interface MapFeatureSnapPreviewOptions {
   pointColor?: string;
   /** 吸附点半径。 */
   pointRadius?: number;
-  /** 命中线要素高亮颜色。 */
-  lineColor?: string;
-  /** 命中线要素高亮宽度。 */
-  lineWidth?: number;
+  /** 命中原要素写入 feature-state 时使用的高亮颜色。 */
+  targetColor?: string;
+  /** 命中原要素写入 feature-state 时使用的透明度，范围 0 到 1。 */
+  targetOpacity?: number;
+  /** 命中线要素写入 feature-state 时使用的线宽，单位像素。 */
+  targetLineWidth?: number;
 }
 
-/** 吸附预览完整要素解析上下文。 */
-export interface MapFeatureSnapPreviewResolveContext {
-  /** 当前命中的渲染要素。 */
-  targetFeature: MapGeoJSONFeature | null;
-  /** 当前命中的目标图层 ID。 */
-  targetLayerId: string | null;
-  /** 当前命中的目标 source ID。 */
-  targetSourceId: string | null;
-  /** 当前命中的规则 ID。 */
-  ruleId: string | null;
+/** 吸附预览需要同步写入状态的附属原要素。 */
+export interface MapFeatureSnapStateTarget {
+  /** 原要素所在 source ID。 */
+  source: string;
+  /** vector source 时原要素所属的 source-layer。 */
+  sourceLayer?: string;
+  /** 原要素在 source 内的真实 ID。 */
+  id: string | number;
 }
 
-/** 吸附预览完整要素解析器。 */
-export type MapFeatureSnapPreviewFeatureResolver = (
-  context: MapFeatureSnapPreviewResolveContext
-) => Feature<Geometry, Record<string, any> | null> | null | undefined;
+/** 根据当前吸附结果补充附属原要素状态的 resolver。 */
+export type MapFeatureSnapStateTargetResolver = (
+  result: MapFeatureSnapResult
+) => MapFeatureSnapStateTarget[];
 
 /** 业务图层吸附配置。 */
 export interface MapFeatureSnapBusinessLayerOptions {
@@ -173,8 +201,12 @@ export interface MapFeatureSnapOptions {
   defaultTolerancePx?: number;
   /** 吸附预览配置。 */
   preview?: MapFeatureSnapPreviewOptions;
-  /** 吸附线预览完整要素解析器；业务 source 场景优先用它回源读取完整 GeoJSON。 */
-  previewFeatureResolver?: MapFeatureSnapPreviewFeatureResolver;
+  /** 根据当前吸附结果补充需要同步高亮的附属原要素。 */
+  stateTargetResolver?: MapFeatureSnapStateTargetResolver;
+  /** 按业务规则读取完整线要素的 resolver；交点索引不使用渲染裁剪坐标。 */
+  intersectionFeatureResolver?: MapFeatureSnapFeatureResolver;
+  /** 交点计算使用的端点虚拟延长长度，单位米；0 表示禁用虚拟延长。 */
+  intersectionExtensionMeters?: number;
   /** 业务图层吸附配置。 */
   businessLayers?: MapFeatureSnapBusinessLayerOptions;
   /** 交点插件内置吸附目标配置。 */
@@ -195,6 +227,8 @@ export interface MapFeatureSnapOptions {
    * 业务侧不需要传该字段，公开文档也不推荐业务直接使用。
    */
   internalContext?: {
+    /** 当前 MapLibre 实例的 mapKey，仅供预览层读取正确地图实例。 */
+    mapKey?: string | symbol;
     /** TerraDraw / Measure 控件当前是否启用。 */
     terradraw?: {
       /** 绘图控件是否启用。 */
@@ -221,8 +255,15 @@ export interface MapFeatureSnapPluginApi {
   isActive: () => boolean;
   /** 主动清空当前吸附预览。 */
   clearPreview: () => void;
+  /** 设置运行期规则查询作用域；null 恢复全局查询。 */
+  setRuleScope: (ruleIds: string[] | null) => void;
   /** 根据普通地图事件解析吸附结果。 */
   resolveMapEvent: (event: MapMouseEvent) => MapFeatureSnapResult;
+  /** 将同一帧地图事件合并，并把最新事件的吸附结果交给调用方。 */
+  scheduleMapEvent?: (
+    event: MapMouseEvent,
+    onResolved: (result: MapFeatureSnapResult) => void
+  ) => void;
   /** 读取控件最终吸附配置。 */
   resolveTerradrawSnapOptions: (
     controlType: TerradrawControlType,

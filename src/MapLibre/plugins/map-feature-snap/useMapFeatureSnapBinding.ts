@@ -1,6 +1,6 @@
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import type { Map as MaplibreMap, MapGeoJSONFeature, MapMouseEvent } from 'maplibre-gl';
-import { ref } from 'vue';
+import { ref, watchEffect } from 'vue';
 import type { TerraDrawMouseEvent } from 'terra-draw';
 import type { MapSnapBinding } from '../types';
 import type {
@@ -8,13 +8,31 @@ import type {
   MapFeatureSnapKind,
   MapFeatureSnapMode,
   MapFeatureSnapOptions,
-  MapFeatureSnapPreviewFeatureResolver,
+  MapFeatureSnapParent,
+  MapFeatureSnapResolvedFeature,
   MapFeatureSnapResult,
   MapFeatureSnapRule,
   MapFeatureSnapSegmentInfo,
+  MapFeatureSnapStateTarget,
 } from './types';
+import {
+  createSnapIntersectionStore,
+  type SnapIntersectionPair,
+  type SnapIntersectionPoint,
+  type SnapIntersectionRule,
+} from './mapFeatureSnapIntersections';
 
 type PreviewFeatureCollection = FeatureCollection;
+
+/** 当前吸附目标写入 feature-state 的样式覆写。 */
+interface SnapPreviewTargetStyle {
+  /** 原要素高亮颜色。 */
+  color: string;
+  /** 原要素透明度覆写；未声明时为 null。 */
+  opacity: number | null;
+  /** 线要素宽度覆写；未声明时为 null。 */
+  lineWidth: number | null;
+}
 
 interface ScreenPoint {
   x: number;
@@ -46,6 +64,7 @@ interface SnapCandidate {
   distancePx: number;
   snapKind: MapFeatureSnapKind;
   segment: MapFeatureSnapSegmentInfo | null;
+  parents: MapFeatureSnapParent[];
 }
 
 interface ResolvePointerOptions {
@@ -58,9 +77,6 @@ export const MAP_FEATURE_SNAP_PREVIEW_SOURCE_ID = '__mapFeatureSnapPreviewSource
 
 /** 吸附预览点图层 ID。 */
 export const MAP_FEATURE_SNAP_PREVIEW_POINT_LAYER_ID = '__mapFeatureSnapPreviewPointLayer';
-
-/** 吸附预览线图层 ID。 */
-export const MAP_FEATURE_SNAP_PREVIEW_LINE_LAYER_ID = '__mapFeatureSnapPreviewLineLayer';
 
 /**
  * 交点插件内部图层 ID。
@@ -96,7 +112,36 @@ export function createEmptyMapFeatureSnapResult(): MapFeatureSnapResult {
     targetSourceId: null,
     targetCoordinate: null,
     segment: null,
+    parents: [],
   };
+}
+
+/**
+ * 读取当前吸附预览写入原要素的状态样式。
+ * @param options 当前吸附插件配置
+ * @returns 已补齐默认颜色、保留可选透明度和线宽的状态样式
+ */
+function createTargetStyle(options: MapFeatureSnapOptions | null | undefined): SnapPreviewTargetStyle {
+  return {
+    color: options?.preview?.targetColor ?? '#ff7a00',
+    opacity: options?.preview?.targetOpacity ?? null,
+    lineWidth: options?.preview?.targetLineWidth ?? null,
+  };
+}
+
+/**
+ * 比较当前和已写入的吸附目标样式，避免相同候选重复写入 feature-state。
+ * @param next 本次准备写入的样式
+ * @param current 当前活动目标已经写入的样式
+ * @returns 样式字段完全相同时返回 true
+ */
+function isSameTargetStyle(
+  next: SnapPreviewTargetStyle,
+  current: SnapPreviewTargetStyle | null
+): boolean {
+  return current?.color === next.color
+    && current.opacity === next.opacity
+    && current.lineWidth === next.lineWidth;
 }
 
 /**
@@ -108,20 +153,6 @@ function createEmptyPreviewFeatureCollection(): PreviewFeatureCollection {
     type: 'FeatureCollection',
     features: [],
   };
-}
-
-/**
- * 判断当前几何是否适合用线图层展示完整命中要素。
- * @param geometry 待判断的 GeoJSON 几何
- * @returns 是否为线或面类几何
- */
-function isLinePreviewGeometry(geometry: Geometry | null | undefined): geometry is Geometry {
-  return (
-    geometry?.type === 'LineString' ||
-    geometry?.type === 'MultiLineString' ||
-    geometry?.type === 'Polygon' ||
-    geometry?.type === 'MultiPolygon'
-  );
 }
 
 /**
@@ -419,6 +450,7 @@ function buildPointCandidates(
       distancePx,
       snapKind: 'vertex',
       segment: null,
+      parents: [],
     });
   });
 
@@ -482,6 +514,7 @@ function buildPathCandidates(
           distancePx,
           snapKind: 'vertex',
           segment: null,
+          parents: [],
         });
       });
     }
@@ -519,6 +552,7 @@ function buildPathCandidates(
             startCoordinate,
             endCoordinate,
           },
+          parents: [],
         });
       }
     }
@@ -545,15 +579,37 @@ function shouldReplaceCandidate(current: SnapCandidate | null, next: SnapCandida
     return nextPriority > currentPriority;
   }
 
+  const currentDiscrete = current.snapKind !== 'segment';
+  const nextDiscrete = next.snapKind !== 'segment';
+  if (nextDiscrete !== currentDiscrete) {
+    return nextDiscrete;
+  }
+
   if (next.distancePx !== current.distancePx) {
     return next.distancePx < current.distancePx;
   }
 
-  if (next.snapKind !== current.snapKind) {
-    return next.snapKind === 'vertex';
-  }
+  return createCandidateKey(next).localeCompare(createCandidateKey(current)) < 0;
+}
 
-  return false;
+/**
+ * 创建距离和优先级完全相同时使用的稳定候选 key。
+ * @param candidate 当前候选
+ * @returns 按种类、规则和坐标组成的稳定 key
+ */
+function createCandidateKey(candidate: SnapCandidate): string {
+  const kindOrder: Record<MapFeatureSnapKind, number> = {
+    vertex: 0,
+    sameLayerIntersect: 1,
+    crossLayerIntersect: 2,
+    segment: 3,
+  };
+  return [
+    kindOrder[candidate.snapKind],
+    candidate.rule.id,
+    candidate.coordinate[0],
+    candidate.coordinate[1],
+  ].join(':');
 }
 
 /**
@@ -580,6 +636,222 @@ function normalizeSnapRules(rules: MapFeatureSnapRule[]): ResolvedMapFeatureSnap
 }
 
 /**
+ * 安全读取单条规则当前是否启用且可见。
+ * @param rule 当前规则
+ * @returns 规则允许运行期查询时返回 true
+ */
+function isRuleAvailable(rule: ResolvedMapFeatureSnapRule): boolean {
+  if (rule.enabled === false) {
+    return false;
+  }
+  if (!rule.isVisible) {
+    return true;
+  }
+
+  try {
+    return rule.isVisible() !== false;
+  } catch (error) {
+    // 显隐 resolver 属于外部配置，异常时关闭当前规则，避免吸附到状态不明的数据。
+    console.error(`[MapFeatureSnap] 吸附规则 '${rule.id}' isVisible 执行失败，已跳过当前规则`, error);
+    return false;
+  }
+}
+
+/**
+ * 判断普通单规则候选是否命中当前会话作用域。
+ * @param ruleId 当前候选规则 ID
+ * @param ruleScope 当前作用域；null 表示全局
+ * @returns 是否允许参与查询
+ */
+function isRuleInScope(ruleId: string, ruleScope: ReadonlySet<string> | null): boolean {
+  return ruleScope === null || ruleScope.has(ruleId);
+}
+
+/**
+ * 判断交点父线组合是否命中当前会话作用域。
+ * @param pair 当前交点父线组合
+ * @param ruleScope 当前作用域；null 表示全局
+ * @returns same 命中自身、cross 任一侧命中时返回 true
+ */
+function isPairInScope(
+  pair: SnapIntersectionPair,
+  ruleScope: ReadonlySet<string> | null
+): boolean {
+  return ruleScope === null
+    || ruleScope.has(pair.first.ruleId)
+    || ruleScope.has(pair.second.ruleId);
+}
+
+/**
+ * 将完整 resolver 要素补成现有候选过滤逻辑可消费的 MapLibre 要素形状。
+ * @param resolved 完整 resolver 输出
+ * @returns 带 source 和 layer 元数据的内存要素
+ */
+function toSnapFeature(
+  resolved: MapFeatureSnapResolvedFeature
+): SnapFeatureLike {
+  return {
+    ...resolved.feature,
+    source: resolved.sourceId,
+    ...(resolved.sourceLayer ? { sourceLayer: resolved.sourceLayer } : {}),
+    layer: { id: resolved.layerId },
+  } as SnapFeatureLike;
+}
+
+/**
+ * 从最新 options 解析交点索引使用的全部业务规则和完整线要素。
+ * @param map 当前地图实例
+ * @param options 当前 snap 配置
+ * @returns 可传给静态交点 store 的规则集合
+ */
+function resolveIntersectionRules(
+  map: MaplibreMap,
+  options: MapFeatureSnapOptions | null | undefined
+): SnapIntersectionRule[] {
+  const resolver = options?.intersectionFeatureResolver;
+  const businessLayers = options?.businessLayers;
+  if (!resolver || businessLayers?.enabled === false || !businessLayers?.rules?.length) {
+    return [];
+  }
+
+  return normalizeSnapRules(businessLayers.rules).flatMap((rule) => {
+    const hasIntersectionMode = rule.snapTo?.some((mode) => (
+      mode === 'sameLayerIntersect' || mode === 'crossLayerIntersect'
+    ));
+    if (!hasIntersectionMode || (
+      rule.geometryTypes?.length && !rule.geometryTypes.includes('LineString')
+    )) {
+      return [];
+    }
+
+    try {
+      const resolvedFeatures = resolver(rule, { zoom: map.getZoom() }).filter((resolved) => {
+        const feature = toSnapFeature(resolved);
+        return matchesRuleFilter(map, feature as MapGeoJSONFeature, rule, resolved.layerId);
+      });
+      return [{ ...rule, resolvedFeatures }];
+    } catch (error) {
+      console.error(`[MapFeatureSnap] 吸附规则 '${rule.id}' 完整线要素解析失败，已跳过当前规则`, error);
+      return [];
+    }
+  });
+}
+
+/**
+ * 为单个交点父线组合创建按规则分别评估的候选。
+ * @param map 当前地图实例
+ * @param pointerPoint 当前鼠标屏幕坐标
+ * @param point 当前唯一交点
+ * @param pair 当前父线组合
+ * @param ruleMap 最新规则表
+ * @param ruleScope 当前会话作用域
+ * @returns 通过双方显隐、scope 和 tolerance 的候选
+ */
+function buildIntersectionCandidates(
+  map: MaplibreMap,
+  pointerPoint: ScreenPoint,
+  point: SnapIntersectionPoint,
+  pair: SnapIntersectionPair,
+  ruleMap: Map<string, ResolvedMapFeatureSnapRule>,
+  ruleScope: ReadonlySet<string> | null
+): SnapCandidate[] {
+  if (!isPairInScope(pair, ruleScope)) {
+    return [];
+  }
+
+  const firstRule = ruleMap.get(pair.first.ruleId);
+  const secondRule = ruleMap.get(pair.second.ruleId);
+  if (!firstRule || !secondRule || !isRuleAvailable(firstRule) || !isRuleAvailable(secondRule)) {
+    return [];
+  }
+
+  const projected = projectCoordinate(map, point.coordinate);
+  const distancePx = getScreenDistance(pointerPoint, projected);
+  const evaluationRules = pair.kind === 'sameLayerIntersect'
+    ? [firstRule]
+    : firstRule.id === secondRule.id
+      ? [firstRule]
+      : [firstRule, secondRule];
+  const parents: MapFeatureSnapParent[] = [pair.first, pair.second];
+
+  return evaluationRules.flatMap((rule) => {
+    if (distancePx > getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX)) {
+      return [];
+    }
+    const primary = pair.first.ruleId === rule.id ? pair.first : pair.second;
+    const feature = toSnapFeature({
+      feature: primary.feature,
+      sourceId: primary.sourceId,
+      ...(primary.sourceLayer ? { sourceLayer: primary.sourceLayer } : {}),
+      layerId: primary.layerId,
+    });
+    return [{
+      rule,
+      feature,
+      layerId: primary.layerId,
+      sourceId: primary.sourceId,
+      coordinate: point.coordinate,
+      distancePx,
+      snapKind: pair.kind,
+      segment: null,
+      parents,
+    }];
+  });
+}
+
+/**
+ * 从 KDBush 查询鼠标容差范围内的交点候选。
+ * @param map 当前地图实例
+ * @param store 当前静态交点 store
+ * @param rules 当前最新规则集合
+ * @param pointer 当前鼠标上下文
+ * @param ruleScope 当前会话作用域
+ * @returns 附近交点候选
+ */
+function resolveIntersectionCandidates(
+  map: MaplibreMap,
+  store: ReturnType<typeof createSnapIntersectionStore>,
+  rules: ResolvedMapFeatureSnapRule[],
+  pointer: ResolvePointerOptions,
+  ruleScope: ReadonlySet<string> | null
+): SnapCandidate[] {
+  const availableRules = rules.filter(isRuleAvailable);
+  if (!availableRules.length || store.size() === 0) {
+    return [];
+  }
+
+  const maxTolerancePx = availableRules.reduce((maxTolerance, rule) => {
+    return Math.max(maxTolerance, getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX));
+  }, 0);
+  const screenCorners: Array<[number, number]> = [
+    [pointer.point.x - maxTolerancePx, pointer.point.y - maxTolerancePx],
+    [pointer.point.x + maxTolerancePx, pointer.point.y - maxTolerancePx],
+    [pointer.point.x + maxTolerancePx, pointer.point.y + maxTolerancePx],
+    [pointer.point.x - maxTolerancePx, pointer.point.y + maxTolerancePx],
+  ];
+  const lngLatCorners = screenCorners.map((corner) => map.unproject(corner));
+  const lngList = lngLatCorners.map((corner) => corner.lng);
+  const latList = lngLatCorners.map((corner) => corner.lat);
+  const ruleMap = new Map(rules.map((rule) => [rule.id, rule]));
+
+  return store.range(
+    Math.min(...lngList),
+    Math.min(...latList),
+    Math.max(...lngList),
+    Math.max(...latList)
+  ).flatMap((point) => {
+    return point.pairs.flatMap((pair) => buildIntersectionCandidates(
+      map,
+      pointer.point,
+      point,
+      pair,
+      ruleMap,
+      ruleScope
+    ));
+  });
+}
+
+/**
  * 根据规则和候选要素列表解析当前最佳吸附结果。
  * @param map 当前地图实例
  * @param rules 当前启用的规则集合
@@ -589,7 +861,8 @@ function normalizeSnapRules(rules: MapFeatureSnapRule[]): ResolvedMapFeatureSnap
 function resolveSnapCandidate(
   map: MaplibreMap,
   rules: ResolvedMapFeatureSnapRule[],
-  pointer: ResolvePointerOptions
+  pointer: ResolvePointerOptions,
+  ruleScope: ReadonlySet<string> | null
 ): SnapCandidate | null {
   if (!rules.length) {
     return null;
@@ -603,10 +876,6 @@ function resolveSnapCandidate(
     ),
   ];
 
-  if (!availableLayerIds.length) {
-    return null;
-  }
-
   const maxTolerancePx = rules.reduce((maxTolerance, rule) => {
     return Math.max(maxTolerance, getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX));
   }, 0);
@@ -616,14 +885,14 @@ function resolveSnapCandidate(
     [pointer.point.x + maxTolerancePx, pointer.point.y + maxTolerancePx],
   ] as [[number, number], [number, number]];
 
-  const candidateFeatures = map.queryRenderedFeatures(bbox, {
-    layers: availableLayerIds,
-  }) as MapGeoJSONFeature[];
+  const candidateFeatures = availableLayerIds.length
+    ? map.queryRenderedFeatures(bbox, { layers: availableLayerIds }) as MapGeoJSONFeature[]
+    : [];
 
   let bestCandidate: SnapCandidate | null = null;
 
   rules.forEach((rule) => {
-    if (rule.enabled === false) {
+    if (!isRuleAvailable(rule) || !isRuleInScope(rule.id, ruleScope)) {
       return;
     }
 
@@ -686,37 +955,8 @@ function toSnapResult(candidate: SnapCandidate | null): MapFeatureSnapResult {
     targetSourceId: candidate.sourceId,
     targetCoordinate: candidate.coordinate,
     segment: candidate.segment,
+    parents: candidate.parents,
   };
-}
-
-/**
- * 通过业务解析器读取完整预览要素几何。
- * @param result 当前吸附结果
- * @param resolver 完整预览要素解析器
- * @returns 可用于线预览的完整几何；解析失败或几何不适合时返回 null
- */
-function resolvePreviewFeatureGeometry(
-  result: MapFeatureSnapResult,
-  resolver?: MapFeatureSnapPreviewFeatureResolver
-): Geometry | null {
-  if (resolver) {
-    try {
-      const resolvedFeature = resolver({
-        targetFeature: result.targetFeature,
-        targetLayerId: result.targetLayerId,
-        targetSourceId: result.targetSourceId,
-        ruleId: result.ruleId,
-      });
-      if (isLinePreviewGeometry(resolvedFeature?.geometry)) {
-        return resolvedFeature.geometry;
-      }
-    } catch (error) {
-      // resolver 属于业务侧输入，异常时退回渲染要素几何，避免预览刷新中断鼠标交互。
-      console.error('[MapFeatureSnap] 吸附预览完整要素解析失败，已退回渲染要素几何', error);
-    }
-  }
-
-  return isLinePreviewGeometry(result.targetFeature?.geometry) ? result.targetFeature.geometry : null;
 }
 
 /**
@@ -830,7 +1070,7 @@ function createBuiltInPolygonEdgeSnapRules(
  * @param options 地图吸附插件配置
  * @returns 当前启用的规则集合
  */
-function getEnabledSnapRules(
+function getSnapRules(
   options: MapFeatureSnapOptions | null | undefined
 ): MapFeatureSnapRule[] {
   if (!isSnapPluginEnabled(options)) {
@@ -851,9 +1091,20 @@ function getEnabledSnapRules(
   }
 
   return [
-    ...businessLayerOptions.rules.filter((rule) => rule.enabled !== false),
+    ...businessLayerOptions.rules,
     ...builtInRules,
   ];
+}
+
+/**
+ * 读取当前运行期启用的普通图层吸附规则集合。
+ * @param options 地图吸附插件配置
+ * @returns 已排除显式关闭规则的集合
+ */
+function getEnabledSnapRules(
+  options: MapFeatureSnapOptions | null | undefined
+): MapFeatureSnapRule[] {
+  return getSnapRules(options).filter((rule) => rule.enabled !== false);
 }
 
 /**
@@ -861,43 +1112,24 @@ function getEnabledSnapRules(
  * @param result 当前吸附结果
  * @returns 可直接喂给 GeoJSONSource 的预览数据
  */
-function buildPreviewData(
-  result: MapFeatureSnapResult,
-  resolver?: MapFeatureSnapPreviewFeatureResolver
+export function buildPreviewData(
+  result: MapFeatureSnapResult
 ): PreviewFeatureCollection {
   if (!result.matched || !result.targetCoordinate) {
     return createEmptyPreviewFeatureCollection();
   }
 
-  const features: PreviewFeatureCollection['features'] = [
-    {
+  return {
+    type: 'FeatureCollection',
+    features: [{
       type: 'Feature',
       id: 'map-feature-snap-preview-point',
-      properties: {
-        kind: 'point',
-      },
+      properties: { kind: 'point' },
       geometry: {
         type: 'Point',
         coordinates: result.targetCoordinate,
       },
-    },
-  ];
-
-  const previewGeometry = resolvePreviewFeatureGeometry(result, resolver);
-  if (previewGeometry) {
-    features.push({
-      type: 'Feature',
-      id: 'map-feature-snap-preview-line',
-      properties: {
-        kind: 'line',
-      },
-      geometry: previewGeometry,
-    });
-  }
-
-  return {
-    type: 'FeatureCollection',
-    features,
+    }],
   };
 }
 
@@ -958,13 +1190,143 @@ export function resolveFeatureSnapResult(options: {
 export function createMapFeatureSnapBinding(options: {
   map: MaplibreMap;
   getOptions: () => MapFeatureSnapOptions | null | undefined;
+  getRuleScope?: () => readonly string[] | null | undefined;
 }): MapFeatureSnapBinding {
   const { map, getOptions } = options;
   const previewData = ref<PreviewFeatureCollection>(createEmptyPreviewFeatureCollection());
+  const intersectionStore = createSnapIntersectionStore();
+  const activeStateTargets = new Map<string, MapFeatureSnapStateTarget>();
+  let activeTargetStyle: SnapPreviewTargetStyle | null = null;
+
+  /**
+   * 从吸附结果读取可写入 MapLibre feature-state 的真实目标。
+   * @param result 当前吸附结果
+   * @returns 按 source、source-layer 和真实 feature ID 去重后的目标
+   */
+  function resolveStateTargets(result: MapFeatureSnapResult): Map<string, MapFeatureSnapStateTarget> {
+    const targets = new Map<string, MapFeatureSnapStateTarget>();
+    /**
+     * 将具备真实 source 和 feature ID 的目标加入去重集合。
+     * @param source MapLibre source ID
+     * @param id MapLibre 顶层 feature ID
+     * @param sourceLayer vector source 对应的 source-layer
+     */
+    const appendTarget = (
+      source: string | null | undefined,
+      id: string | number | null | undefined,
+      sourceLayer?: string
+    ): void => {
+      if (!source || id === null || id === undefined || id === '') {
+        return;
+      }
+      const target = { source, id, ...(sourceLayer ? { sourceLayer } : {}) };
+      targets.set(`${source}:${sourceLayer ?? ''}:${String(id)}`, target);
+    };
+
+    if (result.parents?.length) {
+      result.parents.forEach((parent) => {
+        appendTarget(parent.sourceId, parent.feature.id, parent.sourceLayer);
+      });
+    } else {
+      appendTarget(
+        result.targetSourceId ?? result.targetFeature?.source,
+        result.targetFeature?.id,
+        result.targetFeature?.sourceLayer
+      );
+    }
+
+    getOptions()?.stateTargetResolver?.(result).forEach((target) => {
+      appendTarget(target.source, target.id, target.sourceLayer);
+    });
+    return targets;
+  }
+
+  /**
+   * 安全写入单个吸附预览状态。
+   * source 在样式切换期间可能暂时不存在，此时等待 style/source 事件补写。
+   * @param target MapLibre feature-state 目标
+   * @param enabled 是否高亮
+   * @param style 吸附目标样式；清理状态时传 null
+   */
+  function writeState(
+    target: MapFeatureSnapStateTarget,
+    enabled: boolean,
+    style: SnapPreviewTargetStyle | null
+  ): void {
+    try {
+      map.setFeatureState(target, {
+        snapPreview: enabled,
+        snapPreviewColor: style?.color ?? null,
+        snapPreviewOpacity: style?.opacity ?? null,
+        snapPreviewLineWidth: style?.lineWidth ?? null,
+      });
+    } catch {
+      // style/source 合并期间目标可能短暂不可用，后续地图数据事件会再次补写。
+    }
+  }
+
+  /**
+   * 将最新吸附结果切换为原要素状态预览。
+   * @param result 当前吸附结果
+   * @param style 当前目标样式覆写
+   */
+  function syncStateTargets(result: MapFeatureSnapResult, style: SnapPreviewTargetStyle): void {
+    const nextTargets = resolveStateTargets(result);
+    const styleChanged = !isSameTargetStyle(style, activeTargetStyle);
+    activeStateTargets.forEach((target, key) => {
+      if (!nextTargets.has(key)) {
+        writeState(target, false, null);
+      }
+    });
+    nextTargets.forEach((target, key) => {
+      if (!activeStateTargets.has(key) || styleChanged) {
+        writeState(target, true, style);
+      }
+    });
+    activeStateTargets.clear();
+    nextTargets.forEach((target, key) => activeStateTargets.set(key, target));
+    activeTargetStyle = nextTargets.size ? style : null;
+  }
+
+  /** 清理全部仍处于高亮状态的原要素。 */
+  function clearStateTargets(): void {
+    activeStateTargets.forEach((target) => writeState(target, false, null));
+    activeStateTargets.clear();
+    activeTargetStyle = null;
+  }
+
+  /** 重新写入仍活动的目标，用于恢复样式或 source 合并后丢失的 feature-state。 */
+  function restoreStateTargets(sourceId?: string): void {
+    activeStateTargets.forEach((target) => {
+      if (!sourceId || target.source === sourceId) {
+        writeState(target, true, activeTargetStyle);
+      }
+    });
+  }
+
+  /**
+   * 按最新 source、规则与地图 zoom 刷新交点索引。
+   * 几何签名未变化时 store 会直接跳过实际重建。
+   */
+  function rebuildIntersectionStore(): void {
+    const snapOptions = getOptions();
+    intersectionStore.rebuild(
+      resolveIntersectionRules(map, snapOptions),
+      snapOptions?.intersectionExtensionMeters
+    );
+  }
+
+  const stopIntersectionWatch = watchEffect(() => {
+    rebuildIntersectionStore();
+  }, { flush: 'sync' });
 
   let hasDisposed = false;
   let previewFrameHandle: number | null = null;
   let pendingPreviewEvent: MapMouseEvent | null = null;
+  let pendingResultHandler: ((result: MapFeatureSnapResult) => void) | null = null;
+  let restoreFrameHandle: number | null = null;
+  let restoreAllStateTargets = false;
+  const pendingRestoreSourceIds = new Set<string>();
 
   /**
    * 取消当前已调度但尚未执行的预览同步。
@@ -972,6 +1334,7 @@ export function createMapFeatureSnapBinding(options: {
   function cancelPreviewSync(): void {
     if (previewFrameHandle === null) {
       pendingPreviewEvent = null;
+      pendingResultHandler = null;
       return;
     }
 
@@ -983,6 +1346,65 @@ export function createMapFeatureSnapBinding(options: {
 
     previewFrameHandle = null;
     pendingPreviewEvent = null;
+    pendingResultHandler = null;
+  }
+
+  /**
+   * 取消尚未执行的状态恢复，避免预览已清理后写回过期状态。
+   */
+  function cancelStateRestore(): void {
+    if (restoreFrameHandle !== null) {
+      if (typeof globalThis.cancelAnimationFrame === 'function') {
+        globalThis.cancelAnimationFrame(restoreFrameHandle);
+      } else {
+        globalThis.clearTimeout(restoreFrameHandle);
+      }
+    }
+
+    restoreFrameHandle = null;
+    restoreAllStateTargets = false;
+    pendingRestoreSourceIds.clear();
+  }
+
+  /**
+   * 合并同一帧 style/source 事件后恢复活动状态，避免样式重建期间重复写入。
+   */
+  function flushStateRestore(): void {
+    restoreFrameHandle = null;
+    const shouldRestoreAll = restoreAllStateTargets;
+    const sourceIds = [...pendingRestoreSourceIds];
+    restoreAllStateTargets = false;
+    pendingRestoreSourceIds.clear();
+
+    if (shouldRestoreAll) {
+      restoreStateTargets();
+      return;
+    }
+
+    sourceIds.forEach((sourceId) => restoreStateTargets(sourceId));
+  }
+
+  /**
+   * 调度状态恢复；styledata 优先于同一帧内的任意单 source 恢复。
+   * @param sourceId 需要恢复的 source；不传时表示 style 重建后的全部活动目标
+   */
+  function scheduleStateRestore(sourceId?: string): void {
+    if (sourceId) {
+      pendingRestoreSourceIds.add(sourceId);
+    } else {
+      restoreAllStateTargets = true;
+    }
+
+    if (restoreFrameHandle !== null) {
+      return;
+    }
+
+    if (typeof globalThis.requestAnimationFrame === 'function') {
+      restoreFrameHandle = globalThis.requestAnimationFrame(flushStateRestore);
+      return;
+    }
+
+    restoreFrameHandle = globalThis.setTimeout(flushStateRestore, 16) as unknown as number;
   }
 
   /**
@@ -990,8 +1412,16 @@ export function createMapFeatureSnapBinding(options: {
    */
   function clearPreview(): void {
     cancelPreviewSync();
+    cancelStateRestore();
     previewData.value = createEmptyPreviewFeatureCollection();
+    clearStateTargets();
   }
+
+  const stopPreviewWatch = watchEffect(() => {
+    if (getOptions()?.preview?.enabled === false) {
+      clearPreview();
+    }
+  }, { flush: 'sync' });
 
   /**
    * 根据当前指针位置解析吸附结果。
@@ -1011,8 +1441,25 @@ export function createMapFeatureSnapBinding(options: {
       ...rule,
       tolerancePx: getResolvedTolerancePx(rule, defaultTolerancePx),
     }));
+    const rawRuleScope = options.getRuleScope?.();
+    const ruleScope = rawRuleScope === null || rawRuleScope === undefined
+      ? null
+      : new Set(rawRuleScope);
+    let bestCandidate = resolveSnapCandidate(map, normalizedRules, pointer, ruleScope);
 
-    return toSnapResult(resolveSnapCandidate(map, normalizedRules, pointer));
+    resolveIntersectionCandidates(
+      map,
+      intersectionStore,
+      normalizedRules,
+      pointer,
+      ruleScope
+    ).forEach((candidate) => {
+      if (shouldReplaceCandidate(bestCandidate, candidate)) {
+        bestCandidate = candidate;
+      }
+    });
+
+    return toSnapResult(bestCandidate);
   }
 
   /**
@@ -1057,27 +1504,44 @@ export function createMapFeatureSnapBinding(options: {
   function flushPreviewFrame(): void {
     previewFrameHandle = null;
     const latestEvent = pendingPreviewEvent;
+    const resultHandler = pendingResultHandler;
     pendingPreviewEvent = null;
+    pendingResultHandler = null;
 
     if (!latestEvent) {
       return;
     }
 
     const snapOptions = getOptions();
-    if (!isSnapPluginEnabled(snapOptions) || snapOptions?.preview?.enabled === false) {
-      previewData.value = createEmptyPreviewFeatureCollection();
+    if (!isSnapPluginEnabled(snapOptions)) {
+      clearPreview();
+      resultHandler?.(createEmptyMapFeatureSnapResult());
       return;
     }
 
-    previewData.value = buildPreviewData(resolveMapEvent(latestEvent), snapOptions?.previewFeatureResolver);
+    const result = resolveMapEvent(latestEvent);
+    if (snapOptions?.preview?.enabled === false) {
+      clearPreview();
+    } else {
+      previewData.value = buildPreviewData(result);
+      syncStateTargets(result, createTargetStyle(snapOptions));
+    }
+    resultHandler?.(result);
   }
 
   /**
-   * 调度一次吸附预览同步。
+   * 合并同一帧地图事件，并按最新事件同步预览和外部结果消费方。
    * @param event 最新的鼠标移动事件
+   * @param onResolved 最新事件解析完成后的回调
    */
-  function schedulePreviewSync(event: MapMouseEvent): void {
+  function scheduleMapEvent(
+    event: MapMouseEvent,
+    onResolved?: (result: MapFeatureSnapResult) => void
+  ): void {
     pendingPreviewEvent = event;
+    if (onResolved) {
+      pendingResultHandler = onResolved;
+    }
 
     if (previewFrameHandle !== null) {
       return;
@@ -1100,7 +1564,7 @@ export function createMapFeatureSnapBinding(options: {
    * @param event 当前地图鼠标事件
    */
   function handleMouseMove(event: MapMouseEvent): void {
-    schedulePreviewSync(event);
+    scheduleMapEvent(event);
   }
 
   /**
@@ -1110,14 +1574,40 @@ export function createMapFeatureSnapBinding(options: {
     clearPreview();
   }
 
+  /**
+   * 缩放结束后按当前 zoom 重新计算 source 与 layer filter。
+   */
+  function handleZoomEnd(): void {
+    rebuildIntersectionStore();
+  }
+
+  /** style 重建后恢复仍活动的吸附目标状态。 */
+  function handleStyleData(): void {
+    scheduleStateRestore();
+  }
+
+  /**
+   * 对应 source 数据合并后恢复该 source 下仍活动的吸附目标状态。
+   * @param event MapLibre source 数据事件
+   */
+  function handleSourceData(event: { sourceId?: string }): void {
+    if (event.sourceId) {
+      scheduleStateRestore(event.sourceId);
+    }
+  }
+
   map.on('mousemove', handleMouseMove);
   map.on('mouseout', handleMouseOut);
   map.on('movestart', clearPreview);
   map.on('zoomstart', clearPreview);
+  map.on('zoomend', handleZoomEnd);
+  map.on('styledata', handleStyleData);
+  map.on('sourcedata', handleSourceData);
 
   return {
     previewData,
     resolveMapEvent,
+    scheduleMapEvent,
     resolvePointer,
     resolveTerradrawEvent,
     clearPreview,
@@ -1128,11 +1618,17 @@ export function createMapFeatureSnapBinding(options: {
 
       hasDisposed = true;
       clearPreview();
+      stopPreviewWatch();
+      stopIntersectionWatch();
+      intersectionStore.clear();
 
       map.off('mousemove', handleMouseMove);
       map.off('mouseout', handleMouseOut);
       map.off('movestart', clearPreview);
       map.off('zoomstart', clearPreview);
+      map.off('zoomend', handleZoomEnd);
+      map.off('styledata', handleStyleData);
+      map.off('sourcedata', handleSourceData);
     },
   };
 }

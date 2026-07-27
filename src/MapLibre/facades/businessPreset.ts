@@ -1,5 +1,9 @@
 import type { FilterSpecification } from "maplibre-gl";
 import {
+  featureFilter,
+  type Feature as StyleFilterFeature,
+} from "@maplibre/maplibre-gl-style-spec";
+import {
   createMapDxfExportPlugin,
   type MapDxfExportOptions,
   type MapDxfExportTaskOptions,
@@ -9,8 +13,9 @@ import { createMapFeatureMultiSelectPlugin } from "../plugins/map-feature-multi-
 import {
   createMapFeatureSnapPlugin,
   type MapFeatureSnapBusinessLayerOptions,
+  type MapFeatureSnapFeatureResolver,
   type MapFeatureSnapOptions,
-  type MapFeatureSnapPreviewFeatureResolver,
+  type MapFeatureSnapResolvedFeature,
   type MapFeatureSnapRule,
 } from "../plugins/map-feature-snap";
 import {
@@ -35,6 +40,7 @@ import {
   createFillBusinessLayer,
   createLineBusinessLayer,
   createSymbolBusinessLayer,
+  buildMapBusinessLayerFilter,
   type MapBusinessLayerDescriptor,
   type MapBusinessLayerGeometryType,
   type MapBusinessLayerWhere,
@@ -49,6 +55,22 @@ type MapStyleColor = MapStyleValue<string>;
 
 /** 样式数值。 */
 type MapStyleNumber = MapStyleValue<number>;
+
+/**
+ * 让业务图层颜色响应吸附插件写入的 feature-state。
+ * @param color 业务图层原始颜色
+ * @param fallback 未声明业务颜色时的 kit 默认颜色
+ * @returns 吸附状态优先、普通状态保持原颜色的 MapLibre 表达式
+ */
+function withSnapPreviewColor(color: MapStyleColor | undefined, fallback: string): MapExpression {
+  const baseColor = color ?? fallback;
+  return [
+    "case",
+    ["boolean", ["feature-state", "snapPreview"], false],
+    ["coalesce", ["feature-state", "snapPreviewColor"], baseColor],
+    baseColor,
+  ];
+}
 
 /** 简单线样式配置。 */
 export interface SimpleLineStyleOptions {
@@ -194,7 +216,7 @@ export interface BusinessPluginsOptions {
 export function createSimpleLineStyle(options: SimpleLineStyleOptions = {}) {
   return createLineLayerStyle({
     paint: {
-      ...(options.color ? { "line-color": options.color as any } : {}),
+      "line-color": withSnapPreviewColor(options.color, "#0000ff") as any,
       ...(options.width !== undefined
         ? { "line-width": options.width as any }
         : {}),
@@ -215,7 +237,7 @@ export function createSimpleCircleStyle(
 ) {
   return createCircleLayerStyle({
     paint: {
-      ...(options.color ? { "circle-color": options.color as any } : {}),
+      "circle-color": withSnapPreviewColor(options.color, "#0000ff") as any,
       ...(options.radius !== undefined
         ? { "circle-radius": options.radius as any }
         : {}),
@@ -240,7 +262,7 @@ export function createSimpleCircleStyle(
 export function createSimpleFillStyle(options: SimpleFillStyleOptions = {}) {
   return createFillLayerStyle({
     paint: {
-      ...(options.color ? { "fill-color": options.color as any } : {}),
+      "fill-color": withSnapPreviewColor(options.color, "#888888") as any,
       ...(options.opacity !== undefined
         ? { "fill-opacity": options.opacity as any }
         : {}),
@@ -414,28 +436,153 @@ function resolveBusinessSnapLayers(
 }
 
 /**
- * 创建业务 source 驱动的完整吸附预览要素解析器。
+ * 创建业务 source 驱动的完整交点线要素 resolver。
  * @param sourceRegistry 当前页面业务 source 注册表
- * @returns 完整预览要素解析器；没有 registry 时返回 undefined
+ * @returns 按 rule 读取完整 LineString、MultiLineString 的 resolver
  */
-function createBusinessSnapPreviewResolver(
+export function createBusinessSnapFeatureResolver(
   sourceRegistry: MapBusinessSourceRegistry | undefined,
-): MapFeatureSnapPreviewFeatureResolver | undefined {
+): MapFeatureSnapFeatureResolver | undefined {
   if (!sourceRegistry) {
     return undefined;
   }
 
-  return (context) => {
-    const featureId = context.targetFeature?.id ?? context.targetFeature?.properties?.id ?? null;
-    if (!context.targetSourceId || featureId === null || featureId === undefined) {
-      return null;
-    }
+  return (rule, context) => {
+    const targetLayerIds = new Set(rule.layerIds);
+    const zoom = context && Number.isFinite(context.zoom) ? context.zoom : 0;
+    return sourceRegistry.listSources().flatMap((source) => {
+      const featureCollection = source.sourceProps.data;
+      if (
+        !featureCollection
+        || typeof featureCollection !== "object"
+        || featureCollection.type !== "FeatureCollection"
+      ) {
+        return [];
+      }
 
-    return sourceRegistry.resolveFeature({
-      sourceId: context.targetSourceId,
-      featureId,
-      layerId: context.targetLayerId,
+      return source.getLayers().flatMap((layer) => {
+        if (!targetLayerIds.has(layer.layerId)) {
+          return [];
+        }
+
+        const matchesFilter = createBusinessLayerFeatureMatcher(
+          source.sourceId,
+          layer,
+          source.sourceProps.filter as FilterSpecification | undefined,
+          typeof source.sourceProps.promoteId === "string"
+            ? source.sourceProps.promoteId
+            : undefined,
+          zoom,
+        );
+
+        return featureCollection.features.flatMap((feature) => {
+          if (
+            feature.geometry?.type !== "LineString"
+            && feature.geometry?.type !== "MultiLineString"
+          ) {
+            return [];
+          }
+          if (!matchesFilter(feature)) {
+            return [];
+          }
+
+          return [{
+            // geometry type 已在上方完成运行时收窄，这里同步收窄通用 Feature 泛型。
+            feature: feature as MapFeatureSnapResolvedFeature["feature"],
+            sourceId: source.sourceId,
+            layerId: layer.layerId,
+          }];
+        });
+      });
     });
+  };
+}
+
+/**
+ * 编译 source 与 layer 的 MapLibre filter，并返回完整 GeoJSON 要素匹配器。
+ * @param sourceId 当前 source ID，用于错误定位
+ * @param layer 当前业务 layer 描述
+ * @param sourceFilter source 级 filter
+ * @param promoteId layer 渲染时提升为 feature id 的属性名
+ * @param zoom 当前地图 zoom
+ * @returns 要素匹配函数；filter 无效时当前 layer 全部返回 false
+ */
+function createBusinessLayerFeatureMatcher(
+  sourceId: string,
+  layer: MapBusinessLayerDescriptor,
+  sourceFilter?: FilterSpecification,
+  promoteId?: string,
+  zoom = 0,
+): (feature: GeoJSON.Feature) => boolean {
+  const filterEntries: Array<{
+    filter: FilterSpecification;
+    idProperty?: string;
+  }> = [];
+  if (sourceFilter !== undefined) {
+    filterEntries.push({ filter: sourceFilter });
+  }
+  const layerFilter = buildMapBusinessLayerFilter(layer);
+  if (layerFilter !== undefined) {
+    filterEntries.push({ filter: layerFilter, idProperty: promoteId });
+  }
+  if (!filterEntries.length) {
+    return () => true;
+  }
+
+  try {
+    const compiledFilters = filterEntries.map((entry) => ({
+      ...entry,
+      compiled: featureFilter(entry.filter),
+    }));
+    return (feature) => {
+      try {
+        return compiledFilters.every((entry) => entry.compiled.filter(
+          { zoom },
+          toStyleFilterFeature(feature, entry.idProperty),
+        ));
+      } catch (error) {
+        // 单条异常数据只退出当前候选，避免 source 刷新时中断全部交点索引。
+        console.error(
+          `[MapFeatureSnap] source '${sourceId}' layer '${layer.layerId}' filter 计算失败，已跳过当前要素`,
+          error,
+        );
+        return false;
+      }
+    };
+  } catch (error) {
+    console.error(
+      `[MapFeatureSnap] source '${sourceId}' layer '${layer.layerId}' filter 编译失败，已跳过当前图层`,
+      error,
+    );
+    return () => false;
+  }
+}
+
+/**
+ * 将 GeoJSON 要素转换为 style-spec filter 可消费的最小结构。
+ * @param feature 完整 GeoJSON 要素
+ * @param idProperty layer 通过 promoteId 使用的属性名；不传时保留原始 feature.id
+ * @returns style-spec 表达式要素
+ */
+function toStyleFilterFeature(
+  feature: GeoJSON.Feature,
+  idProperty?: string,
+): StyleFilterFeature {
+  const geometryType = feature.geometry?.type;
+  const normalizedType: StyleFilterFeature["type"] = geometryType === "MultiLineString"
+    ? "LineString"
+    : geometryType === "MultiPoint"
+      ? "Point"
+      : geometryType === "MultiPolygon"
+        ? "Polygon"
+        : geometryType === "Point" || geometryType === "LineString" || geometryType === "Polygon"
+          ? geometryType
+          : "Unknown";
+
+  return {
+    type: normalizedType,
+    id: idProperty ? feature.properties?.[idProperty] : feature.id,
+    properties: feature.properties || {},
   };
 }
 
@@ -483,11 +630,11 @@ function resolveSnapOptions(
   context: BusinessPluginsOptions,
   options: true | BusinessSnapPresetOptions,
 ): MapFeatureSnapOptions {
-  const defaultPreviewFeatureResolver = createBusinessSnapPreviewResolver(context.sourceRegistry);
+  const defaultIntersectionFeatureResolver = createBusinessSnapFeatureResolver(context.sourceRegistry);
   if (options === true) {
     return {
       enabled: true,
-      previewFeatureResolver: defaultPreviewFeatureResolver,
+      intersectionFeatureResolver: defaultIntersectionFeatureResolver,
     };
   }
 
@@ -506,7 +653,8 @@ function resolveSnapOptions(
   return {
     enabled: true,
     ...restOptions,
-    previewFeatureResolver: restOptions.previewFeatureResolver ?? defaultPreviewFeatureResolver,
+    intersectionFeatureResolver:
+      restOptions.intersectionFeatureResolver ?? defaultIntersectionFeatureResolver,
     businessLayers,
   };
 }

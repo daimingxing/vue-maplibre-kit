@@ -309,6 +309,7 @@ const pluginsWithRuntimeContext = computed(() => {
         ...snapOptions,
         internalContext: {
           ...(snapOptions.internalContext || {}),
+          mapKey: props.mapKey,
           terradraw: {
             drawEnabled: Boolean(controls.value.MaplibreTerradrawControl?.isUse),
             measureEnabled: Boolean(controls.value.MaplibreMeasureControl?.isUse),

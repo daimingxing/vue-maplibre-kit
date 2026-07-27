@@ -36,8 +36,10 @@ export const mapFeatureSnapPlugin = defineMapPlugin({
       toggleTarget: pluginController.toggleTarget,
       isActive: () => pluginController.isActive.value,
       clearPreview: () => pluginController.clearPreview(),
+      setRuleScope: (ruleIds) => pluginController.setRuleScope(ruleIds),
       resolveMapEvent: (event: any) =>
         pluginController.resolveMapEvent(event) || createEmptyMapFeatureSnapResult(),
+      scheduleMapEvent: pluginController.scheduleMapEvent,
       resolveTerradrawSnapOptions: pluginController.resolveTerradrawSnapOptions,
     }));
     const pluginState = computed<MapFeatureSnapState>(() => ({
@@ -52,10 +54,10 @@ export const mapFeatureSnapPlugin = defineMapPlugin({
             renderPriority: SNAP_PREVIEW_RENDER_PRIORITY,
             component: MapFeatureSnapPreviewLayers,
             props: {
+              mapKey: pluginController.effectiveOptions.value?.internalContext?.mapKey,
               enabled: pluginController.previewEnabled.value,
               data: pluginController.previewData.value,
               pointStyle: pluginController.previewPointStyle.value,
-              lineStyle: pluginController.previewLineStyle.value,
             },
           },
         ];

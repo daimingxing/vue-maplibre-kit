@@ -21,9 +21,6 @@ export { MapFeatureSnapPreviewLayers } from '../MapLibre/plugins/map-feature-sna
 /** 吸附插件类型常量。按插件 type 判断是否为吸附插件时使用。 */
 export { MAP_FEATURE_SNAP_PLUGIN_TYPE } from '../MapLibre/plugins/map-feature-snap';
 
-/** 吸附预览线图层 ID 常量。需要直接控制吸附线预览图层时使用。 */
-export { MAP_FEATURE_SNAP_PREVIEW_LINE_LAYER_ID } from '../MapLibre/plugins/map-feature-snap';
-
 /** 吸附预览点图层 ID 常量。需要直接控制吸附点预览图层时使用。 */
 export { MAP_FEATURE_SNAP_PREVIEW_POINT_LAYER_ID } from '../MapLibre/plugins/map-feature-snap';
 
@@ -42,6 +39,12 @@ export type { ResolvedTerradrawSnapOptions } from '../MapLibre/plugins/map-featu
 /** 吸附几何类型。限制某条吸附规则能作用到哪些几何时使用。 */
 export type { MapFeatureSnapGeometryType } from '../MapLibre/plugins/map-feature-snap';
 
+/** 完整业务线要素解析器类型。交点索引需要从业务 source 回源时使用。 */
+export type { MapFeatureSnapFeatureResolver } from '../MapLibre/plugins/map-feature-snap';
+
+/** 完整业务线要素解析器上下文类型。读取当前地图 zoom 时使用。 */
+export type { MapFeatureSnapFeatureResolverContext } from '../MapLibre/plugins/map-feature-snap';
+
 /** 吸附类型。区分端点、线段等不同吸附目标时使用。 */
 export type { MapFeatureSnapKind } from '../MapLibre/plugins/map-feature-snap';
 
@@ -50,6 +53,9 @@ export type { MapFeatureSnapMode } from '../MapLibre/plugins/map-feature-snap';
 
 /** 吸附插件配置类型。初始化地图吸附插件时使用。 */
 export type { MapFeatureSnapOptions } from '../MapLibre/plugins/map-feature-snap';
+
+/** 吸附预览附属状态目标解析器类型。为派生要素同步原要素状态时使用。 */
+export type { MapFeatureSnapStateTargetResolver } from '../MapLibre/plugins/map-feature-snap';
 
 /** 业务图层吸附配置类型。给业务图层声明吸附规则时使用。 */
 export type { MapFeatureSnapBusinessLayerOptions } from '../MapLibre/plugins/map-feature-snap';
@@ -63,11 +69,11 @@ export type { MapFeatureSnapPluginApi } from '../MapLibre/plugins/map-feature-sn
 /** 吸附预览配置类型。覆盖吸附点线预览样式时使用。 */
 export type { MapFeatureSnapPreviewOptions } from '../MapLibre/plugins/map-feature-snap';
 
-/** 吸附预览完整要素解析器类型。需要从业务 source 回源生成整线高亮时使用。 */
-export type { MapFeatureSnapPreviewFeatureResolver } from '../MapLibre/plugins/map-feature-snap';
+/** 完整业务线要素解析结果类型。保留 source 与 layer 身份时使用。 */
+export type { MapFeatureSnapResolvedFeature } from '../MapLibre/plugins/map-feature-snap';
 
-/** 吸附预览完整要素解析上下文类型。实现自定义预览解析器时使用。 */
-export type { MapFeatureSnapPreviewResolveContext } from '../MapLibre/plugins/map-feature-snap';
+/** 交点吸附结果中的真实父线类型。读取交点预览来源时使用。 */
+export type { MapFeatureSnapParent } from '../MapLibre/plugins/map-feature-snap';
 
 /** 吸附结果类型。读取一次吸附命中结果时使用。 */
 export type { MapFeatureSnapResult } from '../MapLibre/plugins/map-feature-snap';

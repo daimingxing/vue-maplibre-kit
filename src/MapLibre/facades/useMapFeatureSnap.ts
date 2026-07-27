@@ -1,7 +1,10 @@
 import { computed, ref, toValue, type ComputedRef, type MaybeRefOrGetter } from 'vue';
 import type { MapMouseEvent } from 'maplibre-gl';
 import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
-import type { MapFeatureSnapPluginApi, MapFeatureSnapState } from '../plugins/map-feature-snap';
+import type {
+  MapFeatureSnapPluginApi,
+  MapFeatureSnapState,
+} from '../plugins/map-feature-snap';
 import type { ResolvedTerradrawSnapOptions } from '../plugins/types';
 import type { TerradrawControlType, TerradrawSnapSharedOptions } from '../shared/mapLibre-controls-types';
 import type { MapFeatureSnapResult } from '../shared/map-feature-snap-types';
@@ -25,6 +28,8 @@ export interface UseMapFeatureSnapResult {
   toggle: () => boolean;
   /** 清空当前吸附预览。 */
   clearPreview: () => boolean;
+  /** 设置运行期规则查询作用域；null 恢复全局查询。 */
+  setRuleScope: (ruleIds: string[] | null) => boolean;
   /** 根据普通地图事件解析吸附结果。 */
   resolveMapEvent: (event: MapMouseEvent) => MapFeatureSnapResult;
   /** 读取 TerraDraw / Measure 最终吸附配置。 */
@@ -93,6 +98,9 @@ export function useMapFeatureSnap(
     toggle: () => runAction((api) => api.toggle()),
     clearPreview: () => {
       return runAction((api) => api.clearPreview());
+    },
+    setRuleScope: (ruleIds) => {
+      return runAction((api) => api.setRuleScope(ruleIds));
     },
     resolveMapEvent: (event) => {
       return getSnapApi()?.resolveMapEvent(event) || createEmptyMapFeatureSnapResult();

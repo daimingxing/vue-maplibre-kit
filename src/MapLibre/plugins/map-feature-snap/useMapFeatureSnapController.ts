@@ -1,6 +1,6 @@
 import { computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
-import type { Map as MaplibreMap } from 'maplibre-gl';
-import { createCircleLayerStyle, createLineLayerStyle } from '../../shared/map-layer-style-config';
+import type { Map as MaplibreMap, MapMouseEvent } from 'maplibre-gl';
+import { createCircleLayerStyle } from '../../shared/map-layer-style-config';
 import type { TerradrawControlType, TerradrawSnapSharedOptions } from '../../shared/mapLibre-controls-types';
 import { getMapGlobalSnapDefaults } from '../../shared/map-global-config';
 import type { ResolvedTerradrawSnapOptions } from '../types';
@@ -18,6 +18,7 @@ import type {
   MapFeatureSnapOptions,
   MapFeatureSnapPanelTargetKey,
   MapFeatureSnapPreviewOptions,
+  MapFeatureSnapResult,
   MapFeatureSnapRule,
   MapFeatureSnapTargetOptions,
 } from './types';
@@ -415,10 +416,27 @@ function resolveMapFeatureSnapOptions(
 export function useMapFeatureSnapController(options: UseMapFeatureSnapControllerOptions) {
   const { getOptions, getMap } = options;
   const activeRef = ref(true);
+  const ruleScopeRef = ref<string[] | null>(null);
   const ruleEnabledOverridesRef = ref<Record<string, boolean>>({});
   const targetEnabledOverridesRef = ref<Partial<Record<MapFeatureSnapPanelTargetKey, boolean>>>({});
   const bindingRef = shallowRef<MapFeatureSnapBinding | null>(null);
   const resolvedOptions = computed(() => resolveMapFeatureSnapOptions(getOptions()));
+
+  /** 当前页面已注册插件类型集合。 */
+  const registeredPluginTypes = computed(() => {
+    return new Set((options.listPlugins?.() || []).map((plugin) => plugin.type));
+  });
+
+  /** 当前页面是否注册了交点插件。 */
+  const hasIntersectionPlugin = computed(() => {
+    return registeredPluginTypes.value.has(INTERSECTION_PLUGIN_TYPE);
+  });
+
+  /** 当前页面是否注册了面边线插件。 */
+  const hasPolygonEdgePlugin = computed(() => {
+    return registeredPluginTypes.value.has(POLYGON_EDGE_PLUGIN_TYPE);
+  });
+
   const effectiveOptions = computed<MapFeatureSnapOptions | undefined>(() => {
     const snapOptions = resolvedOptions.value;
     if (!snapOptions) {
@@ -429,7 +447,10 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     const targetOverrides = targetEnabledOverridesRef.value;
     const nextOptions: MapFeatureSnapOptions = {
       ...snapOptions,
-      intersection: applyTargetEnabledOverride(snapOptions.intersection, targetOverrides.intersection),
+      // 旧交点规则只能跟随 intersectionPreview 插件生命周期，不能依赖图层注册时序判断。
+      intersection: hasIntersectionPlugin.value
+        ? applyTargetEnabledOverride(snapOptions.intersection, targetOverrides.intersection)
+        : false,
       polygonEdge: applyTargetEnabledOverride(snapOptions.polygonEdge, targetOverrides.polygonEdge),
     };
 
@@ -475,21 +496,6 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
   /** 右键面板最终配置。 */
   const panelOptions = computed(() => {
     return normalizeSnapControlPanelOptions(resolvedOptions.value?.control?.panel);
-  });
-
-  /** 当前页面已注册插件类型集合。 */
-  const registeredPluginTypes = computed(() => {
-    return new Set((options.listPlugins?.() || []).map((plugin) => plugin.type));
-  });
-
-  /** 当前页面是否注册了交点插件。 */
-  const hasIntersectionPlugin = computed(() => {
-    return registeredPluginTypes.value.has(INTERSECTION_PLUGIN_TYPE);
-  });
-
-  /** 当前页面是否注册了面边线插件。 */
-  const hasPolygonEdgePlugin = computed(() => {
-    return registeredPluginTypes.value.has(POLYGON_EDGE_PLUGIN_TYPE);
   });
 
   /** 当前页面是否启用了绘图或测量控件。 */
@@ -606,6 +612,13 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
   });
 
   /**
+   * 清空吸附预览几何及其原要素状态。
+   */
+  function clearPreview(): void {
+    bindingRef.value?.clearPreview();
+  }
+
+  /**
    * 吸附点图层样式。
    */
   const previewPointStyle = computed(() => {
@@ -618,20 +631,6 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
         'circle-stroke-width': 2,
         'circle-stroke-color': '#ffffff',
         'circle-stroke-opacity': 0.95,
-      },
-    });
-  });
-
-  /**
-   * 命中线段高亮图层样式。
-   */
-  const previewLineStyle = computed(() => {
-    const previewOptions = resolvedOptions.value?.preview;
-    return createLineLayerStyle({
-      paint: {
-        'line-color': previewOptions?.lineColor ?? '#ff7a00',
-        'line-width': previewOptions?.lineWidth ?? 4,
-        'line-opacity': 0.95,
       },
     });
   });
@@ -658,6 +657,7 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     bindingRef.value = createMapFeatureSnapBinding({
       map,
       getOptions: () => effectiveOptions.value,
+      getRuleScope: () => ruleScopeRef.value,
     });
   }
 
@@ -666,7 +666,6 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
       enabled: configuredEnabled.value,
       active: isActive.value,
       map: getMap(),
-      options: effectiveOptions.value,
     }),
     () => {
       syncBinding();
@@ -730,6 +729,17 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     }
 
     setRuleEnabled(ruleId, !currentRule.enabled);
+  }
+
+  /**
+   * 设置运行期规则查询作用域。
+   * @param ruleIds 允许普通候选命中的规则 ID；null 恢复全局查询
+   */
+  function setRuleScope(ruleIds: string[] | null): void {
+    ruleScopeRef.value = ruleIds === null
+      ? null
+      : Array.from(new Set(ruleIds.filter((ruleId) => typeof ruleId === 'string' && ruleId.length > 0)));
+    clearPreview();
   }
 
   /**
@@ -812,6 +822,24 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     return resolvedSnapOptions;
   }
 
+  /**
+   * 合并同一帧地图事件，并把最新事件的吸附结果交给调用方。
+   * @param event 最新地图鼠标事件
+   * @param onResolved 最新事件解析完成后的回调
+   */
+  function scheduleMapEvent(
+    event: MapMouseEvent,
+    onResolved: (result: MapFeatureSnapResult) => void
+  ): void {
+    const binding = bindingRef.value;
+    if (!binding) {
+      onResolved(createEmptyMapFeatureSnapResult());
+      return;
+    }
+
+    binding.scheduleMapEvent(event, onResolved);
+  }
+
   return {
     enabled: configuredEnabled,
     isActive,
@@ -822,7 +850,6 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     previewEnabled,
     previewData,
     previewPointStyle,
-    previewLineStyle,
     binding: bindingRef,
     destroy,
     activate,
@@ -830,11 +857,13 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     toggle,
     setRuleEnabled,
     toggleRule,
+    setRuleScope,
     setTargetEnabled,
     toggleTarget,
     resolveTerradrawSnapOptions,
     resolveMapEvent: (event: any) =>
       bindingRef.value?.resolveMapEvent(event) || createEmptyMapFeatureSnapResult(),
-    clearPreview: () => bindingRef.value?.clearPreview(),
+    scheduleMapEvent,
+    clearPreview,
   };
 }

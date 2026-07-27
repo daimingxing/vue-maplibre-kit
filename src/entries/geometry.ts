@@ -12,6 +12,12 @@ export { MapLineCorridorTool } from '../MapLibre/shared/map-common-tools';
 /** 通用线测量工具类。需要测整条线长度或测线内区间长度时使用。 */
 export { MapLineMeasureTool } from '../MapLibre/shared/map-common-tools';
 
+/** 共享线连接 segment 构建工具。需要让路径网络和吸附使用同一虚拟延长语义时使用。 */
+export { createLineConnectSegments } from '../MapLibre/shared/map-line-connect-tools';
+
+/** 共享线交点计算工具。需要计算组内、跨组和虚拟线交点时使用。 */
+export { findLineIntersections } from '../MapLibre/shared/map-line-connect-tools';
+
 /** 交点转正式点要素工具。需要把临时交点落成正式点要素时使用。 */
 export { buildIntersectionPointFeature } from '../MapLibre/shared/map-intersection-tools';
 
@@ -71,6 +77,21 @@ export type { MapLineLocatedPoint } from '../MapLibre/shared/map-common-tools';
 
 /** 线内区间测量结果类型。读取两点沿线距离时使用。 */
 export type { MapLinePartialMeasureResult } from '../MapLibre/shared/map-common-tools';
+
+/** 共享线算法二维坐标类型。 */
+export type { MapLineCoord } from '../MapLibre/shared/map-line-connect-tools';
+
+/** 共享线算法输入类型。 */
+export type { MapLineInput } from '../MapLibre/shared/map-line-connect-tools';
+
+/** 共享线算法 segment 类型。 */
+export type { MapLineSegment } from '../MapLibre/shared/map-line-connect-tools';
+
+/** 共享线算法交点类型。 */
+export type { MapLineIntersection } from '../MapLibre/shared/map-line-connect-tools';
+
+/** 共享线算法求交配置类型。 */
+export type { FindLineIntersectionsOptions } from '../MapLibre/shared/map-line-connect-tools';
 
 /** 线段命中结果类型。读取当前命中的线段索引和长度时使用。 */
 export type { MapLineSegmentSelection } from '../MapLibre/shared/map-common-tools';

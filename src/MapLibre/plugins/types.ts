@@ -22,6 +22,11 @@ export interface MapSnapBinding {
   previewData: Ref<FeatureCollection>;
   /** 根据 MapLibre 鼠标事件解析吸附结果。 */
   resolveMapEvent: (event: MapMouseEvent) => MapFeatureSnapResult;
+  /** 合并同一帧 MapLibre 鼠标事件，并把最新事件的吸附结果交给调用方。 */
+  scheduleMapEvent: (
+    event: MapMouseEvent,
+    onResolved?: (result: MapFeatureSnapResult) => void
+  ) => void;
   /** 根据普通屏幕点和经纬度解析吸附结果。 */
   resolvePointer: (options: {
     point: { x: number; y: number };
