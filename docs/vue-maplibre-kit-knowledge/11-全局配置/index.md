@@ -1,6 +1,6 @@
 # 全局配置
 
-全局配置用于给整个应用注册地图初始化、控件、插件和图层样式的统一默认值。公开入口是 ue-maplibre-kit/config，源码由 src/config.ts 转发到 src/entries/config.ts。
+全局配置用于给整个应用注册地图初始化、控件、插件和图层样式的统一默认值。公开入口是 `vue-maplibre-kit/config`，源码由 `src/config.ts` 转发到 `src/entries/config.ts`。
 
 本目录不是概念摘要，而是可复制的配置手册。每个子文档都会尽量保留真实代码风格：字段写在 defineMapGlobalConfig({ ... }) 能接受的位置，字段说明写成行内注释，方便开发人员复制后按需取消注释。
 
@@ -34,7 +34,7 @@
 源码入口：
 
 - [src/config.ts](../../../src/config.ts)
-- [src/demo-map-global-config.ts](../../../src/demo-map-global-config.ts)
+- [examples/demo-map-global-config.ts](../../../examples/demo-map-global-config.ts)
 - [src/main.ts](../../../src/main.ts)
 
 ---
@@ -105,8 +105,8 @@ defineMapGlobalConfig({
 - `config.styles.symbol`：符号图层样式工厂默认值
 - `config.styles.raster`：栅格图层样式工厂默认值
 
+`config.plugins.snap.preview` 与地图实例局部配置按字段合并，局部字段优先。独立吸附点没有配置时使用 kit 默认样式；目标要素的颜色、透明度、线宽和点半径没有配置时保留原要素样式。
+
 ---
 
-## 迁移来源
-
-本目录从旧文档 docs/vue-mapLibre-kit知识库/vue-maplibre-kit-全局配置说明.md 拆分迁移，并按 src/entries/config.ts 校对。旧文档只作为迁移来源，新业务文档应以本目录为准。
+字段以 `src/entries/config.ts` 当前导出为准。

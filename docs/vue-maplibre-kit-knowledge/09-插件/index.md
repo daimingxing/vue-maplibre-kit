@@ -29,7 +29,7 @@
 | lineDraft | `lineDraft` | `businessMap.plugins.lineDraft` | 生成延长线、线廊草稿、草稿属性维护 | `NGGI08.vue` |
 | intersection | `intersection` | `businessMap.plugins.intersection` | 线交点预览、正式交点生成与属性维护 | `NGGI09.vue` |
 | polygonEdge | `polygonEdge` | `businessMap.plugins.polygonEdge` | 面边线临时预览、边线高亮、边线吸附目标 | `NGGI12.vue` |
-| multiSelect | `multiSelect` | `businessMap.plugins.multiSelect` | 多选模式、选中集读取、选中态样式联动 | `NGGI10.vue` |
+| multiSelect | `multiSelect` | `businessMap.plugins.multiSelect` | 多选模式、组合手势、范围解析、选中集读取与恢复 | `NGGI10.vue` |
 | dxfExport | `dxfExport` | `businessMap.plugins.dxfExport` | 生成或下载 DXF，读取导出状态 | `NGGI11.vue` |
 
 ## generatedKind 速查

@@ -70,8 +70,10 @@ businessMap.plugins.polygonEdge.clear();
 ```ts
 businessMap.plugins.multiSelect.activate();
 businessMap.plugins.multiSelect.deactivate();
+businessMap.plugins.multiSelect.deactivate({ emitChange: false });
 businessMap.plugins.multiSelect.toggle();
 businessMap.plugins.multiSelect.clear();
+businessMap.plugins.multiSelect.replaceSelectedFeatures(savedFeatures, { emitChange: false });
 ```
 
 如果只需要普通选中态，优先看 `businessMap.selection`。多选插件分组适合读取插件自身状态或调用插件按钮行为。

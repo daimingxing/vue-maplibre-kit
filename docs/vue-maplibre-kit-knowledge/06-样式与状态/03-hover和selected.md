@@ -11,7 +11,7 @@
 1. 在 `mapInteractive.layers` 中声明参与交互的图层。
 2. 开启 `enableFeatureStateHover` 或 `enableFeatureStateSelected`。
 3. 图层样式使用 `createFeatureStateExpression`。
-4. 交互核心自动写入 `feature-state.hover` 和 `feature-state.selected`。
+4. 交互核心自动写入 `feature-state.hover` 和 `feature-state.selected`。光标和 `feature-state.hover` 始终跟随真实指针立即变化；`hoverDelayMs` 只延迟进入/离开回调，不延迟这些视觉状态。
 
 ## 示例
 

@@ -49,7 +49,6 @@
 | ---------------------------- | ----------------------------- |
 | `UseBusinessMapResult`       | `useBusinessMap()` 返回值     |
 | `UseBusinessMapPlugins`      | `businessMap.plugins` 类型    |
-| `UseBusinessMapOptions`      | `useBusinessMap()` 入参       |
 | `MapBusinessSource`          | 业务 source                   |
 | `MapBusinessSourceRegistry`  | source 注册表                 |
 | `MapBusinessLayerDescriptor` | 业务图层描述                  |

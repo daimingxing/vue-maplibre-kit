@@ -13,6 +13,7 @@
 | `MapLibreInit` | 组件 | 地图根组件 |
 | `MglPopup` | 组件 | 地图弹窗 |
 | `useBusinessMap` | 函数 | 高层业务聚合门面 |
+| `UseBusinessMapOptions` | 类型 | `useBusinessMap()` 入参；只从根入口导出，business 入口没有 |
 | `createMapBusinessSource` | 函数 | 业务 source 工厂 |
 | `createMapBusinessSourceRegistry` | 函数 | source 注册表工厂 |
 | `createCircleBusinessLayer` | 函数 | 点图层工厂 |

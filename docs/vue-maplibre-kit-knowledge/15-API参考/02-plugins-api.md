@@ -41,7 +41,7 @@
 | `lineDraft` | `state`、`previewLine()`、`replacePreviewRegion()`、`saveProperties()`、`removeProperties()`、`getFeatureById()`、`clear()` |
 | `intersection` | `state`、`refresh()`、`clear()`、`materialize()`、`removeMaterialized()`、`updateMaterializedProperties()`、`clearMaterialized()`、`getData()`、`getMaterializedData()` |
 | `polygonEdge` | `featureCount`、`selectedEdgeId`、`generateFromFeature()`、`generateFromSelected()`、`highlightPolygon()`、`highlightRing()`、`highlightEdge()`、`selectEdge()`、`clearHighlight()`、`getData()`、`clear()` |
-| `multiSelect` | `isActive`、`selectionMode`、`selectedCount`、`selectedFeatures`、`activate()`、`deactivate()`、`toggle()`、`clear()`、`getActive()`、`getSelectedFeatures()` |
+| `multiSelect` | `isActive`、`selectionMode`、`selectedCount`、`selectedFeatures`、`activate()`、`deactivate()`、`toggle()`、`clear()`、`getActive()`、`getSelectedFeatures()`、`replaceSelectedFeatures()` |
 | `dxfExport` | `state`、`isExporting`、`lastFileName`、`lastWarnings`、`lastError`、`exportDxf()`、`downloadDxf()`、`getResolvedOptions()` |
 
 ## 插件子路径

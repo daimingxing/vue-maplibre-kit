@@ -22,10 +22,11 @@ plugins: {
 
     // preview: {
     //   enabled: true, // 是否启用吸附预览
-    //   pointColor: '#1677ff', // 吸附点颜色
-    //   pointRadius: 6, // 吸附点半径
-    //   lineColor: '#1677ff', // 命中线段高亮颜色
-    //   lineWidth: 5, // 命中线段高亮宽度
+    //   pointColor: '#1677ff', // 独立吸附点颜色
+    //   pointRadius: 6, // 独立吸附点半径
+    //   targetColor: '#1677ff', // 命中原要素的 snapPreview 颜色
+    //   targetOpacity: 0.8, // 命中原要素透明度覆写
+    //   targetLineWidth: 5, // 命中线要素线宽覆写，单位 px
     // },
 
     // intersection: {
@@ -120,7 +121,6 @@ plugins: {
 
 - 合并顺序是“全局 `styleOverrides` -> 当前实例 `styleOverrides`”，实例级同名字段覆盖全局默认值。
 - 当前全局没有 `enabled`、`onHoverEnter`、`onHoverLeave`、`onClick`、`onDoubleClick`、`onContextMenu` 这些字段。
-- 旧版 `inheritInteractiveFromLayerId` 已不属于当前 API，也不应该继续写进这份全局配置文档。
 
 ---
 

@@ -9,6 +9,8 @@ import {
   MapLineExtensionTool,
   MapLineCorridorTool,
   MapLineMeasureTool,
+  createLineConnectSegments,
+  findLineIntersections,
   buildIntersectionCandidates,
   collectLineIntersections,
   buildMaterializedIntersectionFeature,
@@ -24,6 +26,7 @@ import {
 | 线延长 | `MapLineExtensionTool` | 点击线段后生成临时延长线、识别命中线段、过滤零长度线段 |
 | 线廊 | `MapLineCorridorTool` | 按中心线生成面区域、替换同一条线已有的线廊面 |
 | 线测量 | `MapLineMeasureTool` | 计算整线长度、两点沿线区间长度、点到线的投影里程 |
+| 线连接 | `createLineConnectSegments`、`findLineIntersections` | 为开放端点生成最近虚拟连接，并按同组/跨组规则计算真实线与虚拟线交点 |
 | 交点 | `buildIntersectionCandidates`、`collectLineIntersections`、`buildMaterializedIntersectionFeature` | 从多个业务 source 中找线线交点，并把交点落成正式点要素 |
 | 来源引用 | `createMapSourceFeatureRef`、`buildMapSourceFeatureRefKey` | 在预览要素、属性面板、插件动作之间稳定传递 `sourceId + featureId` |
 
@@ -41,4 +44,4 @@ import {
 - 运行时写回 source、更新图层、调用插件，应交给 `useBusinessMap()` 或业务 source 注册表。
 - 线延长、线廊和线测量当前以 `LineString` 为主；`MultiLineString` 需要业务层先拆分。
 - 交点计算会忽略无法收敛成单点的重合线段，这与当前源码实现一致。
-
+- `createLineConnectSegments`、`findLineIntersections` 支持 `LineString`、`MultiLineString`。每个开放端点只保留延长方向最近命中，闭合 path 不生成端点虚拟线；helper 不依赖 Vue、MapLibre 或具体业务协议。

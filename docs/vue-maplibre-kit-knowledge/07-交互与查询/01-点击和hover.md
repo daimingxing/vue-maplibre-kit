@@ -43,12 +43,17 @@ const interactive: MapLayerInteractiveOptions = {
 | 字段 | 含义 |
 | --- | --- |
 | `feature` | 当前命中的原生渲染要素，空白点击时为 null |
+| `features` | 本次指针解析得到的全部渲染命中，顺序与 `queryRenderedFeatures` 一致 |
 | `featureId` | 当前命中的要素 ID |
 | `properties` | 当前要素属性 |
 | `layerId` | 命中的图层 ID |
 | `sourceId` | 命中的 source ID |
 | `lngLat` | 事件经纬度 |
 | `selectedFeatures` | 当前选中集快照 |
+
+`onHoverResolve` 在每次 `requestAnimationFrame` 合并后触发，并带上本次查询得到的 `features`。同一有效目标内移动不会重复触发 `onHoverEnter`，但仍会把最新命中集合交给 `onHoverResolve`，业务层应直接消费该结果，不要再查询一次地图。
+
+`hoverDelayMs` 只延迟 `onHoverEnter` / `onHoverLeave`，默认 `0` 时回调仍同步执行。光标、`feature-state.hover` 和 `onHoverResolve` 始终跟随真实指针立即更新。触摸指针不会合成 Hover。
 
 ## 空白点击
 
