@@ -8,6 +8,7 @@ import {
   getInfiniteLineIntersection,
   getLeftNormalVector,
   getMercatorVectorLength,
+  groundMetersToMercatorMeters,
   lngLatToMercatorPoint,
   mercatorPointToLngLat,
   projectPointToSegment,
@@ -617,11 +618,15 @@ export class MapLineCorridorTool {
     side: 1 | -1
   ): MercatorPoint[] {
     return coordinates.map((currentCoordinate, index) => {
+      const mercatorOffset = groundMetersToMercatorMeters(
+        offsetMeters,
+        mercatorPointToLngLat(currentCoordinate)[1]
+      );
       if (index === 0) {
         const firstNormal = getLeftNormalVector(currentCoordinate, coordinates[index + 1]);
         return addMercatorPoint(
           currentCoordinate,
-          scaleMercatorPoint(firstNormal || { x: 0, y: 0 }, offsetMeters * side)
+          scaleMercatorPoint(firstNormal || { x: 0, y: 0 }, mercatorOffset * side)
         );
       }
 
@@ -629,7 +634,7 @@ export class MapLineCorridorTool {
         const lastNormal = getLeftNormalVector(coordinates[index - 1], currentCoordinate);
         return addMercatorPoint(
           currentCoordinate,
-          scaleMercatorPoint(lastNormal || { x: 0, y: 0 }, offsetMeters * side)
+          scaleMercatorPoint(lastNormal || { x: 0, y: 0 }, mercatorOffset * side)
         );
       }
 
@@ -644,19 +649,19 @@ export class MapLineCorridorTool {
 
       const previousOffsetStart = addMercatorPoint(
         previousCoordinate,
-        scaleMercatorPoint(previousNormal, offsetMeters * side)
+        scaleMercatorPoint(previousNormal, mercatorOffset * side)
       );
       const previousOffsetEnd = addMercatorPoint(
         currentCoordinate,
-        scaleMercatorPoint(previousNormal, offsetMeters * side)
+        scaleMercatorPoint(previousNormal, mercatorOffset * side)
       );
       const nextOffsetStart = addMercatorPoint(
         currentCoordinate,
-        scaleMercatorPoint(nextNormal, offsetMeters * side)
+        scaleMercatorPoint(nextNormal, mercatorOffset * side)
       );
       const nextOffsetEnd = addMercatorPoint(
         nextCoordinate,
-        scaleMercatorPoint(nextNormal, offsetMeters * side)
+        scaleMercatorPoint(nextNormal, mercatorOffset * side)
       );
 
       const intersection = getInfiniteLineIntersection(
@@ -676,7 +681,7 @@ export class MapLineCorridorTool {
       const miterLength = getMercatorVectorLength(
         subtractMercatorPoint(intersection, previousOffsetEnd)
       );
-      if (miterLength > offsetMeters * 6) {
+      if (miterLength > mercatorOffset * 6) {
         return {
           x: (previousOffsetEnd.x + nextOffsetStart.x) / 2,
           y: (previousOffsetEnd.y + nextOffsetStart.y) / 2,

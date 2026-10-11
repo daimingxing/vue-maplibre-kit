@@ -86,6 +86,19 @@ export function addMercatorPoint(left: MercatorPoint, right: MercatorPoint): Mer
 }
 
 /**
+ * 将地面米数转换为当前纬度处的 Web Mercator 平面偏移。
+ * Web Mercator 坐标轴随纬度被 cos(lat) 放大，直接把地面米数当作平面偏移会把宽度缩小。
+ * @param meters 地面距离，单位米
+ * @param latitude 纬度
+ * @returns 对应的墨卡托平面偏移
+ */
+export function groundMetersToMercatorMeters(meters: number, latitude: number): number {
+  const clampedLatitude = Math.max(Math.min(latitude, 85.0511287798), -85.0511287798);
+  const cosine = Math.cos(toRadians(clampedLatitude));
+  return cosine > 0 ? meters / cosine : meters;
+}
+
+/**
  * 将平面向量按比例缩放。
  * @param point 原始向量
  * @param scale 缩放倍数

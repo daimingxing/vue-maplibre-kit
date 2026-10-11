@@ -23,3 +23,21 @@ export type { MapFeatureMultiSelectPluginDescriptor } from '../MapLibre/plugins/
 
 /** 要素多选状态类型。读取当前多选结果和模式时使用。 */
 export type { MapFeatureMultiSelectState } from '../MapLibre/plugins/map-feature-multi-select';
+
+/** 多选手势配置类型。声明 toggle、box、range 开关时使用。 */
+export type { MapSelectionGestures } from '../MapLibre/plugins/map-feature-multi-select';
+
+/** 范围解析器类型。由调用方根据通用要素信息返回范围成员。 */
+export type { MapSelectionRangeResolver } from '../MapLibre/plugins/map-feature-multi-select';
+
+/** 范围解析结果类型。表示成功成员或拒绝原因。 */
+export type { MapSelectionRangeResolveResult } from '../MapLibre/plugins/map-feature-multi-select';
+
+/** 选中集原子替换选项类型。保存或恢复选中集时使用。 */
+export type { MapSelectionReplaceOptions } from '../MapLibre/plugins/map-feature-multi-select';
+
+/** 退出多选模式选项类型。现场恢复时应关闭派发。 */
+export type { MapSelectionDeactivateOptions } from '../MapLibre/plugins/map-feature-multi-select';
+
+/** 多选 undo 历史类型。用于临时会话保存和恢复编辑现场。 */
+export type { MapSelectionUndoHistory } from '../MapLibre/plugins/map-feature-multi-select';

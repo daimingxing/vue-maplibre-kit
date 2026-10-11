@@ -46,6 +46,20 @@ export interface MapLineIntersection<T = unknown> {
   first: MapLineSegment<T>;
   /** 第二条参与 segment。 */
   second: MapLineSegment<T>;
+  /** 第一条父线在真实 geometry 上的附着证据。 */
+  firstAttachment: MapLineIntersectionAttachment<T>;
+  /** 第二条父线在真实 geometry 上的附着证据。 */
+  secondAttachment: MapLineIntersectionAttachment<T>;
+}
+
+/** 交点一侧在真实父线上的附着证据。 */
+export interface MapLineIntersectionAttachment<T = unknown> {
+  /** 当前父线通过真实 segment 还是端点延长参与。 */
+  attachment: 'real' | 'extended';
+  /** 当前交点在真实父线上的附着坐标。 */
+  geometryCoordinate: MapLineCoord;
+  /** 承载附着坐标的真实 segment。 */
+  segment: MapLineSegment<T>;
 }
 
 /** 查找分组线交点的配置。 */
@@ -191,7 +205,13 @@ export function findLineIntersections<T>(
         continue;
       }
       usedKeys.add(key);
-      intersections.push({ coordinate, first, second });
+      intersections.push({
+        coordinate,
+        first,
+        second,
+        firstAttachment: createIntersectionAttachment(first, coordinate),
+        secondAttachment: createIntersectionAttachment(second, coordinate),
+      });
     }
   }
 
@@ -203,6 +223,35 @@ export function findLineIntersections<T>(
         right.second as InternalLineSegment<T>
       ));
   });
+}
+
+/**
+ * 将参与求交的 segment 转换为真实父线附着证据。
+ * @param segment 真实或虚拟参与 segment
+ * @param coordinate 固定交点坐标
+ * @returns 真实 segment、附着类型和真实 geometry 坐标
+ */
+function createIntersectionAttachment<T>(
+  segment: InternalLineSegment<T>,
+  coordinate: MapLineCoord
+): MapLineIntersectionAttachment<T> {
+  const realSegment = segment.virtual && segment.parentSegment
+    ? segment.parentSegment
+    : segment;
+  return {
+    attachment: segment.virtual ? 'extended' : 'real',
+    geometryCoordinate: segment.virtual
+      ? [...segment.start]
+      : [...coordinate],
+    segment: {
+      start: [...realSegment.start],
+      end: [...realSegment.end],
+      line: realSegment.line,
+      pathIndex: realSegment.pathIndex,
+      segmentIndex: realSegment.segmentIndex,
+      virtual: false,
+    },
+  };
 }
 
 /**

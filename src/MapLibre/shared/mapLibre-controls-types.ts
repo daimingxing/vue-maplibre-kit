@@ -273,6 +273,7 @@ export type MapLayerInteractiveEventType =
   | 'ready'
   | 'hoverenter'
   | 'hoverleave'
+  | 'hoverresolve'
   | 'click'
   | 'dblclick'
   | 'contextmenu'
@@ -288,7 +289,134 @@ export type MapSelectionMode = 'single' | 'multiple';
 export type MapSelectionDeactivateBehavior = 'clear' | 'retain';
 
 /** 选中集变化原因。 */
-export type MapSelectionChangeReason = 'click' | 'box' | 'clear' | 'deactivate' | 'api';
+export type MapSelectionChangeReason =
+  | 'click'
+  | 'box'
+  | 'range'
+  | 'reject'
+  | 'clear'
+  | 'deactivate'
+  | 'api'
+  | 'undo';
+
+/** 框选与修饰键范围手势使用的精确匹配修饰键。 */
+export type MapSelectionModifierTrigger = 'shift' | 'ctrl' | 'alt';
+
+/** 范围选择触发方式；click 表示无需修饰键的连续点击范围模式。 */
+export type MapSelectionRangeTrigger = 'click' | MapSelectionModifierTrigger;
+
+/** 框选手势对象配置。 */
+export interface MapSelectionBoxGesture {
+  /** 是否启用框选；省略时视为启用。 */
+  enabled?: boolean;
+  /** 框选修饰键；省略时为 shift。 */
+  trigger?: MapSelectionModifierTrigger;
+}
+
+/** 范围手势对象配置。 */
+export interface MapSelectionRangeGesture {
+  /** 是否启用范围选择；省略时视为启用。 */
+  enabled?: boolean;
+  /** 范围触发方式；省略时为 shift。修饰键只约束终点，起点用普通单击。 */
+  trigger?: MapSelectionRangeTrigger;
+}
+
+/** 多选手势开关。未声明时 clickAdd、clickDeselect 与框选启用，范围关闭。 */
+export interface MapSelectionGestures {
+  /** 普通点击未选中要素时新增单个要素。 */
+  clickAdd?: boolean;
+  /** 普通点击已选中要素时取消该要素。 */
+  clickDeselect?: boolean;
+  /** 框选；true 表示启用且使用 shift，对象可指定 enabled 与 trigger。 */
+  box?: boolean | MapSelectionBoxGesture;
+  /** 范围选择；true 表示启用且使用 shift，对象可指定 enabled 与 trigger。 */
+  range?: boolean | MapSelectionRangeGesture;
+}
+
+/** 归一化后的框选手势。 */
+export interface ResolvedMapSelectionBoxGesture {
+  /** 是否启用框选。 */
+  enabled: boolean;
+  /** 框选精确匹配的修饰键。 */
+  trigger: MapSelectionModifierTrigger;
+}
+
+/** 归一化后的范围手势。 */
+export interface ResolvedMapSelectionRangeGesture {
+  /** 是否启用范围选择。 */
+  enabled: boolean;
+  /** 范围触发方式。 */
+  trigger: MapSelectionRangeTrigger;
+}
+
+/** 归一化后的多选手势开关。 */
+export interface ResolvedMapSelectionGestures {
+  /** 普通点击未选中要素时新增单个要素。 */
+  clickAdd: boolean;
+  /** 普通点击已选中要素时取消该要素。 */
+  clickDeselect: boolean;
+  /** 归一化后的框选手势。 */
+  box: ResolvedMapSelectionBoxGesture;
+  /** 归一化后的范围手势。 */
+  range: ResolvedMapSelectionRangeGesture;
+}
+
+/** 范围解析器读取的运行时上下文。 */
+export interface MapSelectionRangeResolveContext {
+  /** 当前完整选中集快照。 */
+  selectedFeatures: MapLayerSelectedFeature[];
+  /** 当前地图实例。 */
+  map: MaplibreMap;
+}
+
+/** 范围解析成功或拒绝的结果。 */
+export type MapSelectionRangeResolveResult =
+  | {
+      /** 范围成员已成功解析。 */
+      status: 'resolved';
+      /** 应一次性加入选中集的范围成员。 */
+      features: MapLayerSelectedFeature[];
+    }
+  | {
+      /** 本次范围操作被拒绝。 */
+      status: 'rejected';
+      /** 调用方可识别的拒绝原因。 */
+      reason: string;
+    };
+
+/**
+ * 范围成员解析器。
+ * 只接收通用选中项快照，不读取业务图层或属性名称。
+ */
+export type MapSelectionRangeResolver = (
+  anchor: MapLayerSelectedFeature,
+  endpoint: MapLayerSelectedFeature,
+  context: MapSelectionRangeResolveContext
+) => MapSelectionRangeResolveResult;
+
+/** 范围拒绝时附带的起点、终点与原因。 */
+export interface MapSelectionRangeRejectInfo {
+  /** 调用方可识别的拒绝原因。 */
+  reason: string;
+  /** 当前范围起点。 */
+  start: MapLayerSelectedFeature;
+  /** 当前范围终点。 */
+  end: MapLayerSelectedFeature;
+}
+
+/** 原子替换完整选中集时的附加选项。 */
+export interface MapSelectionReplaceOptions {
+  /** 是否派发选中集变化回调；默认 true。现场保存或恢复应传 false。 */
+  emitChange?: boolean;
+  /** 变化原因；默认 api。 */
+  reason?: MapSelectionChangeReason;
+}
+
+/** 退出多选模式时的附加选项。 */
+export interface MapSelectionDeactivateOptions {
+  /** 是否按 deactivateBehavior 处理选中集并派发变化；默认 true。现场恢复应传 false。 */
+  emitChange?: boolean;
+}
 
 /** 选中集快捷查询配置。 */
 export interface MapSelectionQueryOptions {
@@ -314,6 +442,22 @@ export interface MapLayerSelectedFeature {
   properties: Record<string, any> | null;
   /** 当前选中项标准化 GeoJSON 快照。 */
   snapshot: MapCommonFeature | null;
+}
+
+/** 多选编辑周期内一次可回退快照。 */
+export interface MapSelectionUndoSnapshot {
+  /** 完整选中集副本。 */
+  selectedFeatures: MapLayerSelectedFeature[];
+  /** 主选中项稳定键。 */
+  primarySelectedKey: string | null;
+  /** 范围起点稳定键。 */
+  rangeAnchorKey: string | null;
+}
+
+/** 当前多选 undo 历史快照。 */
+export interface MapSelectionUndoHistory {
+  /** 按回退顺序保存的历史快照。 */
+  snapshots: MapSelectionUndoSnapshot[];
 }
 
 /** 按图层分组后的选中集结果。 */
@@ -358,6 +502,12 @@ export interface MapSelectionToolOptions {
   excludeLayerIds?: string[];
   /** 业务层自定义候选过滤函数；返回 false 时当前要素不可加入多选集。 */
   canSelect?: (context: MapSelectionFilterContext) => boolean;
+  /** 多选手势开关；未传时 clickAdd、clickDeselect 与框选启用，范围关闭。 */
+  gestures?: MapSelectionGestures;
+  /** 范围成员解析器；range 启用时由调用方提供。 */
+  resolveRange?: MapSelectionRangeResolver;
+  /** 是否渲染内置多选开关；默认 true。命令会话期间可关闭以免与会话控件竞争。 */
+  showControl?: boolean;
 }
 
 /** 归一化后的多选工具配置。 */
@@ -374,6 +524,12 @@ export interface ResolvedMapSelectionToolOptions {
   excludeLayerIds: string[];
   /** 业务层自定义候选过滤函数。 */
   canSelect?: (context: MapSelectionFilterContext) => boolean;
+  /** 归一化后的多选手势开关。 */
+  gestures: ResolvedMapSelectionGestures;
+  /** 范围成员解析器。 */
+  resolveRange?: MapSelectionRangeResolver;
+  /** 是否渲染内置多选开关。 */
+  showControl: boolean;
 }
 
 /** 普通图层选择服务状态。 */
@@ -420,6 +576,11 @@ export interface MapLayerInteractiveContext {
   originalEvent?: MouseEvent;
   /** 当前事件命中的吸附结果 */
   snapResult?: MapFeatureSnapResult | null;
+  /**
+   * 本次指针解析得到的全部渲染命中，顺序与 `queryRenderedFeatures` 一致。
+   * 业务层应直接消费该列表，不再发起第二次要素查询。
+   */
+  features?: MapGeoJSONFeature[];
   /** 当前交互层生效的选择模式。 */
   selectionMode?: MapSelectionMode;
   /** 当前是否处于多选模式。 */
@@ -442,6 +603,8 @@ export interface MapLayerSelectionChangeContext extends MapLayerInteractiveConte
   removedFeatures: MapLayerSelectedFeature[];
   /** 本次变化原因。 */
   reason: MapSelectionChangeReason;
+  /** 范围拒绝时的原因和端点引用；仅 reason 为 reject 时存在。 */
+  rangeReject?: MapSelectionRangeRejectInfo;
   /** 快速提取当前完整选中集中的要素 ID 列表。 */
   getSelectedFeatureIds: (options?: MapSelectionQueryOptions) => Array<string | number>;
   /** 快速提取本次新增选中项中的要素 ID 列表。 */
@@ -495,6 +658,12 @@ export interface MapLayerInteractiveLayerOptions {
 export interface MapLayerInteractiveOptions {
   /** 是否启用该业务交互封装；默认 true */
   enabled?: boolean;
+  /**
+   * Hover 预制事件延迟，单位毫秒。
+   * 只延迟 `onHoverEnter` / `onHoverLeave`，不延迟光标、feature-state 与 `onHoverResolve`。
+   * 省略或为 `0` 时同步触发 enter/leave 回调。
+   */
+  hoverDelayMs?: number;
   /** 参与交互的图层配置；先按 hitPriority 决策，同优先级再按声明顺序决策 */
   layers?: Record<string, MapLayerInteractiveLayerOptions>;
   /** 交互管理器初始化完成后的回调 */
@@ -503,6 +672,11 @@ export interface MapLayerInteractiveOptions {
   onHoverEnter?: (context: MapLayerInteractiveContext) => void;
   /** 鼠标离开当前命中的已声明图层要素时触发 */
   onHoverLeave?: (context: MapLayerInteractiveContext) => void;
+  /**
+   * 每次帧合并后的已解析 Hover 上下文回调。
+   * 同一有效目标内移动仍会触发，便于业务层消费完整命中集合而不再查询地图。
+   */
+  onHoverResolve?: (context: MapLayerInteractiveContext) => void;
   /** 单击地图时触发；命中图层要素时会附带命中上下文 */
   onClick?: (context: MapLayerInteractiveContext) => void;
   /** 双击地图时触发；命中图层要素时会附带命中上下文 */

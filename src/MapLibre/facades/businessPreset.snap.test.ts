@@ -61,6 +61,41 @@ describe('createBusinessSnapFeatureResolver', () => {
     });
   });
 
+  it('简单点样式只在显式状态存在时覆盖原始半径', () => {
+    expect(createSimpleCircleStyle({ radius: 8 }).paint?.['circle-radius']).toEqual([
+      'case',
+      ['boolean', ['feature-state', 'snapPreview'], false],
+      ['coalesce', ['feature-state', 'snapPreviewPointRadius'], 8],
+      8,
+    ]);
+  });
+
+  it('简单线样式只在显式状态存在时覆盖原始线宽', () => {
+    expect(createSimpleLineStyle({ width: 4 }).paint?.['line-width']).toEqual([
+      'case',
+      ['boolean', ['feature-state', 'snapPreview'], false],
+      ['coalesce', ['feature-state', 'snapPreviewLineWidth'], 4],
+      4,
+    ]);
+  });
+
+  it('简单业务样式只在显式状态存在时覆盖原始透明度', () => {
+    const expressions = [
+      createSimpleLineStyle({ opacity: 0.4 }).paint?.['line-opacity'],
+      createSimpleCircleStyle({ opacity: 0.4 }).paint?.['circle-opacity'],
+      createSimpleFillStyle({ opacity: 0.4 }).paint?.['fill-opacity'],
+    ];
+
+    expressions.forEach((expression) => {
+      expect(expression).toEqual([
+        'case',
+        ['boolean', ['feature-state', 'snapPreview'], false],
+        ['coalesce', ['feature-state', 'snapPreviewOpacity'], 0.4],
+        0.4,
+      ]);
+    });
+  });
+
   it('按 source、layer 和 filter 返回完整 LineString 与 MultiLineString', () => {
     const fullCoordinates = [[0, 0], [1, 1], [2, 0]];
     const data: FeatureCollection = {

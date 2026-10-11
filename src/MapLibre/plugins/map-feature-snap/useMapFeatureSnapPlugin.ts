@@ -36,6 +36,7 @@ export const mapFeatureSnapPlugin = defineMapPlugin({
       toggleTarget: pluginController.toggleTarget,
       isActive: () => pluginController.isActive.value,
       clearPreview: () => pluginController.clearPreview(),
+      getPreviewSnapshot: () => pluginController.getPreviewSnapshot(),
       setRuleScope: (ruleIds) => pluginController.setRuleScope(ruleIds),
       resolveMapEvent: (event: any) =>
         pluginController.resolveMapEvent(event) || createEmptyMapFeatureSnapResult(),
@@ -55,7 +56,7 @@ export const mapFeatureSnapPlugin = defineMapPlugin({
             component: MapFeatureSnapPreviewLayers,
             props: {
               mapKey: pluginController.effectiveOptions.value?.internalContext?.mapKey,
-              enabled: pluginController.previewEnabled.value,
+              enabled: pluginController.previewPointEnabled.value,
               data: pluginController.previewData.value,
               pointStyle: pluginController.previewPointStyle.value,
             },

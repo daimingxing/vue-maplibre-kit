@@ -144,6 +144,15 @@ describe('mapFeatureSnapIntersections', () => {
       points[0].pairs[0].first.feature.id,
       points[0].pairs[0].second.feature.id,
     ]).toEqual(expect.arrayContaining(['cut-drift', 'entry-32']));
+    const parents = [points[0].pairs[0].first, points[0].pairs[0].second];
+    expect(parents.map((parent) => parent.attachment).sort()).toEqual(['extended', 'real']);
+    parents.forEach((parent) => {
+      expect(parent.geometryCoordinate.every(Number.isFinite)).toBe(true);
+      expect(parent.segment).toEqual(expect.objectContaining({
+        startCoordinate: expect.any(Array),
+        endCoordinate: expect.any(Array),
+      }));
+    });
   });
 
   it('显隐函数变化不重建几何，feature 引用变化时重建', () => {

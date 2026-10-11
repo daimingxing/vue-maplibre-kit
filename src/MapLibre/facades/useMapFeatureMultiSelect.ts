@@ -3,6 +3,8 @@ import type { MapLibreInitExpose } from '../core/mapLibre-init.types';
 import type {
   MapFeatureMultiSelectPluginApi,
   MapFeatureMultiSelectState,
+  MapSelectionReplaceOptions,
+  MapSelectionDeactivateOptions,
 } from '../plugins/map-feature-multi-select';
 import type {
   MapLayerSelectedFeature,
@@ -34,8 +36,11 @@ export interface UseMapFeatureMultiSelectResult {
   selectedFeatures: ComputedRef<MapLayerSelectedFeature[]>;
   /** 激活多选模式。 */
   activate: () => boolean;
-  /** 退出多选模式。 */
-  deactivate: () => boolean;
+  /**
+   * 退出多选模式。
+   * @param options 是否按退出策略清空并派发变化；现场恢复应关闭派发
+   */
+  deactivate: (options?: MapSelectionDeactivateOptions) => boolean;
   /** 切换多选模式。 */
   toggle: () => boolean;
   /** 清空当前选中集。 */
@@ -44,6 +49,23 @@ export interface UseMapFeatureMultiSelectResult {
   getActive: () => boolean;
   /** 读取当前完整选中集。 */
   getSelectedFeatures: () => MapLayerSelectedFeature[];
+  /**
+   * 原子替换完整选中集。
+   * 用于保存后的现场恢复；默认派发变化回调，会话内部恢复应关闭派发。
+   */
+  replaceSelectedFeatures: (
+    features: MapLayerSelectedFeature[],
+    options?: MapSelectionReplaceOptions
+  ) => boolean;
+  /**
+   * 回退到上一次用户可见选中变化之前的完整选中集、主选中项和范围起点。
+   * @returns 发生回退时返回 true；插件未注册、未激活或无历史时返回 false
+   */
+  undo: () => boolean;
+  /** 当前是否存在可回退历史。 */
+  canUndo: () => boolean;
+  /** 清空当前多选编辑周期内的 undo 历史。 */
+  clearUndoHistory: () => boolean;
 }
 
 /**
@@ -95,10 +117,15 @@ export function useMapFeatureMultiSelect(
     selectedCount: computed(() => state.value.selectedCount),
     selectedFeatures: computed(() => [...state.value.selectedFeatures]),
     activate: () => runAction((api) => api.activate()),
-    deactivate: () => runAction((api) => api.deactivate()),
+    deactivate: (options) => runAction((api) => api.deactivate(options)),
     toggle: () => runAction((api) => api.toggle()),
     clear: () => runAction((api) => api.clear()),
     getActive: () => getMultiSelectApi()?.isActive() || false,
     getSelectedFeatures: () => getMultiSelectApi()?.getSelectedFeatures() || [],
+    replaceSelectedFeatures: (features, options) =>
+      runAction((api) => api.replaceSelectedFeatures(features, options)),
+    undo: () => getMultiSelectApi()?.undo() ?? false,
+    canUndo: () => getMultiSelectApi()?.canUndo() ?? false,
+    clearUndoHistory: () => runAction((api) => api.clearUndoHistory()),
   };
 }

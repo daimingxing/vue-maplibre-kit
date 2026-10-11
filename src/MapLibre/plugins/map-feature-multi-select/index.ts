@@ -4,7 +4,16 @@ import {
   MAP_FEATURE_MULTI_SELECT_PLUGIN_TYPE,
   type MapFeatureMultiSelectPluginDescriptor,
 } from './useMapFeatureMultiSelectPlugin';
-import type { MapFeatureMultiSelectPluginApi, MapFeatureMultiSelectState } from './types';
+import type {
+  MapFeatureMultiSelectPluginApi,
+  MapFeatureMultiSelectState,
+  MapSelectionGestures,
+  MapSelectionRangeResolver,
+  MapSelectionRangeResolveResult,
+  MapSelectionReplaceOptions,
+  MapSelectionDeactivateOptions,
+  MapSelectionUndoHistory,
+} from './types';
 
 /**
  * 创建要素多选插件描述对象。
@@ -31,4 +40,10 @@ export type {
   MapFeatureMultiSelectPluginApi,
   MapFeatureMultiSelectPluginDescriptor,
   MapFeatureMultiSelectState,
+  MapSelectionGestures,
+  MapSelectionRangeResolver,
+  MapSelectionRangeResolveResult,
+  MapSelectionReplaceOptions,
+  MapSelectionDeactivateOptions,
+  MapSelectionUndoHistory,
 };

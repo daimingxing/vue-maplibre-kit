@@ -7,7 +7,11 @@ import {
   MAP_FEATURE_SNAP_PREVIEW_SOURCE_ID,
 } from './useMapFeatureSnapBinding';
 import MapFeatureSnapPreviewLayers from './MapFeatureSnapPreviewLayers.vue';
-import type { MapFeatureSnapOptions } from './types';
+import type {
+  MapFeatureSnapCoordinate,
+  MapFeatureSnapDecision,
+  MapFeatureSnapOptions,
+} from './types';
 import {
   mapFeatureSnapPlugin,
   MAP_FEATURE_SNAP_PLUGIN_TYPE,
@@ -45,6 +49,8 @@ export {
   MAP_FEATURE_SNAP_PREVIEW_SOURCE_ID,
 };
 export type {
+  MapFeatureSnapCoordinate,
+  MapFeatureSnapDecision,
   MapFeatureSnapBinding,
   MapFeatureSnapPluginDescriptor,
   ResolvedTerradrawSnapOptions,
@@ -55,12 +61,19 @@ export type {
   MapFeatureSnapFeatureResolverContext,
   MapFeatureSnapKind,
   MapFeatureSnapMode,
+  MapFeatureSnapInvalidReason,
+  MapFeatureSnapParticipant,
+  MapFeatureSnapRelation,
+  MapFeatureSnapResolution,
+  MapFeatureSnapTarget,
   MapFeatureSnapOptions,
   MapFeatureSnapParent,
   MapFeatureSnapBusinessLayerOptions,
+  MapFeatureSnapCandidate,
   MapFeatureSnapDrawnTargetOptions,
   MapFeatureSnapPluginApi,
   MapFeatureSnapPreviewOptions,
+  MapFeatureSnapPreviewSnapshot,
   MapFeatureSnapResolvedFeature,
   MapFeatureSnapResult,
   MapFeatureSnapRule,

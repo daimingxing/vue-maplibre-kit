@@ -1,9 +1,14 @@
-import { computed, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue';
+import { computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue';
 import type {
+  MapLayerSelectedFeature,
+  MapSelectionReplaceOptions,
+  MapSelectionDeactivateOptions,
   MapSelectionState,
+  MapSelectionUndoHistory,
   ResolvedMapSelectionToolOptions,
 } from '../../shared/mapLibre-controls-types';
 import { getMapGlobalMultiSelectDefaults } from '../../shared/map-global-config';
+import { resolveMapSelectionGestures } from '../../shared/map-selection-gestures';
 import type { MapSelectionBindingController, MapSelectionService } from '../types';
 import type { MapFeatureMultiSelectOptions, ResolvedMapFeatureMultiSelectOptions } from './types';
 
@@ -34,6 +39,9 @@ function normalizeMapFeatureMultiSelectOptions(
     targetLayerIds: rawOptions?.targetLayerIds || null,
     excludeLayerIds: [...(rawOptions?.excludeLayerIds || [])],
     canSelect: rawOptions?.canSelect,
+    gestures: resolveMapSelectionGestures(rawOptions?.gestures),
+    resolveRange: rawOptions?.resolveRange,
+    showControl: rawOptions?.showControl !== false,
   };
 }
 
@@ -55,10 +63,20 @@ export function useMapFeatureMultiSelectService(
   resolvedOptions: Readonly<Ref<ResolvedMapFeatureMultiSelectOptions>>;
   service: MapSelectionService;
   activate: () => void;
-  deactivate: () => void;
+  deactivate: (options?: MapSelectionDeactivateOptions) => void;
   toggle: () => void;
   clear: () => void;
   isActive: () => boolean;
+  getSelectedFeatures: () => MapLayerSelectedFeature[];
+  replaceSelectedFeatures: (
+    features: MapLayerSelectedFeature[],
+    options?: MapSelectionReplaceOptions
+  ) => void;
+  undo: () => boolean;
+  canUndo: () => boolean;
+  clearUndoHistory: () => void;
+  snapshotUndoHistory: () => MapSelectionUndoHistory;
+  restoreUndoHistory: (history: MapSelectionUndoHistory) => void;
   destroy: () => void;
 } {
   const { getOptions } = options;
@@ -76,6 +94,14 @@ export function useMapFeatureMultiSelectService(
       targetLayerIds: currentOptions.targetLayerIds,
       excludeLayerIds: [...currentOptions.excludeLayerIds],
       canSelect: currentOptions.canSelect,
+      gestures: {
+        clickAdd: currentOptions.gestures.clickAdd,
+        clickDeselect: currentOptions.gestures.clickDeselect,
+        box: { ...currentOptions.gestures.box },
+        range: { ...currentOptions.gestures.range },
+      },
+      resolveRange: currentOptions.resolveRange,
+      showControl: currentOptions.showControl,
     };
   });
 
@@ -111,9 +137,10 @@ export function useMapFeatureMultiSelectService(
 
   /**
    * 退出多选模式。
+   * @param options 是否按退出策略清空并派发变化；现场恢复应关闭派发
    */
-  const deactivate = (): void => {
-    bindingRef.value?.deactivate();
+  const deactivate = (options?: MapSelectionDeactivateOptions): void => {
+    bindingRef.value?.deactivate(options);
   };
 
   /**
@@ -141,6 +168,65 @@ export function useMapFeatureMultiSelectService(
    */
   const isActive = (): boolean => {
     return bindingRef.value?.isActive() ?? state.value.isActive;
+  };
+
+  /**
+   * 读取当前完整选中集快照。
+   * @returns 当前选中集副本
+   */
+  const getSelectedFeatures = (): MapLayerSelectedFeature[] => {
+    return bindingRef.value?.getSelectedFeatures() ?? [...state.value.selectedFeatures];
+  };
+
+  /**
+   * 原子替换完整选中集。
+   * @param features 下一份完整选中集
+   * @param options 是否派发变化及原因
+   */
+  const replaceSelectedFeatures = (
+    features: MapLayerSelectedFeature[],
+    options?: MapSelectionReplaceOptions
+  ): void => {
+    bindingRef.value?.replaceSelectedFeatures(features, options);
+  };
+
+  /**
+   * 回退到上一次用户可见选中变化之前的状态。
+   * @returns 发生回退时返回 true；无绑定、未激活或无历史时返回 false
+   */
+  const undo = (): boolean => {
+    return bindingRef.value?.undo() ?? false;
+  };
+
+  /**
+   * 当前是否存在可回退历史。
+   * @returns 有历史时返回 true
+   */
+  const canUndo = (): boolean => {
+    return bindingRef.value?.canUndo() ?? false;
+  };
+
+  /**
+   * 清空当前多选编辑周期内的 undo 历史。
+   */
+  const clearUndoHistory = (): void => {
+    bindingRef.value?.clearUndoHistory();
+  };
+
+  /**
+   * 读取当前 undo 历史副本。
+   * @returns 可独立恢复的 undo 历史
+   */
+  const snapshotUndoHistory = (): MapSelectionUndoHistory => {
+    return bindingRef.value?.snapshotUndoHistory() ?? { snapshots: [] };
+  };
+
+  /**
+   * 恢复指定 undo 历史。
+   * @param history 待恢复的 undo 历史
+   */
+  const restoreUndoHistory = (history: MapSelectionUndoHistory): void => {
+    bindingRef.value?.restoreUndoHistory(history);
   };
 
   /**
@@ -188,7 +274,7 @@ export function useMapFeatureMultiSelectService(
 
   /**
    * 销毁多选服务。
-   * 插件动态移除时需要停止配置监听，并释放交互核心绑定。
+   * 插件动态重建时不在组件 setup 中，必须由插件宿主显式调用；卸载钩子只是组件场景的兜底。
    */
   const destroy = (): void => {
     stopOptionsWatch();
@@ -198,9 +284,11 @@ export function useMapFeatureMultiSelectService(
     };
   };
 
-  onBeforeUnmount(() => {
-    destroy();
-  });
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      destroy();
+    });
+  }
 
   const service: MapSelectionService = {
     state,
@@ -212,6 +300,13 @@ export function useMapFeatureMultiSelectService(
     toggle,
     clear,
     isActive,
+    getSelectedFeatures,
+    replaceSelectedFeatures,
+    undo,
+    canUndo,
+    clearUndoHistory,
+    snapshotUndoHistory,
+    restoreUndoHistory,
   };
 
   return {
@@ -223,6 +318,13 @@ export function useMapFeatureMultiSelectService(
     toggle,
     clear,
     isActive,
+    getSelectedFeatures,
+    replaceSelectedFeatures,
+    undo,
+    canUndo,
+    clearUndoHistory,
+    snapshotUndoHistory,
+    restoreUndoHistory,
     destroy,
   };
 }

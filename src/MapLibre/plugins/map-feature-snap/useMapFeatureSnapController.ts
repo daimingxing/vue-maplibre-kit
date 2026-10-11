@@ -18,6 +18,7 @@ import type {
   MapFeatureSnapOptions,
   MapFeatureSnapPanelTargetKey,
   MapFeatureSnapPreviewOptions,
+  MapFeatureSnapPreviewSnapshot,
   MapFeatureSnapResult,
   MapFeatureSnapRule,
   MapFeatureSnapTargetOptions,
@@ -599,6 +600,11 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     return isActive.value && resolvedOptions.value?.preview?.enabled !== false;
   });
 
+  /** 独立吸附点是否显示。 */
+  const previewPointEnabled = computed(() => {
+    return previewEnabled.value && resolvedOptions.value?.preview?.pointEnabled !== false;
+  });
+
   /**
    * 当前吸附预览图层数据源。
    */
@@ -616,6 +622,14 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
    */
   function clearPreview(): void {
     bindingRef.value?.clearPreview();
+  }
+
+  /**
+   * 读取当前已经提交并可供交互消费的吸附快照。
+   * @returns 当前吸附快照；绑定或快照不存在时返回 null
+   */
+  function getPreviewSnapshot(): MapFeatureSnapPreviewSnapshot | null {
+    return bindingRef.value?.getPreviewSnapshot() ?? null;
   }
 
   /**
@@ -848,6 +862,7 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
     controlRuleItems,
     controlGroups,
     previewEnabled,
+    previewPointEnabled,
     previewData,
     previewPointStyle,
     binding: bindingRef,
@@ -865,5 +880,6 @@ export function useMapFeatureSnapController(options: UseMapFeatureSnapController
       bindingRef.value?.resolveMapEvent(event) || createEmptyMapFeatureSnapResult(),
     scheduleMapEvent,
     clearPreview,
+    getPreviewSnapshot,
   };
 }

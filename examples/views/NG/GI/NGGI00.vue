@@ -206,8 +206,8 @@ import {
   type SelectionSummaryRow,
 } from "./components/NGGI00DemoPanel.shared";
 import { computed, ref, reactive, shallowRef } from "vue";
-import mapGeojson from "./mock/map.geojson";
-import mapGeojson2 from "./mock/map2.geojson";
+import mapGeojsonRaw from "./mock/map.geojson?raw";
+import mapGeojson2Raw from "./mock/map2.geojson?raw";
 import { ElButton, ElMessage } from "element-plus";
 import {
   MapLineMeasureTool,
@@ -333,6 +333,14 @@ import sendIcon from "./assets/send.svg";
 import texturelabsWater from "./assets/Texturelabs_Water.jpg";
 
 /**
+ * 解析示例 GeoJSON 文本。
+ * @param text GeoJSON 文本
+ */
+function parseGeojson(text: string): MapCommonFeatureCollection {
+  return JSON.parse(text) as MapCommonFeatureCollection;
+}
+
+/**
  * ==========================
  * 业务数据源与图层常量定义
  * ==========================
@@ -340,10 +348,10 @@ import texturelabsWater from "./assets/Texturelabs_Water.jpg";
 
 // 业务数据响应式引用 (通常来自接口请求或本地 mock)
 const test_geojson = ref<MapCommonFeatureCollection>(
-  mapGeojson as MapCommonFeatureCollection,
+  parseGeojson(mapGeojsonRaw),
 );
 const test_geojson_secondary = ref<MapCommonFeatureCollection>(
-  mapGeojson2 as MapCommonFeatureCollection,
+  parseGeojson(mapGeojson2Raw),
 );
 
 /**

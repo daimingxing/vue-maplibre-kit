@@ -120,7 +120,9 @@ import { cloneDeep, merge } from 'lodash-es';
 import TerradrawLineDecorationLayers from '../terradraw/TerradrawLineDecorationLayers.vue';
 import { instantiateTerradrawModeOptions } from '../terradraw/terradraw-mode-factory';
 import {
+  createTerradrawSnapInputCoordinator,
   createTerradrawReadySyncManager,
+  guardTerradrawModeInputs,
   syncTerradrawLineAndPolygonSnapping,
 } from '../terradraw/terradraw-snap-sync';
 import {
@@ -574,6 +576,27 @@ function shouldIgnoreMapInteractivePointerEvent(): boolean {
 
 /** TerraDraw ready 前同步任务管理器。 */
 const terradrawReadySyncManager = createTerradrawReadySyncManager();
+/** 绘图控件复用的 TerraDraw invalid 输入守卫协调器。 */
+const drawSnapInputCoordinator = createTerradrawSnapInputCoordinator();
+/** 测量控件复用的 TerraDraw invalid 输入守卫协调器。 */
+const measureSnapInputCoordinator = createTerradrawSnapInputCoordinator();
+
+/**
+ * 为当前控件启用的标准 TerraDraw 绘制模式接入 invalid 输入守卫。
+ * @param modeOptions 已实例化的 TerraDraw mode 集合
+ * @param coordinator 当前控件的吸附输入协调器
+ */
+function guardTerradrawSnapModes(
+  modeOptions: Record<string, unknown>,
+  coordinator: ReturnType<typeof createTerradrawSnapInputCoordinator>
+): void {
+  ['point', 'linestring', 'polygon'].forEach((modeName) => {
+    const mode = modeOptions[modeName];
+    if (mode && typeof mode === 'object') {
+      guardTerradrawModeInputs(mode, coordinator);
+    }
+  });
+}
 
 /**
  * 预处理绘图控件配置，生成底层控件构造参数与附属绑定配置。
@@ -603,6 +626,7 @@ function prepareDrawControlOptions(config: TerradrawControlOptions | null | unde
 
   // 容器层统一负责把 plain object 配置实例化为 TerraDraw 模式。
   controlOptions.modeOptions = instantiateTerradrawModeOptions(controlOptions.modeOptions);
+  guardTerradrawSnapModes(controlOptions.modeOptions, drawSnapInputCoordinator);
 
   return {
     position,
@@ -638,6 +662,7 @@ function prepareMeasureControlOptions(config: MeasureControlOptions | null | und
 
   // 测量控件同样支持直接传配置对象，由容器层统一实例化。
   controlOptions.modeOptions = instantiateTerradrawModeOptions(controlOptions.modeOptions);
+  guardTerradrawSnapModes(controlOptions.modeOptions, measureSnapInputCoordinator);
 
   return {
     position,
@@ -661,6 +686,7 @@ function syncDrawSnapping(localSnapConfig: TerradrawSnapSharedOptions | boolean 
       return resolveTerradrawSnapOptions('draw', nextLocalSnapConfig);
     },
     ensureReadyForModeSync: terradrawReadySyncManager.ensureReadyForModeSync,
+    inputCoordinator: drawSnapInputCoordinator,
     resolveMapResult: resolveTerradrawMapSnapResult,
     resolveDrawnResult: (event) => {
       const resolvedSnapOptions = resolveTerradrawSnapOptions('draw', localSnapConfig);
@@ -687,6 +713,7 @@ function syncMeasureSnapping(
       return resolveTerradrawSnapOptions('measure', nextLocalSnapConfig);
     },
     ensureReadyForModeSync: terradrawReadySyncManager.ensureReadyForModeSync,
+    inputCoordinator: measureSnapInputCoordinator,
     resolveMapResult: resolveTerradrawMapSnapResult,
     resolveDrawnResult: (event) => {
       const resolvedSnapOptions = resolveTerradrawSnapOptions('measure', localSnapConfig);

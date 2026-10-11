@@ -7,10 +7,16 @@ import type {
   MapLayerInteractiveLayerOptions,
   MapLayerInteractiveOptions,
   MapLayerSelectedFeature,
+  MapSelectionUndoHistory,
+  MapSelectionUndoSnapshot,
   MapLayerSelectionChangeContext,
   MapSelectionChangeReason,
   MapSelectionFilterContext,
   MapSelectionMode,
+  MapSelectionRangeRejectInfo,
+  MapSelectionReplaceOptions,
+  MapSelectionDeactivateOptions,
+  ResolvedMapSelectionGestures,
   ResolvedMapSelectionToolOptions,
 } from '../shared/mapLibre-controls-types';
 import type { MapSnapBinding, MapSelectionService } from '../plugins/types';
@@ -20,6 +26,12 @@ import {
   isMapInteractiveEventHandled,
   markMapInteractiveEventHandled,
 } from './mapInteractiveEventHandled';
+import {
+  isEditableKeyboardTarget,
+  isPlainSelectionClick,
+  matchesSelectionModifier,
+  resolveMapSelectionGestures,
+} from '../shared/map-selection-gestures';
 
 export interface UseMapInteractiveOptions {
   /** 地图实例引用，通常是通过 useMap() 获取的 */
@@ -45,6 +57,7 @@ interface HoveredLayerTarget {
 interface EventTargetResolution {
   rawTarget: HoveredLayerTarget | null;
   effectiveTarget: HoveredLayerTarget | null;
+  renderedFeatures: MapGeoJSONFeature[];
   pointerContext: Partial<MapLayerInteractiveContext>;
 }
 
@@ -67,6 +80,8 @@ interface BoxSelectionSession {
   hasDragged: boolean;
   /** 进入框选前拖拽平移是否开启 */
   dragPanWasEnabled: boolean;
+  /** 本次按下是否匹配框选 trigger；仅此时拖拽执行框选并显示框选浮层。 */
+  applyBox: boolean;
 }
 
 type LayerInteractiveCallback =
@@ -82,6 +97,7 @@ type TopLevelInteractiveCallback =
   | MapLayerInteractiveOptions['onReady']
   | MapLayerInteractiveOptions['onHoverEnter']
   | MapLayerInteractiveOptions['onHoverLeave']
+  | MapLayerInteractiveOptions['onHoverResolve']
   | MapLayerInteractiveOptions['onClick']
   | MapLayerInteractiveOptions['onDoubleClick']
   | MapLayerInteractiveOptions['onContextMenu']
@@ -101,12 +117,17 @@ type PointerEventType = Extract<MapLayerInteractiveEventType, 'click' | 'dblclic
 const BOX_SELECTION_MIN_DISTANCE = 4;
 
 /** 选择服务缺省配置。 */
+const defaultSelectionGestures: ResolvedMapSelectionGestures = resolveMapSelectionGestures(undefined);
+
+/** 选择服务缺省配置。 */
 const defaultSelectionOptions: ResolvedMapSelectionToolOptions = {
   enabled: false,
   deactivateBehavior: 'clear',
   closeOnEscape: true,
   targetLayerIds: null,
   excludeLayerIds: [],
+  gestures: { ...defaultSelectionGestures },
+  showControl: true,
 };
 
 /**
@@ -212,6 +233,7 @@ function hasInteractiveHandlers(interactive: MapLayerInteractiveOptions): boolea
     interactive.onReady ||
       interactive.onHoverEnter ||
       interactive.onHoverLeave ||
+      interactive.onHoverResolve ||
       interactive.onClick ||
       interactive.onDoubleClick ||
       interactive.onContextMenu ||
@@ -323,9 +345,12 @@ export function useMapInteractive(options: UseMapInteractiveOptions) {
  * 创建普通图层统一交互绑定实例。
  * @param map 当前 MapLibre 地图实例
  * @param getInteractive 读取最新普通图层交互配置的方法
+ * @param getSnapBinding 读取当前吸附绑定
+ * @param getSelectionService 读取当前多选服务
+ * @param shouldIgnorePointerEvent 外部绘制/测量是否接管指针事件
  * @returns 绑定实例
  */
-function createMapInteractiveBinding(
+export function createMapInteractiveBinding(
   map: MaplibreMap,
   getInteractive: () => MapLayerInteractiveOptions | null | undefined,
   getSnapBinding?: (() => MapSnapBinding | null | undefined) | undefined,
@@ -334,6 +359,10 @@ function createMapInteractiveBinding(
 ): MapInteractiveBinding {
   const selectionService = getSelectionService?.() || null;
   let hoveredTarget: HoveredLayerTarget | null = null;
+  let notifiedHoverTarget: HoveredLayerTarget | null = null;
+  let candidateHoverTarget: HoveredLayerTarget | null = null;
+  let hoverEventTimer: ReturnType<typeof setTimeout> | null = null;
+  let hoverEventGeneration = 0;
   let selectedTargetMap = new Map<string, HoveredLayerTarget>();
   let selectedFeatures: MapLayerSelectedFeature[] = [];
   let primarySelectedTarget: HoveredLayerTarget | null = null;
@@ -344,6 +373,8 @@ function createMapInteractiveBinding(
   let pendingHoverEvent: MapMouseEvent | null = null;
   let suppressNextClick = false;
   let boxSelectionSession: BoxSelectionSession | null = null;
+  let rangeAnchorKey: string | null = null;
+  let undoStack: MapSelectionUndoSnapshot[] = [];
   let boxZoomWasEnabled = false;
   let hasCapturedBoxZoomState = false;
   let keydownListenerBound = false;
@@ -419,6 +450,106 @@ function createMapInteractiveBinding(
    */
   const getSelectionOptions = (): ResolvedMapSelectionToolOptions => {
     return selectionService?.getOptions() || defaultSelectionOptions;
+  };
+
+  /**
+   * 读取当前生效的多选手势开关。
+   * @returns 归一化后的手势开关
+   */
+  const getSelectionGestures = (): ResolvedMapSelectionGestures => {
+    return getSelectionOptions().gestures ?? defaultSelectionGestures;
+  };
+
+  /**
+   * 清除当前范围锚点。
+   */
+  const clearRangeAnchor = (): void => {
+    rangeAnchorKey = null;
+  };
+
+  /**
+   * 复制当前选中集、主选中项和范围起点，作为 undo 快照。
+   * @returns 独立快照
+   */
+  const cloneUndoSnapshot = (): MapSelectionUndoSnapshot => {
+    return {
+      selectedFeatures: selectedFeatures.map((feature) => ({
+        ...feature,
+        properties: cloneSerializable(feature.properties),
+        snapshot: cloneSerializable(feature.snapshot),
+      })),
+      primarySelectedKey,
+      rangeAnchorKey,
+    };
+  };
+
+  /**
+   * 判断两份选中集是否包含相同稳定键。
+   * @param left 左侧选中集
+   * @param right 右侧选中集
+   * @returns 键集合相同时返回 true
+   */
+  const hasSameSelectedKeys = (
+    left: MapLayerSelectedFeature[],
+    right: MapLayerSelectedFeature[]
+  ): boolean => {
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    const rightKeys = new Set(right.map((feature) => feature.key));
+    return left.every((feature) => rightKeys.has(feature.key));
+  };
+
+  /**
+   * 在选中集发生用户可见变化后写入 undo 历史。
+   * @param snapshot 变化前快照
+   */
+  const pushUndoSnapshot = (snapshot: MapSelectionUndoSnapshot): void => {
+    if (hasSameSelectedKeys(snapshot.selectedFeatures, selectedFeatures)) {
+      return;
+    }
+
+    undoStack.push(snapshot);
+  };
+
+  /**
+   * 清空当前多选编辑周期内的 undo 历史。
+   */
+  const clearUndoHistory = (): void => {
+    undoStack = [];
+  };
+
+  /**
+   * 读取当前 undo 历史副本，供临时多选会话保存现场。
+   * @returns 可独立恢复的 undo 历史
+   */
+  const snapshotUndoHistory = (): MapSelectionUndoHistory => ({
+    snapshots: undoStack.map((snapshot) => ({
+      selectedFeatures: snapshot.selectedFeatures.map((feature) => ({
+        ...feature,
+        properties: cloneSerializable(feature.properties),
+        snapshot: cloneSerializable(feature.snapshot),
+      })),
+      primarySelectedKey: snapshot.primarySelectedKey,
+      rangeAnchorKey: snapshot.rangeAnchorKey,
+    })),
+  });
+
+  /**
+   * 恢复指定 undo 历史，避免临时多选会话覆盖常驻多选历史。
+   * @param history 待恢复的 undo 历史
+   */
+  const restoreUndoHistory = (history: MapSelectionUndoHistory): void => {
+    undoStack = history.snapshots.map((snapshot) => ({
+      selectedFeatures: snapshot.selectedFeatures.map((feature) => ({
+        ...feature,
+        properties: cloneSerializable(feature.properties),
+        snapshot: cloneSerializable(feature.snapshot),
+      })),
+      primarySelectedKey: snapshot.primarySelectedKey,
+      rangeAnchorKey: snapshot.rangeAnchorKey,
+    }));
   };
 
   /**
@@ -836,7 +967,9 @@ function createMapInteractiveBinding(
     addedTargets: HoveredLayerTarget[],
     removedTargets: HoveredLayerTarget[],
     reason: MapSelectionChangeReason,
-    extraContext: Partial<MapLayerInteractiveContext> = {}
+    extraContext: Partial<MapLayerInteractiveContext> & {
+      rangeReject?: MapSelectionRangeRejectInfo;
+    } = {}
   ): void => {
     const interactive = getCurrentInteractive();
     if (!interactive?.onSelectionChange) {
@@ -850,14 +983,18 @@ function createMapInteractiveBinding(
     const removedFeatures = removedTargets
       .map((target) => createSelectedFeatureRecord(target))
       .filter(Boolean) as MapLayerSelectedFeature[];
+    const { rangeReject, ...pointerExtraContext } = extraContext;
     const selectionExtraContext: Partial<MapLayerInteractiveContext> &
-      Pick<MapLayerSelectionChangeContext, 'addedFeatures' | 'removedFeatures' | 'reason'> = {
-      ...extraContext,
+      Pick<MapLayerSelectionChangeContext, 'addedFeatures' | 'removedFeatures' | 'reason'> & {
+        rangeReject?: MapSelectionRangeRejectInfo;
+      } = {
+      ...pointerExtraContext,
       selectedFeatures: [...selectedFeatures],
       selectedCount: selectedFeatures.length,
       addedFeatures,
       removedFeatures,
       reason,
+      ...(rangeReject ? { rangeReject } : {}),
     };
     const selectionContext = createInteractiveContext(
       primaryTarget?.feature || null,
@@ -880,6 +1017,7 @@ function createMapInteractiveBinding(
 
   /**
    * 清空当前 hover 状态，并按需触发 leave 回调。
+   * 视觉状态立即清除；进入/离开回调走统一延迟提交路径。
    * @param shouldNotifyLeave 是否触发离开回调
    * @param extraContext 离开回调补充的上下文
    */
@@ -892,22 +1030,25 @@ function createMapInteractiveBinding(
     setCanvasCursor(null);
     setFeatureHoverState(previousTarget, false);
 
-    if (!previousTarget || !shouldNotifyLeave) {
+    const resolveContext: Partial<MapLayerInteractiveContext> = {
+      ...extraContext,
+      features: extraContext.features ?? [],
+    };
+    emitTopLevelCallback(
+      null,
+      'hoverresolve',
+      (interactive) => interactive.onHoverResolve,
+      resolveContext
+    );
+
+    if (!shouldNotifyLeave) {
+      cancelHoverEventTimer();
+      candidateHoverTarget = null;
+      notifiedHoverTarget = null;
       return;
     }
 
-    emitTopLevelCallback(
-      previousTarget,
-      'hoverleave',
-      (interactive) => interactive.onHoverLeave,
-      extraContext
-    );
-    emitLayerCallback(
-      previousTarget,
-      'hoverleave',
-      (layerConfig) => layerConfig.onHoverLeave,
-      extraContext
-    );
+    scheduleHoverEvents(null, resolveContext);
   };
 
   /**
@@ -928,6 +1069,7 @@ function createMapInteractiveBinding(
     } = clearOptions;
     const previousSelectedMap = new Map(selectedTargetMap);
     const previousTargets = getCurrentSelectedTargets();
+    const before = cloneUndoSnapshot();
 
     previousTargets.forEach((target) => {
       setFeatureSelectedState(target, false);
@@ -936,6 +1078,7 @@ function createMapInteractiveBinding(
     selectedTargetMap.clear();
     primarySelectedTarget = null;
     primarySelectedKey = null;
+    clearRangeAnchor();
     syncSelectionState();
 
     if (shouldNotifyDeselect) {
@@ -951,6 +1094,9 @@ function createMapInteractiveBinding(
 
     const removedTargets = Array.from(previousSelectedMap.values());
     if (shouldEmitSelectionChange && removedTargets.length > 0) {
+      if (reason !== 'deactivate' && reason !== 'undo') {
+        pushUndoSnapshot(before);
+      }
       emitSelectionChange([], removedTargets, reason, extraContext);
     }
   };
@@ -1063,25 +1209,156 @@ function createMapInteractiveBinding(
   };
 
   /**
-   * 根据当前鼠标事件解析命中的业务图层目标。
-   * @param event 当前地图鼠标事件
-   * @returns 命中的图层目标；未命中时返回 null
+   * 读取当前交互配置的 Hover 事件延迟。
+   * @returns 大于等于 0 的毫秒数；未配置时为 0
    */
-  const getEventTarget = (event: MapMouseEvent): HoveredLayerTarget | null => {
-    const availableLayerIds = getLayerIdsInPriorityOrder();
-    if (!availableLayerIds.length) {
-      return null;
+  const getHoverDelayMs = (): number => {
+    const delayMs = getCurrentInteractive()?.hoverDelayMs;
+    return typeof delayMs === 'number' && Number.isFinite(delayMs) && delayMs > 0 ? delayMs : 0;
+  };
+
+  /**
+   * 判断当前指针事件是否具备 Hover 能力。
+   * 触摸输入不会合成 Hover，避免点击后出现意外进入/离开回调。
+   * @param event 当前地图鼠标事件
+   * @returns 鼠标或笔悬停时返回 true
+   */
+  const isHoverCapablePointer = (event: MapMouseEvent): boolean => {
+    const originalEvent = event.originalEvent as PointerEvent | TouchEvent | MouseEvent | undefined;
+    if (!originalEvent) {
+      return true;
     }
 
-    const availableLayerIdSet = new Set(availableLayerIds);
-    const features = map.queryRenderedFeatures(event.point, {
+    if ('pointerType' in originalEvent && originalEvent.pointerType) {
+      return originalEvent.pointerType === 'mouse' || originalEvent.pointerType === 'pen';
+    }
+
+    if ('touches' in originalEvent && originalEvent.touches.length > 0) {
+      return false;
+    }
+
+    return true;
+  };
+
+  /**
+   * 取消尚未提交的 Hover 事件计时器，并使过期回调失效。
+   */
+  const cancelHoverEventTimer = (): void => {
+    hoverEventGeneration += 1;
+    if (hoverEventTimer !== null) {
+      globalThis.clearTimeout(hoverEventTimer);
+      hoverEventTimer = null;
+    }
+  };
+
+  /**
+   * 提交当前候选 Hover 目标的进入/离开回调。
+   * delayMs 为 0 时同步执行，与延迟路径共用同一套集合差语义。
+   * @param extraContext 当前指针上下文
+   */
+  const commitHoverEvents = (extraContext: Partial<MapLayerInteractiveContext>): void => {
+    hoverEventTimer = null;
+    const nextTarget = candidateHoverTarget;
+    if (isSameTarget(notifiedHoverTarget, nextTarget)) {
+      notifiedHoverTarget = nextTarget;
+      return;
+    }
+
+    if (notifiedHoverTarget) {
+      emitTopLevelCallback(
+        notifiedHoverTarget,
+        'hoverleave',
+        (interactive) => interactive.onHoverLeave,
+        extraContext
+      );
+      emitLayerCallback(
+        notifiedHoverTarget,
+        'hoverleave',
+        (layerConfig) => layerConfig.onHoverLeave,
+        extraContext
+      );
+    }
+
+    if (nextTarget) {
+      emitTopLevelCallback(
+        nextTarget,
+        'hoverenter',
+        (interactive) => interactive.onHoverEnter,
+        extraContext
+      );
+      emitLayerCallback(nextTarget, 'hoverenter', (layerConfig) => layerConfig.onHoverEnter, extraContext);
+    }
+
+    notifiedHoverTarget = nextTarget;
+  };
+
+  /**
+   * 在即时视觉 Hover 之后调度进入/离开回调。
+   * 候选目标未变化时不重启计时器；回到已通知目标时取消待执行离开。
+   * @param nextTarget 当前视觉 Hover 目标
+   * @param extraContext 当前指针上下文
+   */
+  const scheduleHoverEvents = (
+    nextTarget: HoveredLayerTarget | null,
+    extraContext: Partial<MapLayerInteractiveContext>
+  ): void => {
+    if (isSameTarget(candidateHoverTarget, nextTarget) && hoverEventTimer !== null) {
+      candidateHoverTarget = nextTarget;
+      return;
+    }
+
+    if (isSameTarget(notifiedHoverTarget, nextTarget)) {
+      cancelHoverEventTimer();
+      candidateHoverTarget = nextTarget;
+      return;
+    }
+
+    cancelHoverEventTimer();
+    candidateHoverTarget = nextTarget;
+    const delayMs = getHoverDelayMs();
+    const generation = hoverEventGeneration;
+    const submit = () => {
+      if (generation !== hoverEventGeneration) {
+        return;
+      }
+      commitHoverEvents(extraContext);
+    };
+
+    if (delayMs === 0) {
+      submit();
+      return;
+    }
+
+    hoverEventTimer = globalThis.setTimeout(submit, delayMs);
+  };
+
+  /**
+   * 查询当前指针位置的全部交互图层命中。
+   * @param event 当前地图鼠标事件
+   * @returns 本次解析使用的渲染命中；无可用图层时为空数组
+   */
+  const queryEventRenderedFeatures = (event: MapMouseEvent): MapGeoJSONFeature[] => {
+    const availableLayerIds = getLayerIdsInPriorityOrder();
+    if (!availableLayerIds.length) {
+      return [];
+    }
+
+    return map.queryRenderedFeatures(event.point, {
       layers: availableLayerIds,
     }) as MapGeoJSONFeature[];
+  };
 
+  /**
+   * 从已查询的渲染命中中选取当前有效图层目标。
+   * @param features 本次指针解析得到的渲染命中
+   * @returns 命中的图层目标；未命中时返回 null
+   */
+  const getEventTargetFromFeatures = (features: MapGeoJSONFeature[]): HoveredLayerTarget | null => {
     if (!features.length) {
       return null;
     }
 
+    const availableLayerIdSet = new Set(getLayerIdsInPriorityOrder());
     for (const [layerId] of sortLayerEntriesByHitPriority(getLayerEntries())) {
       if (!availableLayerIdSet.has(layerId)) {
         continue;
@@ -1103,10 +1380,11 @@ function createMapInteractiveBinding(
    * 根据普通图层吸附结果构建当前事件的有效命中目标。
    * 只有当吸附目标图层同时声明在普通交互配置里时，才会将其视为有效交互目标。
    * @param event 当前地图鼠标事件
-   * @returns 原始命中目标、有效命中目标以及补充后的指针上下文
+   * @returns 原始命中目标、有效命中目标、完整渲染命中以及补充后的指针上下文
    */
   const resolveEventTarget = (event: MapMouseEvent): EventTargetResolution => {
-    const rawTarget = getEventTarget(event);
+    const renderedFeatures = queryEventRenderedFeatures(event);
+    const rawTarget = getEventTargetFromFeatures(renderedFeatures);
     const snapResult = getSnapBinding?.()?.resolveMapEvent(event) || null;
     let effectiveTarget = rawTarget;
     const rawLayerConfig = getLayerConfig(rawTarget?.layerId || null);
@@ -1127,10 +1405,12 @@ function createMapInteractiveBinding(
     return {
       rawTarget,
       effectiveTarget,
+      renderedFeatures,
       pointerContext: createPointerContext(event, {
         ...(snapResult?.matched && snapResult.lngLat ? { lngLat: snapResult.lngLat } : {}),
         hitFeature: rawTarget?.feature || null,
         snapResult,
+        features: renderedFeatures,
       }),
     };
   };
@@ -1144,6 +1424,7 @@ function createMapInteractiveBinding(
 
 /**
  * 将 hover 命中目标同步到内部状态，并分发顶层与图层级回调。
+ * 光标和 feature-state.hover 立即更新；进入/离开回调受 hoverDelayMs 控制。
  * @param target 当前 hover 命中目标
  * @param pointerContext 当前 hover 事件的标准化指针上下文
  */
@@ -1151,26 +1432,42 @@ const applyHoverTarget = (
     target: HoveredLayerTarget | null,
     pointerContext: Partial<MapLayerInteractiveContext>
   ): void => {
+    const resolveContext: Partial<MapLayerInteractiveContext> = {
+      ...pointerContext,
+      features: pointerContext.features ?? [],
+    };
+
     if (!target) {
-      clearHoverState(true, pointerContext);
+      clearHoverState(true, resolveContext);
       return;
     }
 
     if (isSameTarget(hoveredTarget, target)) {
       hoveredTarget = target;
       setCanvasCursor(target);
+      emitTopLevelCallback(
+        target,
+        'hoverresolve',
+        (interactive) => interactive.onHoverResolve,
+        resolveContext
+      );
       return;
     }
 
     if (hoveredTarget) {
-      clearHoverState(true, pointerContext);
+      setFeatureHoverState(hoveredTarget, false);
     }
 
     hoveredTarget = target;
     setCanvasCursor(target);
     setFeatureHoverState(target, true);
-    emitTopLevelCallback(target, 'hoverenter', (interactive) => interactive.onHoverEnter, pointerContext);
-    emitLayerCallback(target, 'hoverenter', (layerConfig) => layerConfig.onHoverEnter, pointerContext);
+    emitTopLevelCallback(
+      target,
+      'hoverresolve',
+      (interactive) => interactive.onHoverResolve,
+      resolveContext
+    );
+    scheduleHoverEvents(target, resolveContext);
   };
 
   /**
@@ -1302,12 +1599,14 @@ const applyHoverTarget = (
       return false;
     }
 
+    const before = cloneUndoSnapshot();
     if (selectedTargetMap.has(selectionKey)) {
       const removedTarget = removeSelectedTargetByKey(selectionKey, pointerContext);
       if (!removedTarget) {
         return false;
       }
 
+      pushUndoSnapshot(before);
       emitSelectionChange([], [removedTarget], 'click', pointerContext);
       return true;
     }
@@ -1317,6 +1616,7 @@ const applyHoverTarget = (
     primarySelectedKey = selectionKey;
     setFeatureSelectedState(target, true);
     syncSelectionState();
+    pushUndoSnapshot(before);
     emitLayerCallback(
       target,
       'featureselect',
@@ -1337,6 +1637,7 @@ const applyHoverTarget = (
     targets: HoveredLayerTarget[],
     pointerContext: Partial<MapLayerInteractiveContext>
   ): void => {
+    const before = cloneUndoSnapshot();
     const addedTargets: HoveredLayerTarget[] = [];
 
     targets.forEach((target) => {
@@ -1363,6 +1664,7 @@ const applyHoverTarget = (
     }
 
     syncSelectionState();
+    pushUndoSnapshot(before);
     addedTargets.forEach((target) => {
       emitLayerCallback(
         target,
@@ -1372,6 +1674,433 @@ const applyHoverTarget = (
       );
     });
     emitSelectionChange(addedTargets, [], 'box', pointerContext);
+  };
+
+  /**
+   * 从公开选中项快照构造内部命中目标，供范围追加和选中集恢复使用。
+   * @param feature 公开选中项快照
+   * @returns 内部命中目标；缺少稳定身份时返回 null
+   */
+  const createTargetFromSelectedFeature = (
+    feature: MapLayerSelectedFeature
+  ): HoveredLayerTarget | null => {
+    if (!feature.sourceId || feature.featureId === null || !feature.layerId) {
+      return null;
+    }
+
+    return {
+      feature: {
+        type: 'Feature',
+        id: feature.featureId,
+        source: feature.sourceId,
+        sourceLayer: feature.sourceLayer || undefined,
+        properties: feature.properties,
+        geometry: feature.snapshot?.geometry ?? undefined,
+        layer: { id: feature.layerId },
+      } as MapGeoJSONFeature,
+      layerId: feature.layerId,
+    };
+  };
+
+  /**
+   * 将范围成员一次性追加到当前选中集。
+   * 成功时只派发一次 range 变化，且不替换范围锚点。
+   * @param features 范围解析得到的成员
+   * @param pointerContext 当前指针上下文
+   */
+  const appendRangeSelectionTargets = (
+    features: MapLayerSelectedFeature[],
+    pointerContext: Partial<MapLayerInteractiveContext>
+  ): void => {
+    const before = cloneUndoSnapshot();
+    const addedTargets: HoveredLayerTarget[] = [];
+
+    features.forEach((feature) => {
+      const target = createTargetFromSelectedFeature(feature);
+      const selectionKey = feature.key || (target ? createSelectionKey(target.feature) : null);
+      if (!target || !selectionKey || selectedTargetMap.has(selectionKey)) {
+        return;
+      }
+
+      selectedTargetMap.set(selectionKey, target);
+      setFeatureSelectedState(target, true);
+      addedTargets.push(target);
+    });
+
+    if (addedTargets.length === 0) {
+      return;
+    }
+
+    syncSelectionState();
+    pushUndoSnapshot(before);
+    addedTargets.forEach((target) => {
+      emitLayerCallback(
+        target,
+        'featureselect',
+        (layerConfig) => layerConfig.onFeatureSelect,
+        pointerContext
+      );
+    });
+    emitSelectionChange(addedTargets, [], 'range', pointerContext);
+  };
+
+  /**
+   * 没有锚点时选中当前要素并设为范围起点。
+   * @param target 当前命中目标
+   * @param pointerContext 当前指针上下文
+   */
+  const establishRangeAnchor = (
+    target: HoveredLayerTarget,
+    pointerContext: Partial<MapLayerInteractiveContext>
+  ): void => {
+    const selectionKey = createSelectionKey(target.feature);
+    if (!selectionKey || !canSelectTarget(target)) {
+      return;
+    }
+
+    if (!selectedTargetMap.has(selectionKey)) {
+      const before = cloneUndoSnapshot();
+      selectedTargetMap.set(selectionKey, target);
+      primarySelectedTarget = target;
+      primarySelectedKey = selectionKey;
+      setFeatureSelectedState(target, true);
+      syncSelectionState();
+      pushUndoSnapshot(before);
+      emitLayerCallback(
+        target,
+        'featureselect',
+        (layerConfig) => layerConfig.onFeatureSelect,
+        pointerContext
+      );
+      emitSelectionChange([target], [], 'click', pointerContext);
+    } else {
+      selectedTargetMap.set(selectionKey, target);
+      primarySelectedTarget = target;
+      primarySelectedKey = selectionKey;
+    }
+
+    rangeAnchorKey = selectionKey;
+  };
+
+  /**
+   * 处理多选模式下的范围手势。
+   * 无起点时把当前命中设为起点；有起点时解析闭区间并追加未选中成员。
+   * @param target 当前命中目标
+   * @param pointerContext 当前指针上下文
+   */
+  const handleRangeGestureClick = (
+    target: HoveredLayerTarget,
+    pointerContext: Partial<MapLayerInteractiveContext>
+  ): void => {
+    if (!canSelectTarget(target)) {
+      return;
+    }
+
+    if (!rangeAnchorKey) {
+      establishRangeAnchor(target, pointerContext);
+      return;
+    }
+
+    const anchorTarget = selectedTargetMap.get(rangeAnchorKey) || null;
+    const anchorRecord = createSelectedFeatureRecord(anchorTarget);
+    const endpointRecord = createSelectedFeatureRecord(target);
+    if (!anchorRecord || !endpointRecord) {
+      return;
+    }
+
+    const resolver = getSelectionOptions().resolveRange;
+    if (!resolver) {
+      emitSelectionChange([], [], 'reject', {
+        ...pointerContext,
+        rangeReject: {
+          reason: 'rangeUnsupported',
+          start: anchorRecord,
+          end: endpointRecord,
+        },
+      });
+      return;
+    }
+
+    const result = resolver(anchorRecord, endpointRecord, {
+      selectedFeatures: [...selectedFeatures],
+      map,
+    });
+    if (result.status === 'rejected') {
+      emitSelectionChange([], [], 'reject', {
+        ...pointerContext,
+        rangeReject: {
+          reason: result.reason,
+          start: anchorRecord,
+          end: endpointRecord,
+        },
+      });
+      return;
+    }
+
+    appendRangeSelectionTargets(result.features, pointerContext);
+  };
+
+  /**
+   * 按 clickAdd / clickDeselect 处理普通点击，并维护范围起点。
+   * 新增单个要素会滚动起点；反选当前起点会清除起点。
+   * @param target 当前命中目标
+   * @param pointerContext 当前指针上下文
+   * @param gestures 当前手势开关
+   */
+  const handlePlainMultiSelectClick = (
+    target: HoveredLayerTarget,
+    pointerContext: Partial<MapLayerInteractiveContext>,
+    gestures: ResolvedMapSelectionGestures
+  ): void => {
+    const selectionKey = createSelectionKey(target.feature);
+    const wasSelected = Boolean(selectionKey && selectedTargetMap.has(selectionKey));
+    if (wasSelected) {
+      if (!gestures.clickDeselect) {
+        return;
+      }
+
+      const changed = toggleMultiSelectedTarget(target, pointerContext);
+      if (changed && selectionKey && rangeAnchorKey === selectionKey) {
+        clearRangeAnchor();
+      }
+      return;
+    }
+
+    if (!gestures.clickAdd) {
+      return;
+    }
+
+    const changed = toggleMultiSelectedTarget(target, pointerContext);
+    if (changed && selectionKey) {
+      rangeAnchorKey = selectionKey;
+    }
+  };
+
+  /**
+   * 处理多选模式下的点击手势分流。
+   * 修饰键只执行范围；无起点时普通单击即可建起点。
+   * 连续点击范围模式下未选中目标走范围、已选中目标只反选。
+   * @param target 当前命中目标
+   * @param pointerContext 当前指针上下文
+   */
+  const handleMultiSelectClick = (
+    target: HoveredLayerTarget,
+    pointerContext: Partial<MapLayerInteractiveContext>
+  ): void => {
+    const gestures = getSelectionGestures();
+    const originalEvent = pointerContext.originalEvent as MouseEvent | undefined;
+    const rangeEnabled = gestures.range.enabled;
+    const rangeTrigger = gestures.range.trigger;
+
+    if (
+      rangeEnabled &&
+      rangeTrigger !== 'click' &&
+      matchesSelectionModifier(originalEvent, rangeTrigger)
+    ) {
+      handleRangeGestureClick(target, pointerContext);
+      return;
+    }
+
+    if (!isPlainSelectionClick(originalEvent)) {
+      return;
+    }
+
+    if (rangeEnabled && rangeTrigger === 'click') {
+      const selectionKey = createSelectionKey(target.feature);
+      const wasSelected = Boolean(selectionKey && selectedTargetMap.has(selectionKey));
+      if (wasSelected) {
+        handlePlainMultiSelectClick(target, pointerContext, gestures);
+        return;
+      }
+
+      if (!rangeAnchorKey) {
+        establishRangeAnchor(target, pointerContext);
+        return;
+      }
+
+      handleRangeGestureClick(target, pointerContext);
+      return;
+    }
+
+    // clickAdd 关闭时，修饰键范围仍允许无起点的普通单击建立起点；
+    // 有起点后未选中普通单击不追加、不执行范围。
+    if (rangeEnabled && rangeTrigger !== 'click' && !gestures.clickAdd) {
+      const selectionKey = createSelectionKey(target.feature);
+      const wasSelected = Boolean(selectionKey && selectedTargetMap.has(selectionKey));
+      if (wasSelected) {
+        handlePlainMultiSelectClick(target, pointerContext, gestures);
+        return;
+      }
+
+      if (!rangeAnchorKey) {
+        establishRangeAnchor(target, pointerContext);
+      }
+
+      return;
+    }
+
+    handlePlainMultiSelectClick(target, pointerContext, gestures);
+  };
+
+  /**
+   * 原子替换完整选中集，并同步 feature-state 与公开状态。
+   * @param features 下一份完整选中集
+   * @param options 是否派发变化及原因
+   */
+  const replaceSelectedFeatures = (
+    features: MapLayerSelectedFeature[],
+    options: MapSelectionReplaceOptions = {}
+  ): void => {
+    const emitChange = options.emitChange !== false;
+    const reason = options.reason ?? 'api';
+    const before = cloneUndoSnapshot();
+    const previousMap = new Map(selectedTargetMap);
+    const previousTargets = Array.from(previousMap.values());
+    const nextMap = new Map<string, HoveredLayerTarget>();
+    const nextTargets: HoveredLayerTarget[] = [];
+
+    features.forEach((feature) => {
+      const target = createTargetFromSelectedFeature(feature);
+      const selectionKey = feature.key || (target ? createSelectionKey(target.feature) : null);
+      if (!target || !selectionKey || nextMap.has(selectionKey)) {
+        return;
+      }
+
+      nextMap.set(selectionKey, target);
+      nextTargets.push(target);
+    });
+
+    previousTargets.forEach((target) => {
+      const selectionKey = createSelectionKey(target.feature);
+      if (!selectionKey || !nextMap.has(selectionKey)) {
+        setFeatureSelectedState(target, false);
+      }
+    });
+
+    selectedTargetMap = nextMap;
+    primarySelectedTarget = nextTargets[nextTargets.length - 1] || null;
+    primarySelectedKey = primarySelectedTarget
+      ? createSelectionKey(primarySelectedTarget.feature)
+      : null;
+    clearRangeAnchor();
+
+    nextTargets.forEach((target) => {
+      const selectionKey = createSelectionKey(target.feature);
+      if (!selectionKey || previousMap.has(selectionKey)) {
+        return;
+      }
+
+      setFeatureSelectedState(target, true);
+    });
+
+    syncSelectionState();
+
+    if (!emitChange) {
+      return;
+    }
+
+    const addedTargets = nextTargets.filter((target) => {
+      const selectionKey = createSelectionKey(target.feature);
+      return Boolean(selectionKey && !previousMap.has(selectionKey));
+    });
+    const removedTargets = previousTargets.filter((target) => {
+      const selectionKey = createSelectionKey(target.feature);
+      return !selectionKey || !nextMap.has(selectionKey);
+    });
+
+    if (addedTargets.length > 0 || removedTargets.length > 0) {
+      if (reason !== 'undo') {
+        pushUndoSnapshot(before);
+      }
+      emitSelectionChange(addedTargets, removedTargets, reason);
+    }
+  };
+
+  /**
+   * 按快照恢复选中集、主选中项和范围起点，并派发 undo 变化。
+   * @param snapshot 待恢复的历史快照
+   */
+  const restoreUndoSnapshot = (snapshot: MapSelectionUndoSnapshot): void => {
+    const previousMap = new Map(selectedTargetMap);
+    const previousTargets = Array.from(previousMap.values());
+    const nextMap = new Map<string, HoveredLayerTarget>();
+    const nextTargets: HoveredLayerTarget[] = [];
+
+    snapshot.selectedFeatures.forEach((feature) => {
+      const target = createTargetFromSelectedFeature(feature);
+      const selectionKey = feature.key || (target ? createSelectionKey(target.feature) : null);
+      if (!target || !selectionKey || nextMap.has(selectionKey)) {
+        return;
+      }
+
+      nextMap.set(selectionKey, target);
+      nextTargets.push(target);
+    });
+
+    previousTargets.forEach((target) => {
+      const selectionKey = createSelectionKey(target.feature);
+      if (!selectionKey || !nextMap.has(selectionKey)) {
+        setFeatureSelectedState(target, false);
+      }
+    });
+
+    selectedTargetMap = nextMap;
+    primarySelectedTarget = (snapshot.primarySelectedKey
+      ? nextMap.get(snapshot.primarySelectedKey)
+      : null) || nextTargets[nextTargets.length - 1] || null;
+    primarySelectedKey = primarySelectedTarget
+      ? createSelectionKey(primarySelectedTarget.feature)
+      : null;
+    rangeAnchorKey = snapshot.rangeAnchorKey && nextMap.has(snapshot.rangeAnchorKey)
+      ? snapshot.rangeAnchorKey
+      : null;
+
+    nextTargets.forEach((target) => {
+      const selectionKey = createSelectionKey(target.feature);
+      if (!selectionKey || previousMap.has(selectionKey)) {
+        return;
+      }
+
+      setFeatureSelectedState(target, true);
+    });
+
+    syncSelectionState();
+
+    const addedTargets = nextTargets.filter((target) => {
+      const selectionKey = createSelectionKey(target.feature);
+      return Boolean(selectionKey && !previousMap.has(selectionKey));
+    });
+    const removedTargets = previousTargets.filter((target) => {
+      const selectionKey = createSelectionKey(target.feature);
+      return !selectionKey || !nextMap.has(selectionKey);
+    });
+    emitSelectionChange(addedTargets, removedTargets, 'undo');
+  };
+
+  /**
+   * 回退到上一次用户可见选中变化之前的状态。
+   * @returns 发生回退时返回 true；无历史或未激活时返回 false
+   */
+  const undoSelection = (): boolean => {
+    if (!isMultiSelectActive || undoStack.length === 0) {
+      return false;
+    }
+
+    const snapshot = undoStack.pop();
+    if (!snapshot) {
+      return false;
+    }
+
+    restoreUndoSnapshot(snapshot);
+    return true;
+  };
+
+  /**
+   * 当前是否存在可回退历史。
+   * @returns 有历史时返回 true
+   */
+  const canUndoSelection = (): boolean => {
+    return isMultiSelectActive && undoStack.length > 0;
   };
 
   /**
@@ -1557,6 +2286,7 @@ const applyHoverTarget = (
     }
 
     isMultiSelectActive = true;
+    clearUndoHistory();
     boxZoomWasEnabled = Boolean(map.boxZoom?.isEnabled?.());
     hasCapturedBoxZoomState = true;
     map.boxZoom?.disable?.();
@@ -1568,18 +2298,24 @@ const applyHoverTarget = (
    * 退出多选模式，并按配置决定是否保留当前选中集。
    * @param reason 本次退出原因
    */
-  const deactivateMultiSelectMode = (reason: MapSelectionChangeReason = 'deactivate'): void => {
+  const deactivateMultiSelectMode = (
+    reason: MapSelectionChangeReason = 'deactivate',
+    options: MapSelectionDeactivateOptions = {}
+  ): void => {
     if (!isMultiSelectActive) {
       syncSelectionState();
       return;
     }
 
     isMultiSelectActive = false;
+    clearUndoHistory();
     clearBoxSelectionSession();
+    clearRangeAnchor();
     restoreBoxZoomState();
     detachMultiSelectKeydown();
 
-    if (getSelectionOptions().deactivateBehavior === 'clear') {
+    const emitChange = options.emitChange !== false;
+    if (emitChange && getSelectionOptions().deactivateBehavior === 'clear') {
       clearSelectionState({
         shouldNotifyDeselect: true,
         shouldEmitSelectionChange: true,
@@ -1612,12 +2348,14 @@ const applyHoverTarget = (
     if (!boxSelectionSession.hasDragged) {
       boxSelectionSession.hasDragged = true;
 
-      if (boxSelectionSession.dragPanWasEnabled) {
+      if (boxSelectionSession.applyBox && boxSelectionSession.dragPanWasEnabled) {
         map.dragPan?.disable?.();
       }
     }
 
-    syncBoxSelectionElement();
+    if (boxSelectionSession.applyBox) {
+      syncBoxSelectionElement();
+    }
     event.preventDefault();
   };
 
@@ -1635,10 +2373,11 @@ const applyHoverTarget = (
     const pointerContext = createPointerContextFromMouseEvent(event);
 
     if (currentSession.hasDragged) {
-      const matchedTargets = collectBoxSelectionTargets(currentSession);
+      const shouldApplyBox = currentSession.applyBox;
+      const matchedTargets = shouldApplyBox ? collectBoxSelectionTargets(currentSession) : [];
       clearBoxSelectionSession();
 
-      if (matchedTargets.length > 0) {
+      if (shouldApplyBox && matchedTargets.length > 0) {
         appendBoxSelectionTargets(matchedTargets, pointerContext);
       }
 
@@ -1651,16 +2390,25 @@ const applyHoverTarget = (
   };
 
   /**
-   * 处理多选模式下接管的 Shift + 左键 mousedown。
+   * 处理多选模式下接管的修饰键 + 左键 mousedown。
+   * 精确匹配框选或修饰键范围的 trigger 后开始拖拽会话，用于区分框选与随后的 click。
+   * 只有匹配框选 trigger 的按下才会在拖拽后执行框选；范围 trigger 的拖拽只抑制随后 click。
    * @param event 当前地图鼠标事件
    */
   const handleMapMouseDown = (event: MapMouseEvent): void => {
     const originalEvent = event.originalEvent as MouseEvent | undefined;
+    const gestures = getSelectionGestures();
+    const boxArmed =
+      gestures.box.enabled && matchesSelectionModifier(originalEvent, gestures.box.trigger);
+    const rangeArmed =
+      gestures.range.enabled &&
+      gestures.range.trigger !== 'click' &&
+      matchesSelectionModifier(originalEvent, gestures.range.trigger);
     if (
       !isMultiSelectActive ||
       !originalEvent ||
       originalEvent.button !== 0 ||
-      originalEvent.shiftKey !== true
+      (!boxArmed && !rangeArmed)
     ) {
       return;
     }
@@ -1672,6 +2420,7 @@ const applyHoverTarget = (
       boxElement: null,
       hasDragged: false,
       dragPanWasEnabled: Boolean(map.dragPan?.isEnabled?.()),
+      applyBox: boxArmed,
     };
 
     globalThis.addEventListener('mousemove', handleWindowMouseMove);
@@ -1689,7 +2438,21 @@ const applyHoverTarget = (
    * @param event 原始 DOM 键盘事件
    */
   const handleWindowKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Escape' || !isMultiSelectActive || getSelectionOptions().closeOnEscape === false) {
+    if (!isMultiSelectActive) {
+      return;
+    }
+
+    if (event.key === 'Delete') {
+      if (isEditableKeyboardTarget(event.target) || undoStack.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      undoSelection();
+      return;
+    }
+
+    if (event.key !== 'Escape' || getSelectionOptions().closeOnEscape === false) {
       return;
     }
 
@@ -1786,14 +2549,14 @@ const applyHoverTarget = (
 
       if (isMultiSelectActive) {
         if (target) {
-          toggleMultiSelectedTarget(target, pointerContext);
+          handleMultiSelectClick(target, pointerContext);
           markMapInteractiveEventHandled(event);
         } else {
           scheduleBlankClick(event, pointerContext);
         }
 
         // 多选模式下左键被选择语义完全接管：
-        // 1. 命中要素时只做追加/反选，不再透传普通 onClick，避免误触发单选弹窗或详情逻辑
+        // 1. 命中要素时只做当前手势对应的选择，不再透传普通 onClick
         // 2. 命中空白时仍通过上面的 scheduleBlankClick 触发 onBlankClick
         return;
       }
@@ -1830,9 +2593,13 @@ const applyHoverTarget = (
    * @param event 当前地图鼠标事件
    */
   const handleMouseMove = (event: MapMouseEvent): void => {
+    if (!isHoverCapablePointer(event)) {
+      return;
+    }
+
     if (isMapInteractiveEventHandled(event)) {
       cancelScheduledHoverSync();
-      clearHoverState(true, createPointerContext(event, { hitFeature: null, snapResult: null }));
+      clearHoverState(true, createPointerContext(event, { hitFeature: null, snapResult: null, features: [] }));
       return;
     }
 
@@ -1845,7 +2612,7 @@ const applyHoverTarget = (
    */
   const handleMouseOut = (event: MapMouseEvent): void => {
     cancelScheduledHoverSync();
-    clearHoverState(true, createPointerContext(event, { hitFeature: null, snapResult: null }));
+    clearHoverState(true, createPointerContext(event, { hitFeature: null, snapResult: null, features: [] }));
   };
 
   /**
@@ -1897,7 +2664,7 @@ const applyHoverTarget = (
   const detachSelectionBinding =
     selectionService?.attachBinding({
       activate: activateMultiSelectMode,
-      deactivate: () => deactivateMultiSelectMode('deactivate'),
+      deactivate: (options) => deactivateMultiSelectMode('deactivate', options),
       clear: () =>
         clearSelectionState({
           shouldNotifyDeselect: true,
@@ -1905,6 +2672,13 @@ const applyHoverTarget = (
           reason: 'api',
         }),
       isActive: () => isMultiSelectActive,
+      getSelectedFeatures: () => [...selectedFeatures],
+      replaceSelectedFeatures,
+      undo: undoSelection,
+      canUndo: canUndoSelection,
+      clearUndoHistory,
+      snapshotUndoHistory,
+      restoreUndoHistory,
     }) || null;
 
   if (selectionService && selectionService.isActive()) {
@@ -1921,6 +2695,7 @@ const applyHoverTarget = (
       hasDisposed = true;
 
       cancelScheduledHoverSync();
+      cancelHoverEventTimer();
       clearHoverState(false);
       clearBoxSelectionSession();
       detachMultiSelectKeydown();

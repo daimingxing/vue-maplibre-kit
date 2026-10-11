@@ -86,6 +86,9 @@ export type { MapLayerInteractiveOptions } from '../MapLibre/shared/mapLibre-con
 /** 当前被选中的图层要素类型。适合描述选中结果。 */
 export type { MapLayerSelectedFeature } from '../MapLibre/shared/mapLibre-controls-types';
 
+/** 多选 undo 历史类型。用于临时会话保存和恢复编辑现场。 */
+export type { MapSelectionUndoHistory } from '../MapLibre/shared/mapLibre-controls-types';
+
 /** 选中态变化上下文类型。监听选中变化时使用。 */
 export type { MapLayerSelectionChangeContext } from '../MapLibre/shared/mapLibre-controls-types';
 
@@ -112,6 +115,18 @@ export type { MapSelectionState } from '../MapLibre/shared/mapLibre-controls-typ
 
 /** 选中工具配置类型。声明选中工具行为时使用。 */
 export type { MapSelectionToolOptions } from '../MapLibre/shared/mapLibre-controls-types';
+
+/** 多选手势配置类型。声明 toggle、box、range 开关时使用。 */
+export type { MapSelectionGestures } from '../MapLibre/shared/mapLibre-controls-types';
+
+/** 范围解析器类型。由调用方根据通用要素信息返回范围成员。 */
+export type { MapSelectionRangeResolver } from '../MapLibre/shared/mapLibre-controls-types';
+
+/** 范围解析结果类型。表示成功成员或拒绝原因。 */
+export type { MapSelectionRangeResolveResult } from '../MapLibre/shared/mapLibre-controls-types';
+
+/** 选中集原子替换选项类型。保存或恢复选中集时使用。 */
+export type { MapSelectionReplaceOptions } from '../MapLibre/shared/mapLibre-controls-types';
 
 /** 测量控件配置类型。接入量测能力时使用。 */
 export type { MeasureControlOptions } from '../MapLibre/shared/mapLibre-controls-types';

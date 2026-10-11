@@ -72,6 +72,21 @@ function withSnapPreviewColor(color: MapStyleColor | undefined, fallback: string
   ];
 }
 
+/**
+ * 让业务图层数值样式响应吸附插件写入的 feature-state。
+ * @param value 业务图层原始数值
+ * @param stateKey 吸附状态字段
+ * @returns 未配置吸附覆写时保持原值的 MapLibre 表达式
+ */
+function withSnapPreviewNumber(value: MapStyleNumber, stateKey: string): MapExpression {
+  return [
+    "case",
+    ["boolean", ["feature-state", "snapPreview"], false],
+    ["coalesce", ["feature-state", stateKey], value],
+    value,
+  ];
+}
+
 /** 简单线样式配置。 */
 export interface SimpleLineStyleOptions {
   /** 线颜色。 */
@@ -210,6 +225,7 @@ export interface BusinessPluginsOptions {
 
 /**
  * 创建简单线图层样式。
+ * 颜色、线宽和透明度会读取吸附预览 feature-state；未写入覆写时保持当前值。
  * @param options 简单线样式配置
  * @returns 现有线图层样式对象
  */
@@ -218,10 +234,10 @@ export function createSimpleLineStyle(options: SimpleLineStyleOptions = {}) {
     paint: {
       "line-color": withSnapPreviewColor(options.color, "#0000ff") as any,
       ...(options.width !== undefined
-        ? { "line-width": options.width as any }
+        ? { "line-width": withSnapPreviewNumber(options.width, "snapPreviewLineWidth") as any }
         : {}),
       ...(options.opacity !== undefined
-        ? { "line-opacity": options.opacity as any }
+        ? { "line-opacity": withSnapPreviewNumber(options.opacity, "snapPreviewOpacity") as any }
         : {}),
     },
   });
@@ -229,6 +245,7 @@ export function createSimpleLineStyle(options: SimpleLineStyleOptions = {}) {
 
 /**
  * 创建简单点图层样式。
+ * 颜色、半径和透明度会读取吸附预览 feature-state；未写入覆写时保持当前值。
  * @param options 简单点样式配置
  * @returns 现有点图层样式对象
  */
@@ -239,10 +256,10 @@ export function createSimpleCircleStyle(
     paint: {
       "circle-color": withSnapPreviewColor(options.color, "#0000ff") as any,
       ...(options.radius !== undefined
-        ? { "circle-radius": options.radius as any }
+        ? { "circle-radius": withSnapPreviewNumber(options.radius, "snapPreviewPointRadius") as any }
         : {}),
       ...(options.opacity !== undefined
-        ? { "circle-opacity": options.opacity as any }
+        ? { "circle-opacity": withSnapPreviewNumber(options.opacity, "snapPreviewOpacity") as any }
         : {}),
       ...(options.strokeColor
         ? { "circle-stroke-color": options.strokeColor as any }
@@ -256,6 +273,7 @@ export function createSimpleCircleStyle(
 
 /**
  * 创建简单面图层样式。
+ * 颜色和透明度会读取吸附预览 feature-state；未写入覆写时保持当前值。
  * @param options 简单面样式配置
  * @returns 现有面图层样式对象
  */
@@ -264,7 +282,7 @@ export function createSimpleFillStyle(options: SimpleFillStyleOptions = {}) {
     paint: {
       "fill-color": withSnapPreviewColor(options.color, "#888888") as any,
       ...(options.opacity !== undefined
-        ? { "fill-opacity": options.opacity as any }
+        ? { "fill-opacity": withSnapPreviewNumber(options.opacity, "snapPreviewOpacity") as any }
         : {}),
       ...(options.outlineColor
         ? { "fill-outline-color": options.outlineColor as any }

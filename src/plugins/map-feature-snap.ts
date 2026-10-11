@@ -51,6 +51,24 @@ export type { MapFeatureSnapKind } from '../MapLibre/plugins/map-feature-snap';
 /** 吸附模式类型。配置吸附行为模式时使用。 */
 export type { MapFeatureSnapMode } from '../MapLibre/plugins/map-feature-snap';
 
+/** 吸附规范化决策类型。 */
+export type { MapFeatureSnapDecision } from '../MapLibre/plugins/map-feature-snap';
+
+/** 吸附解析状态类型。 */
+export type { MapFeatureSnapResolution } from '../MapLibre/plugins/map-feature-snap';
+
+/** 吸附交互关系类型。 */
+export type { MapFeatureSnapRelation } from '../MapLibre/plugins/map-feature-snap';
+
+/** 吸附交点参与者类型。 */
+export type { MapFeatureSnapParticipant } from '../MapLibre/plugins/map-feature-snap';
+
+/** 吸附可选择目标类型。 */
+export type { MapFeatureSnapTarget } from '../MapLibre/plugins/map-feature-snap';
+
+/** 吸附证据错误原因类型。 */
+export type { MapFeatureSnapInvalidReason } from '../MapLibre/plugins/map-feature-snap';
+
 /** 吸附插件配置类型。初始化地图吸附插件时使用。 */
 export type { MapFeatureSnapOptions } from '../MapLibre/plugins/map-feature-snap';
 
@@ -66,8 +84,14 @@ export type { MapFeatureSnapDrawnTargetOptions } from '../MapLibre/plugins/map-f
 /** 吸附插件 API 类型。业务层直接调用吸附插件实例时使用。 */
 export type { MapFeatureSnapPluginApi } from '../MapLibre/plugins/map-feature-snap';
 
+/** 同一指针位置的单个稳定吸附候选类型。 */
+export type { MapFeatureSnapCandidate } from '../MapLibre/plugins/map-feature-snap';
+
 /** 吸附预览配置类型。覆盖吸附点线预览样式时使用。 */
 export type { MapFeatureSnapPreviewOptions } from '../MapLibre/plugins/map-feature-snap';
+
+/** 已提交到可见高亮的吸附帧快照类型。 */
+export type { MapFeatureSnapPreviewSnapshot } from '../MapLibre/plugins/map-feature-snap';
 
 /** 完整业务线要素解析结果类型。保留 source 与 layer 身份时使用。 */
 export type { MapFeatureSnapResolvedFeature } from '../MapLibre/plugins/map-feature-snap';

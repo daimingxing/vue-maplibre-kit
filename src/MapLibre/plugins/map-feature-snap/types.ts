@@ -12,10 +12,18 @@ import type {
 } from '../../shared/map-feature-snap-types';
 
 export type {
+  MapFeatureSnapCoordinate,
+  MapFeatureSnapDecision,
   MapFeatureSnapDrawnTargetOptions,
   MapFeatureSnapGeometryType,
   MapFeatureSnapKind,
   MapFeatureSnapMode,
+  MapFeatureSnapInvalidReason,
+  MapFeatureSnapParticipant,
+  MapFeatureSnapRelation,
+  MapFeatureSnapResolution,
+  MapFeatureSnapTarget,
+  MapFeatureSnapCandidate,
   MapFeatureSnapParent,
   MapFeatureSnapResult,
   MapFeatureSnapSegmentInfo,
@@ -93,6 +101,8 @@ export type MapFeatureSnapFeatureResolver = (
 export interface MapFeatureSnapPreviewOptions {
   /** 是否启用吸附预览。 */
   enabled?: boolean;
+  /** 是否显示独立吸附点；默认显示。 */
+  pointEnabled?: boolean;
   /** 吸附点颜色。 */
   pointColor?: string;
   /** 吸附点半径。 */
@@ -103,6 +113,28 @@ export interface MapFeatureSnapPreviewOptions {
   targetOpacity?: number;
   /** 命中线要素写入 feature-state 时使用的线宽，单位像素。 */
   targetLineWidth?: number;
+  /** 命中点要素写入 feature-state 时使用的半径，单位像素。 */
+  targetPointRadius?: number;
+}
+
+/** 同一指针位置附近多个真实要素的候选归组配置。 */
+export interface MapFeatureSnapNearbyOptions {
+  /** 是否启用近邻候选；默认 true。 */
+  enabled?: boolean;
+  /** 候选投影点之间允许的最大真实距离，单位米。 */
+  maxDistanceMeters?: number;
+  /** 在主候选吸附范围外增加的屏幕操作余量，单位 CSS pixel。 */
+  paddingPx?: number;
+}
+
+/** 已提交并可供交互消费的指针吸附快照。 */
+export interface MapFeatureSnapPreviewSnapshot {
+  /** 当前预览帧使用的原始鼠标经纬度。 */
+  originalCoordinate: [number, number];
+  /** 当前预览帧使用的原始屏幕坐标。 */
+  pointer: { x: number; y: number };
+  /** 当前指针对应的吸附结果；视觉预览关闭时仍可命中。 */
+  result: MapFeatureSnapResult;
 }
 
 /** 吸附预览需要同步写入状态的附属原要素。 */
@@ -201,6 +233,8 @@ export interface MapFeatureSnapOptions {
   defaultTolerancePx?: number;
   /** 吸附预览配置。 */
   preview?: MapFeatureSnapPreviewOptions;
+  /** 近邻真实要素候选配置；未声明时保持单一主候选。 */
+  nearby?: boolean | MapFeatureSnapNearbyOptions;
   /** 根据当前吸附结果补充需要同步高亮的附属原要素。 */
   stateTargetResolver?: MapFeatureSnapStateTargetResolver;
   /** 按业务规则读取完整线要素的 resolver；交点索引不使用渲染裁剪坐标。 */
@@ -255,6 +289,8 @@ export interface MapFeatureSnapPluginApi {
   isActive: () => boolean;
   /** 主动清空当前吸附预览。 */
   clearPreview: () => void;
+  /** 读取当前已经提交并可供交互消费的指针快照。 */
+  getPreviewSnapshot: () => MapFeatureSnapPreviewSnapshot | null;
   /** 设置运行期规则查询作用域；null 恢复全局查询。 */
   setRuleScope: (ruleIds: string[] | null) => void;
   /** 根据普通地图事件解析吸附结果。 */

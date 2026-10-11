@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, ref, type EffectScope } from 'vue';
 import type { Map as MaplibreMap, MapMouseEvent } from 'maplibre-gl';
+import { getMapGlobalSnapDefaults } from '../../shared/map-global-config';
 import { useMapFeatureSnapController } from './useMapFeatureSnapController';
 import type { MapFeatureSnapOptions } from './types';
 
@@ -170,6 +171,22 @@ describe('useMapFeatureSnapController', () => {
       'circle-color': '#e11d48',
       'circle-radius': 11,
     });
+    expect(controller.effectiveOptions.value?.preview?.targetColor).toBe(
+      getMapGlobalSnapDefaults()?.preview?.targetColor
+    );
+  });
+
+  it('独立吸附点默认显示并可单独关闭', () => {
+    const { map } = createMapStub();
+    const defaultController = createController(map, []);
+    expect(defaultController.previewPointEnabled.value).toBe(true);
+    activeScope?.stop();
+
+    const hiddenController = createController(map, [], {
+      preview: { pointEnabled: false, targetColor: '#2563eb' },
+    });
+    expect(hiddenController.previewEnabled.value).toBe(true);
+    expect(hiddenController.previewPointEnabled.value).toBe(false);
   });
 
 });

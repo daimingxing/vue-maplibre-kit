@@ -1,12 +1,14 @@
 import KDBush from 'kdbush';
 import {
   findLineIntersections,
+  type MapLineIntersectionAttachment,
   type MapLineInput,
 } from '../../shared/map-line-connect-tools';
 import type {
   MapFeatureSnapMode,
   MapFeatureSnapResolvedFeature,
   MapFeatureSnapRule,
+  MapFeatureSnapSegmentInfo,
 } from './types';
 
 /** kit 在未传配置时使用的虚拟延长长度，单位米。 */
@@ -37,6 +39,12 @@ export interface SnapIntersectionParent {
   layerId: string;
   /** 完整真实父线要素。 */
   feature: MapFeatureSnapResolvedFeature['feature'];
+  /** 当前父线通过真实 segment 还是端点延长参与。 */
+  attachment: 'real' | 'extended';
+  /** 固定交点在当前真实父线上的附着坐标。 */
+  geometryCoordinate: [number, number];
+  /** 承载附着坐标的真实 segment。 */
+  segment: MapFeatureSnapSegmentInfo;
 }
 
 /** 同一坐标下的一组实际求交父线。 */
@@ -171,13 +179,25 @@ export function createSnapIntersectionStore(): SnapIntersectionStore {
    * @param data 共享线 helper 携带的领域数据
    * @returns snap 交点父线
    */
-  function createParent(data: IntersectionLineData): SnapIntersectionParent {
+  function createParent(
+    data: IntersectionLineData,
+    attachment: MapLineIntersectionAttachment<IntersectionLineData>
+  ): SnapIntersectionParent {
     return {
       ruleId: data.ruleId,
       sourceId: data.resolved.sourceId,
       ...(data.resolved.sourceLayer ? { sourceLayer: data.resolved.sourceLayer } : {}),
       layerId: data.resolved.layerId,
       feature: data.resolved.feature,
+      attachment: attachment.attachment,
+      geometryCoordinate: [...attachment.geometryCoordinate],
+      segment: {
+        pathIndex: attachment.segment.pathIndex,
+        ringIndex: attachment.segment.pathIndex,
+        segmentIndex: attachment.segment.segmentIndex,
+        startCoordinate: [...attachment.segment.start],
+        endCoordinate: [...attachment.segment.end],
+      },
     };
   }
 
@@ -208,8 +228,8 @@ export function createSnapIntersectionStore(): SnapIntersectionStore {
 
     intersections.forEach((intersection) => {
       const coordinateKey = createCoordinateKey(intersection.coordinate);
-      const first = createParent(intersection.first.line.data);
-      const second = createParent(intersection.second.line.data);
+      const first = createParent(intersection.first.line.data, intersection.firstAttachment);
+      const second = createParent(intersection.second.line.data, intersection.secondAttachment);
       const kind = first.ruleId === second.ruleId
         ? 'sameLayerIntersect'
         : 'crossLayerIntersect';

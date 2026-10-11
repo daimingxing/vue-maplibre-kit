@@ -274,4 +274,35 @@ describe('map-line-connect-tools', () => {
       expect(segment.end[1]).toBeCloseTo(cross[1], 9);
     });
   });
+
+  it('交点保留每条父线的真实附着坐标和延长证据', () => {
+    const intersections = findLineIntersections({
+      lines: [
+        line('horizontal', 'path', [[-METER_LNG, 0], [0, 0]]),
+        line('vertical', 'path', [[METER_LNG, -METER_LNG], [METER_LNG, METER_LNG]]),
+      ],
+      extensionMeters: 2,
+      sameGroupIds: new Set(['path']),
+      crossGroupIds: new Set<string>(),
+    });
+
+    expect(intersections).toHaveLength(1);
+    const attachments = [
+      intersections[0].firstAttachment,
+      intersections[0].secondAttachment,
+    ];
+    const horizontal = attachments.find((item) => item.segment.line.id === 'horizontal');
+    const vertical = attachments.find((item) => item.segment.line.id === 'vertical');
+    expect(horizontal).toEqual(expect.objectContaining({
+      attachment: 'extended',
+      geometryCoordinate: [0, 0],
+      segment: expect.objectContaining({ virtual: false }),
+    }));
+    expect(vertical).toEqual(expect.objectContaining({
+      attachment: 'real',
+      segment: expect.objectContaining({ virtual: false }),
+    }));
+    expect(vertical?.geometryCoordinate[0]).toBeCloseTo(METER_LNG, 9);
+    expect(vertical?.geometryCoordinate[1]).toBeCloseTo(0, 9);
+  });
 });

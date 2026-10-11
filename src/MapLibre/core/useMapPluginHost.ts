@@ -447,6 +447,13 @@ function mergeMapInteractiveOptions(
     baseConfig.onHoverLeave,
     patchConfig.onHoverLeave
   );
+  mergedConfig.onHoverResolve = mergeInteractiveCallbacks(
+    baseConfig.onHoverResolve,
+    patchConfig.onHoverResolve
+  );
+  if (patchConfig.hoverDelayMs === undefined) {
+    mergedConfig.hoverDelayMs = baseConfig.hoverDelayMs;
+  }
   mergedConfig.onClick = mergeInteractiveCallbacks(baseConfig.onClick, patchConfig.onClick);
   mergedConfig.onDoubleClick = mergeInteractiveCallbacks(
     baseConfig.onDoubleClick,

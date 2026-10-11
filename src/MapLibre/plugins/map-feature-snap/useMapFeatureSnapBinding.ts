@@ -4,20 +4,26 @@ import { ref, watchEffect } from 'vue';
 import type { TerraDrawMouseEvent } from 'terra-draw';
 import type { MapSnapBinding } from '../types';
 import type {
+  MapFeatureSnapCandidate,
+  MapFeatureSnapDecision,
   MapFeatureSnapGeometryType,
+  MapFeatureSnapInvalidReason,
   MapFeatureSnapKind,
   MapFeatureSnapMode,
   MapFeatureSnapOptions,
   MapFeatureSnapParent,
+  MapFeatureSnapParticipant,
+  MapFeatureSnapPreviewSnapshot,
   MapFeatureSnapResolvedFeature,
   MapFeatureSnapResult,
+  MapFeatureSnapRelation,
   MapFeatureSnapRule,
   MapFeatureSnapSegmentInfo,
   MapFeatureSnapStateTarget,
+  MapFeatureSnapTarget,
 } from './types';
 import {
   createSnapIntersectionStore,
-  type SnapIntersectionPair,
   type SnapIntersectionPoint,
   type SnapIntersectionRule,
 } from './mapFeatureSnapIntersections';
@@ -26,12 +32,14 @@ type PreviewFeatureCollection = FeatureCollection;
 
 /** 当前吸附目标写入 feature-state 的样式覆写。 */
 interface SnapPreviewTargetStyle {
-  /** 原要素高亮颜色。 */
-  color: string;
+  /** 原要素颜色覆写；未声明时为 null。 */
+  color: string | null;
   /** 原要素透明度覆写；未声明时为 null。 */
   opacity: number | null;
   /** 线要素宽度覆写；未声明时为 null。 */
   lineWidth: number | null;
+  /** 点要素半径覆写；未声明时为 null。 */
+  pointRadius: number | null;
 }
 
 interface ScreenPoint {
@@ -61,15 +69,40 @@ interface SnapCandidate {
   layerId: string;
   sourceId: string | null;
   coordinate: [number, number];
+  /** 交点节点固定坐标；direct 与 nearby 不提供。 */
+  snapCoordinate?: [number, number];
   distancePx: number;
   snapKind: MapFeatureSnapKind;
   segment: MapFeatureSnapSegmentInfo | null;
   parents: MapFeatureSnapParent[];
+  /** 当前目标通过真实 segment 还是端点延长参与。 */
+  attachment?: 'real' | 'extended';
 }
 
 interface ResolvePointerOptions {
   point: ScreenPoint;
   lngLat: { lng: number; lat: number };
+}
+
+/** 归一化后的近邻候选配置。 */
+interface ResolvedNearbyOptions {
+  enabled: boolean;
+  maxDistanceMeters: number;
+  paddingPx: number;
+}
+
+/** 原始屏幕指针在单个真实要素上的最近投影。 */
+interface FeatureProjection {
+  coordinate: [number, number];
+  point: ScreenPoint;
+  distancePx: number;
+}
+
+/** 同一业务 feature 身份下单个渲染切片对应的近邻候选。 */
+interface NearbyAlternative {
+  candidate: SnapCandidate;
+  projection: FeatureProjection;
+  meterGap: number;
 }
 
 /** 吸附预览数据源 ID。 */
@@ -92,9 +125,15 @@ const POLYGON_EDGE_SNAP_PRIORITY = 90;
 
 const DEFAULT_TOLERANCE_PX = 16;
 const DEFAULT_SNAP_MODES: MapFeatureSnapMode[] = ['vertex', 'segment'];
+const DEFAULT_NEARBY_MAX_METERS = 1;
+const DEFAULT_NEARBY_PADDING_PX = 2;
+const EARTH_RADIUS_METERS = 6371008.8;
 
 /** 地图吸附插件内部绑定句柄。 */
-export type MapFeatureSnapBinding = MapSnapBinding;
+export type MapFeatureSnapBinding = MapSnapBinding & {
+  /** 读取当前已经提交并可供交互消费的指针快照。 */
+  getPreviewSnapshot: () => MapFeatureSnapPreviewSnapshot | null;
+};
 
 /**
  * 创建一个“未命中吸附”的空结果。
@@ -102,6 +141,7 @@ export type MapFeatureSnapBinding = MapSnapBinding;
  */
 export function createEmptyMapFeatureSnapResult(): MapFeatureSnapResult {
   return {
+    resolution: { status: 'unmatched' },
     matched: false,
     lngLat: null,
     distancePx: null,
@@ -111,21 +151,24 @@ export function createEmptyMapFeatureSnapResult(): MapFeatureSnapResult {
     targetLayerId: null,
     targetSourceId: null,
     targetCoordinate: null,
+    anchorCoordinate: null,
     segment: null,
     parents: [],
+    candidates: [],
   };
 }
 
 /**
  * 读取当前吸附预览写入原要素的状态样式。
  * @param options 当前吸附插件配置
- * @returns 已补齐默认颜色、保留可选透明度和线宽的状态样式
+ * @returns 只包含显式配置字段的状态样式
  */
 function createTargetStyle(options: MapFeatureSnapOptions | null | undefined): SnapPreviewTargetStyle {
   return {
-    color: options?.preview?.targetColor ?? '#ff7a00',
+    color: options?.preview?.targetColor ?? null,
     opacity: options?.preview?.targetOpacity ?? null,
     lineWidth: options?.preview?.targetLineWidth ?? null,
+    pointRadius: options?.preview?.targetPointRadius ?? null,
   };
 }
 
@@ -141,7 +184,8 @@ function isSameTargetStyle(
 ): boolean {
   return current?.color === next.color
     && current.opacity === next.opacity
-    && current.lineWidth === next.lineWidth;
+    && current.lineWidth === next.lineWidth
+    && current.pointRadius === next.pointRadius;
 }
 
 /**
@@ -201,6 +245,33 @@ function getResolvedTolerancePx(
 }
 
 /**
+ * 统一归一化近邻候选配置，保证查询范围与最终过滤使用同一组数值。
+ * @param options 原始近邻配置
+ * @returns 包含启用态、米制距离和屏幕余量的稳定配置
+ */
+function resolveNearbyOptions(
+  options: MapFeatureSnapOptions['nearby']
+): ResolvedNearbyOptions {
+  const enabled = Boolean(options)
+    && (typeof options !== 'object' || options.enabled !== false);
+  const rawMaxDistanceMeters = typeof options === 'object'
+    ? options.maxDistanceMeters ?? DEFAULT_NEARBY_MAX_METERS
+    : DEFAULT_NEARBY_MAX_METERS;
+  const rawPaddingPx = typeof options === 'object'
+    ? options.paddingPx ?? DEFAULT_NEARBY_PADDING_PX
+    : DEFAULT_NEARBY_PADDING_PX;
+  return {
+    enabled,
+    maxDistanceMeters: Number.isFinite(rawMaxDistanceMeters)
+      ? Math.max(0, rawMaxDistanceMeters)
+      : DEFAULT_NEARBY_MAX_METERS,
+    paddingPx: Number.isFinite(rawPaddingPx)
+      ? Math.max(0, rawPaddingPx)
+      : DEFAULT_NEARBY_PADDING_PX,
+  };
+}
+
+/**
  * 将候选路径中的一个坐标投影到屏幕平面。
  * @param map 当前地图实例
  * @param coordinate 待投影坐标
@@ -224,6 +295,26 @@ function getScreenDistance(start: ScreenPoint, end: ScreenPoint): number {
   const deltaX = start.x - end.x;
   const deltaY = start.y - end.y;
   return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+}
+
+/**
+ * 计算两个经纬度坐标之间的球面距离。
+ * @param start 起点经纬度
+ * @param end 终点经纬度
+ * @returns 两点距离，单位米
+ */
+function getCoordinateDistanceMeters(
+  start: [number, number],
+  end: [number, number]
+): number {
+  const toRadians = (value: number): number => value * Math.PI / 180;
+  const startLat = toRadians(start[1]);
+  const endLat = toRadians(end[1]);
+  const latDelta = endLat - startLat;
+  const lngDelta = toRadians(end[0] - start[0]);
+  const haversine = Math.sin(latDelta / 2) ** 2
+    + Math.cos(startLat) * Math.cos(endLat) * Math.sin(lngDelta / 2) ** 2;
+  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(haversine)));
 }
 
 /**
@@ -383,6 +474,60 @@ function getPointGeometryCoordinates(geometry: Geometry): [number, number][] {
 }
 
 /**
+ * 使用同一个原始屏幕指针计算其在真实要素几何上的最近投影。
+ * 点要素返回最近顶点，线和面边界返回最近线段投影；不支持或空几何返回 null。
+ * @param map 当前地图实例
+ * @param pointer 原始鼠标屏幕坐标
+ * @param feature 当前真实渲染要素
+ * @returns 最近投影的经纬度、屏幕坐标和指针距离
+ */
+function resolveFeatureProjection(
+  map: MaplibreMap,
+  pointer: ScreenPoint,
+  feature: SnapFeatureLike
+): FeatureProjection | null {
+  let nearest: FeatureProjection | null = null;
+
+  /** 按距离保留更近的投影点。 */
+  const consider = (coordinate: [number, number], point: ScreenPoint): void => {
+    const distancePx = getScreenDistance(pointer, point);
+    if (!nearest || distancePx < nearest.distancePx) {
+      nearest = { coordinate, point, distancePx };
+    }
+  };
+
+  const geometryType = resolveFeatureGeometryType(feature);
+  if (geometryType === 'Point') {
+    getPointGeometryCoordinates(feature.geometry).forEach((coordinate) => {
+      consider(coordinate, projectCoordinate(map, coordinate));
+    });
+    return nearest;
+  }
+
+  const paths = geometryType === 'LineString'
+    ? getLineGeometryPaths(feature.geometry)
+    : geometryType === 'Polygon'
+      ? getPolygonGeometryPaths(feature.geometry)
+      : [];
+  paths.forEach((path) => {
+    if (path.length === 1) {
+      consider(path[0], projectCoordinate(map, path[0]));
+      return;
+    }
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const projected = projectPointToScreenSegment(
+        pointer,
+        projectCoordinate(map, path[index]),
+        projectCoordinate(map, path[index + 1])
+      ).point;
+      const lngLat = map.unproject([projected.x, projected.y]);
+      consider([lngLat.lng, lngLat.lat], projected);
+    }
+  });
+  return nearest;
+}
+
+/**
  * 将候选渲染要素几何类型归一化为规则层可判断的三大类。
  * @param feature 当前候选渲染要素
  * @returns 归一化后的几何类型；不支持时返回 null
@@ -411,6 +556,7 @@ function resolveFeatureGeometryType(feature: SnapFeatureLike): MapFeatureSnapGeo
  * @param feature 当前候选要素
  * @param rule 当前规则
  * @param layerId 当前候选图层 ID
+ * @param tolerancePx 当前候选查询范围
  * @returns 当前候选要素的最佳点吸附结果；未命中返回空数组
  */
 function buildPointCandidates(
@@ -418,7 +564,8 @@ function buildPointCandidates(
   pointerPoint: ScreenPoint,
   feature: SnapFeatureLike,
   rule: ResolvedMapFeatureSnapRule,
-  layerId: string
+  layerId: string,
+  tolerancePx = getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX)
 ): SnapCandidate[] {
   const featureGeometryType = resolveFeatureGeometryType(feature);
   if (featureGeometryType !== 'Point') {
@@ -430,7 +577,6 @@ function buildPointCandidates(
     return [];
   }
 
-  const tolerancePx = getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX);
   const candidates: SnapCandidate[] = [];
 
   getPointGeometryCoordinates(feature.geometry).forEach((coordinate) => {
@@ -464,6 +610,7 @@ function buildPointCandidates(
  * @param feature 当前候选要素
  * @param rule 当前规则
  * @param layerId 当前候选图层 ID
+ * @param tolerancePx 当前候选查询范围
  * @returns 当前候选要素的候选吸附结果集合
  */
 function buildPathCandidates(
@@ -471,7 +618,8 @@ function buildPathCandidates(
   pointerPoint: ScreenPoint,
   feature: SnapFeatureLike,
   rule: ResolvedMapFeatureSnapRule,
-  layerId: string
+  layerId: string,
+  tolerancePx = getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX)
 ): SnapCandidate[] {
   const featureGeometryType = resolveFeatureGeometryType(feature);
   if (featureGeometryType !== 'LineString' && featureGeometryType !== 'Polygon') {
@@ -483,7 +631,6 @@ function buildPathCandidates(
     return [];
   }
 
-  const tolerancePx = getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX);
   const paths =
     featureGeometryType === 'LineString'
       ? getLineGeometryPaths(feature.geometry)
@@ -607,6 +754,8 @@ function createCandidateKey(candidate: SnapCandidate): string {
   return [
     kindOrder[candidate.snapKind],
     candidate.rule.id,
+    createFeatureCandidateKey(candidate)
+      ?? `${candidate.sourceId ?? ''}:${candidate.feature.sourceLayer ?? ''}:${candidate.layerId}:${JSON.stringify(candidate.feature.geometry)}`,
     candidate.coordinate[0],
     candidate.coordinate[1],
   ].join(':');
@@ -668,21 +817,6 @@ function isRuleInScope(ruleId: string, ruleScope: ReadonlySet<string> | null): b
 }
 
 /**
- * 判断交点父线组合是否命中当前会话作用域。
- * @param pair 当前交点父线组合
- * @param ruleScope 当前作用域；null 表示全局
- * @returns same 命中自身、cross 任一侧命中时返回 true
- */
-function isPairInScope(
-  pair: SnapIntersectionPair,
-  ruleScope: ReadonlySet<string> | null
-): boolean {
-  return ruleScope === null
-    || ruleScope.has(pair.first.ruleId)
-    || ruleScope.has(pair.second.ruleId);
-}
-
-/**
  * 将完整 resolver 要素补成现有候选过滤逻辑可消费的 MapLibre 要素形状。
  * @param resolved 完整 resolver 输出
  * @returns 带 source 和 layer 元数据的内存要素
@@ -738,63 +872,100 @@ function resolveIntersectionRules(
 }
 
 /**
- * 为单个交点父线组合创建按规则分别评估的候选。
+ * 创建同一交点节点内父线的稳定身份。
+ * @param parent 当前交点父线
+ * @returns 不包含附着方式的父线身份，用于同一节点优先保留真实证据
+ */
+function createIntersectionParentIdentity(parent: MapFeatureSnapParent): string {
+  return createDecisionKey({
+    ruleId: parent.ruleId,
+    sourceId: parent.sourceId,
+    sourceLayer: parent.sourceLayer,
+    layerId: parent.layerId,
+    feature: parent.feature as SnapFeatureLike,
+    coordinate: parent.geometryCoordinate ?? [Number.NaN, Number.NaN],
+    segment: parent.segment ?? null,
+  });
+}
+
+/**
+ * 为单个交点节点创建完整参与者和当前 scope 可选目标。
  * @param map 当前地图实例
  * @param pointerPoint 当前鼠标屏幕坐标
- * @param point 当前唯一交点
- * @param pair 当前父线组合
+ * @param point 当前唯一交点节点
  * @param ruleMap 最新规则表
- * @param ruleScope 当前会话作用域
- * @returns 通过双方显隐、scope 和 tolerance 的候选
+ * @param ruleScope 当前会话 target 作用域
+ * @param paddingPx 交点相对基础 tolerance 的额外捕获范围
+ * @returns participant 完整且 target 已按 scope 与捕获范围筛选的候选
  */
 function buildIntersectionCandidates(
   map: MaplibreMap,
   pointerPoint: ScreenPoint,
   point: SnapIntersectionPoint,
-  pair: SnapIntersectionPair,
   ruleMap: Map<string, ResolvedMapFeatureSnapRule>,
-  ruleScope: ReadonlySet<string> | null
+  ruleScope: ReadonlySet<string> | null,
+  paddingPx: number
 ): SnapCandidate[] {
-  if (!isPairInScope(pair, ruleScope)) {
-    return [];
-  }
-
-  const firstRule = ruleMap.get(pair.first.ruleId);
-  const secondRule = ruleMap.get(pair.second.ruleId);
-  if (!firstRule || !secondRule || !isRuleAvailable(firstRule) || !isRuleAvailable(secondRule)) {
-    return [];
-  }
-
   const projected = projectCoordinate(map, point.coordinate);
   const distancePx = getScreenDistance(pointerPoint, projected);
-  const evaluationRules = pair.kind === 'sameLayerIntersect'
-    ? [firstRule]
-    : firstRule.id === secondRule.id
-      ? [firstRule]
-      : [firstRule, secondRule];
-  const parents: MapFeatureSnapParent[] = [pair.first, pair.second];
+  const validPairs = point.pairs.filter((pair) => {
+    const firstRule = ruleMap.get(pair.first.ruleId);
+    const secondRule = ruleMap.get(pair.second.ruleId);
+    return Boolean(
+      firstRule
+      && secondRule
+      && isRuleAvailable(firstRule)
+      && isRuleAvailable(secondRule)
+    );
+  });
+  if (!validPairs.length) {
+    return [];
+  }
 
-  return evaluationRules.flatMap((rule) => {
-    if (distancePx > getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX)) {
+  const parentMap = new Map<string, MapFeatureSnapParent>();
+  validPairs.flatMap((pair) => [pair.first, pair.second]).forEach((parent) => {
+    const key = createIntersectionParentIdentity(parent);
+    const current = parentMap.get(key);
+    // 同一父线同时存在真实和延长证据时，真实附着是更强证据。
+    if (!current || (current.attachment === 'extended' && parent.attachment === 'real')) {
+      parentMap.set(key, parent);
+    }
+  });
+  const parents = [...parentMap.values()].sort((left, right) => (
+    createIntersectionParentIdentity(left).localeCompare(createIntersectionParentIdentity(right))
+  ));
+  const snapKind = validPairs.some((pair) => pair.kind === 'crossLayerIntersect')
+    ? 'crossLayerIntersect'
+    : 'sameLayerIntersect';
+
+  return parents.flatMap((parent) => {
+    const rule = ruleMap.get(parent.ruleId);
+    if (!rule || !isRuleInScope(rule.id, ruleScope)) {
       return [];
     }
-    const primary = pair.first.ruleId === rule.id ? pair.first : pair.second;
+    if (distancePx > getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX) + paddingPx) {
+      return [];
+    }
     const feature = toSnapFeature({
-      feature: primary.feature,
-      sourceId: primary.sourceId,
-      ...(primary.sourceLayer ? { sourceLayer: primary.sourceLayer } : {}),
-      layerId: primary.layerId,
+      feature: parent.feature,
+      sourceId: parent.sourceId ?? '',
+      ...(parent.sourceLayer ? { sourceLayer: parent.sourceLayer } : {}),
+      layerId: parent.layerId ?? '',
     });
     return [{
       rule,
       feature,
-      layerId: primary.layerId,
-      sourceId: primary.sourceId,
-      coordinate: point.coordinate,
+      layerId: parent.layerId ?? '',
+      sourceId: parent.sourceId,
+      coordinate: parent.geometryCoordinate
+        ? [...parent.geometryCoordinate]
+        : [Number.NaN, Number.NaN],
+      snapCoordinate: [...point.coordinate],
       distancePx,
-      snapKind: pair.kind,
-      segment: null,
+      snapKind,
+      segment: parent.segment ?? null,
       parents,
+      attachment: parent.attachment ?? 'real',
     }];
   });
 }
@@ -806,6 +977,7 @@ function buildIntersectionCandidates(
  * @param rules 当前最新规则集合
  * @param pointer 当前鼠标上下文
  * @param ruleScope 当前会话作用域
+ * @param paddingPx 交点相对基础 tolerance 的额外捕获范围
  * @returns 附近交点候选
  */
 function resolveIntersectionCandidates(
@@ -813,7 +985,8 @@ function resolveIntersectionCandidates(
   store: ReturnType<typeof createSnapIntersectionStore>,
   rules: ResolvedMapFeatureSnapRule[],
   pointer: ResolvePointerOptions,
-  ruleScope: ReadonlySet<string> | null
+  ruleScope: ReadonlySet<string> | null,
+  paddingPx: number
 ): SnapCandidate[] {
   const availableRules = rules.filter(isRuleAvailable);
   if (!availableRules.length || store.size() === 0) {
@@ -821,7 +994,10 @@ function resolveIntersectionCandidates(
   }
 
   const maxTolerancePx = availableRules.reduce((maxTolerance, rule) => {
-    return Math.max(maxTolerance, getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX));
+    return Math.max(
+      maxTolerance,
+      getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX) + paddingPx
+    );
   }, 0);
   const screenCorners: Array<[number, number]> = [
     [pointer.point.x - maxTolerancePx, pointer.point.y - maxTolerancePx],
@@ -840,32 +1016,34 @@ function resolveIntersectionCandidates(
     Math.max(...lngList),
     Math.max(...latList)
   ).flatMap((point) => {
-    return point.pairs.flatMap((pair) => buildIntersectionCandidates(
+    return buildIntersectionCandidates(
       map,
       pointer.point,
       point,
-      pair,
       ruleMap,
-      ruleScope
-    ));
+      ruleScope,
+      paddingPx
+    );
   });
 }
 
 /**
- * 根据规则和候选要素列表解析当前最佳吸附结果。
+ * 根据规则和候选要素列表解析当前指针范围内的普通候选。
  * @param map 当前地图实例
  * @param rules 当前启用的规则集合
  * @param pointer 当前鼠标指针上下文
- * @returns 最终命中的吸附候选
+ * @param paddingPx 候选查询在正常吸附范围外增加的像素余量
+ * @returns 当前查询范围内的普通候选
  */
-function resolveSnapCandidate(
+function resolveSnapCandidates(
   map: MaplibreMap,
   rules: ResolvedMapFeatureSnapRule[],
   pointer: ResolvePointerOptions,
-  ruleScope: ReadonlySet<string> | null
-): SnapCandidate | null {
+  ruleScope: ReadonlySet<string> | null,
+  paddingPx: number
+): SnapCandidate[] {
   if (!rules.length) {
-    return null;
+    return [];
   }
 
   const availableLayerIds = [
@@ -877,7 +1055,10 @@ function resolveSnapCandidate(
   ];
 
   const maxTolerancePx = rules.reduce((maxTolerance, rule) => {
-    return Math.max(maxTolerance, getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX));
+    return Math.max(
+      maxTolerance,
+      getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX) + paddingPx
+    );
   }, 0);
 
   const bbox = [
@@ -889,7 +1070,7 @@ function resolveSnapCandidate(
     ? map.queryRenderedFeatures(bbox, { layers: availableLayerIds }) as MapGeoJSONFeature[]
     : [];
 
-  let bestCandidate: SnapCandidate | null = null;
+  const resolvedCandidates: SnapCandidate[] = [];
 
   rules.forEach((rule) => {
     if (!isRuleAvailable(rule) || !isRuleInScope(rule.id, ruleScope)) {
@@ -915,47 +1096,457 @@ function resolveSnapCandidate(
         return;
       }
 
+      const queryTolerancePx = getResolvedTolerancePx(rule, DEFAULT_TOLERANCE_PX) + paddingPx;
       const candidates =
         featureGeometryType === 'Point'
-          ? buildPointCandidates(map, pointer.point, feature, rule, layerId)
-          : buildPathCandidates(map, pointer.point, feature, rule, layerId);
+          ? buildPointCandidates(map, pointer.point, feature, rule, layerId, queryTolerancePx)
+          : buildPathCandidates(map, pointer.point, feature, rule, layerId, queryTolerancePx);
 
-      candidates.forEach((candidate) => {
-        if (shouldReplaceCandidate(bestCandidate, candidate)) {
-          bestCandidate = candidate;
-        }
-      });
+      resolvedCandidates.push(...candidates);
     });
   });
 
-  return bestCandidate;
+  return resolvedCandidates;
 }
 
 /**
- * 将候选吸附结果转换为统一输出对象。
+ * 读取候选真实要素的稳定身份，用于合并同一要素的多个顶点或线段命中。
+ * @param candidate 当前内部候选
+ * @returns source、source-layer 与真实要素 ID 组成的身份键；无稳定 ID 时返回 null
+ */
+function createFeatureCandidateKey(candidate: SnapCandidate): string | null {
+  const sourceId = candidate.sourceId ?? candidate.feature.source;
+  const featureId = candidate.feature.id;
+  if (!sourceId || featureId === null || featureId === undefined || featureId === '') {
+    return null;
+  }
+  return [
+    sourceId,
+    candidate.feature.sourceLayer ?? '',
+    featureId,
+  ].join(':');
+}
+
+/**
+ * 比较同一业务 feature 的不同渲染切片，确保代表切片不依赖查询输入顺序。
+ * @param first 第一个渲染切片候选
+ * @param second 第二个渲染切片候选
+ * @returns first 更优时小于 0，second 更优时大于 0，完全等价时返回 0
+ */
+function compareNearbyAlternatives(
+  first: NearbyAlternative,
+  second: NearbyAlternative
+): number {
+  return first.projection.distancePx - second.projection.distancePx
+    || first.meterGap - second.meterGap
+    || first.projection.coordinate[0] - second.projection.coordinate[0]
+    || first.projection.coordinate[1] - second.projection.coordinate[1]
+    || first.candidate.distancePx - second.candidate.distancePx
+    || createCandidateKey(first.candidate).localeCompare(createCandidateKey(second.candidate));
+}
+
+/**
+ * 按当前配置解析与主候选难以稳定区分的真实要素集合。
+ * @param map 当前地图实例
+ * @param primary 正常吸附范围内选出的主候选
+ * @param candidates 扩大查询范围得到的普通候选
+ * @param pointer 当前原始鼠标指针
+ * @param nearbyOptions 已归一化的近邻候选配置
+ * @returns 主候选固定在首位的稳定候选集合
+ */
+function resolveNearbyCandidates(
+  map: MaplibreMap,
+  primary: SnapCandidate,
+  candidates: SnapCandidate[],
+  pointer: ResolvePointerOptions,
+  nearbyOptions: ResolvedNearbyOptions
+): SnapCandidate[] {
+  if (!nearbyOptions.enabled) {
+    return [primary];
+  }
+  // 近邻归组只解决当前视图下难以区分的真实 Path；Point、Polygon 和运行时 Arrow 保持单主候选。
+  if (resolveFeatureGeometryType(primary.feature) !== 'LineString') {
+    return [primary];
+  }
+  if (primary.parents.length) {
+    return [primary];
+  }
+
+  const effectiveTolerancePx = getResolvedTolerancePx(primary.rule, DEFAULT_TOLERANCE_PX);
+  const nearbyTolerancePx = effectiveTolerancePx + nearbyOptions.paddingPx;
+  const primaryProjection = resolveFeatureProjection(map, pointer.point, primary.feature);
+  if (!primaryProjection || primaryProjection.distancePx > effectiveTolerancePx) {
+    return [primary];
+  }
+  const projectedPrimary: SnapCandidate = {
+    ...primary,
+    coordinate: primaryProjection.coordinate,
+    distancePx: primaryProjection.distancePx,
+  };
+  const primaryFeatureKey = createFeatureCandidateKey(primary);
+  const alternatives = new Map<string, NearbyAlternative>();
+  const projectionByFeature = new WeakMap<SnapFeatureLike, FeatureProjection | null>();
+
+  candidates.forEach((candidate) => {
+    const featureKey = createFeatureCandidateKey(candidate);
+    if (!featureKey
+      || candidate.feature === primary.feature
+      || (primaryFeatureKey !== null && featureKey === primaryFeatureKey)) {
+      return;
+    }
+    // 同一渲染切片可能产生多个 vertex/segment 命中，但不同 geometry 切片必须分别投影。
+    if (!projectionByFeature.has(candidate.feature)) {
+      projectionByFeature.set(
+        candidate.feature,
+        resolveFeatureProjection(map, pointer.point, candidate.feature)
+      );
+    }
+    const projection = projectionByFeature.get(candidate.feature);
+    if (!projection || projection.distancePx > nearbyTolerancePx) {
+      return;
+    }
+    const meterGap = getCoordinateDistanceMeters(
+      primaryProjection.coordinate,
+      projection.coordinate
+    );
+    const screenGapPx = getScreenDistance(primaryProjection.point, projection.point);
+    if (meterGap > nearbyOptions.maxDistanceMeters || screenGapPx > nearbyTolerancePx) {
+      return;
+    }
+
+    const current = alternatives.get(featureKey);
+    const next = { candidate, projection, meterGap };
+    if (!current || compareNearbyAlternatives(next, current) < 0) {
+      alternatives.set(featureKey, next);
+    }
+  });
+
+  const sortedAlternatives = [...alternatives.values()].sort((first, second) => (
+    first.projection.distancePx - second.projection.distancePx
+    || first.meterGap - second.meterGap
+    || (createFeatureCandidateKey(first.candidate) ?? '')
+      .localeCompare(createFeatureCandidateKey(second.candidate) ?? '')
+    || createCandidateKey(first.candidate).localeCompare(createCandidateKey(second.candidate))
+  ));
+  return [
+    projectedPrimary,
+    ...sortedAlternatives.map(({ candidate, projection }) => ({
+      ...candidate,
+      coordinate: projection.coordinate,
+      distancePx: projection.distancePx,
+    })),
+  ];
+}
+
+/** 只读 decision 坐标工厂。 */
+function freezeCoordinate(coordinate: readonly [number, number]): readonly [number, number] {
+  return Object.freeze([coordinate[0], coordinate[1]] as [number, number]);
+}
+
+/**
+ * 复制公开 segment，避免 decision 暴露内部仍可修改的引用。
+ * @param segment 原始 segment
+ * @returns 只读语义下的独立 segment；无 segment 时返回 null
+ */
+function cloneSegment(segment: MapFeatureSnapSegmentInfo | null): MapFeatureSnapSegmentInfo | null {
+  if (!segment) {
+    return null;
+  }
+  return Object.freeze({
+    pathIndex: segment.pathIndex,
+    ringIndex: segment.ringIndex,
+    segmentIndex: segment.segmentIndex,
+    startCoordinate: [...segment.startCoordinate] as [number, number],
+    endCoordinate: [...segment.endCoordinate] as [number, number],
+  });
+}
+
+/**
+ * 创建可区分同一要素不同几何位置的稳定 key。
+ * @param value 目标或 participant 的身份与位置证据
+ * @returns 包含来源、要素、坐标和 segment 位置的稳定 key
+ */
+function createDecisionKey(value: {
+  ruleId: string;
+  sourceId: string | null;
+  sourceLayer?: string;
+  layerId: string | null;
+  feature: SnapFeatureLike;
+  coordinate: readonly [number, number];
+  segment: MapFeatureSnapSegmentInfo | null;
+}): string {
+  const featureIdentity = value.feature.id ?? JSON.stringify(value.feature.geometry);
+  const segmentIdentity = value.segment
+    ? `${value.segment.pathIndex}:${value.segment.segmentIndex}`
+    : 'point';
+  return [
+    value.ruleId,
+    value.sourceId ?? '',
+    value.sourceLayer ?? '',
+    value.layerId ?? '',
+    featureIdentity,
+    Number.isFinite(value.coordinate[0]) ? value.coordinate[0].toFixed(9) : String(value.coordinate[0]),
+    Number.isFinite(value.coordinate[1]) ? value.coordinate[1].toFixed(9) : String(value.coordinate[1]),
+    segmentIdentity,
+  ].join(':');
+}
+
+/**
+ * 将内部候选转换为 decision target。
+ * @param candidate 当前内部候选
+ * @returns 不暴露内部 rule 引用的不可变 target
+ */
+function toDecisionTarget(candidate: SnapCandidate): MapFeatureSnapTarget {
+  const segment = cloneSegment(candidate.segment);
+  const geometryCoordinate = freezeCoordinate(candidate.coordinate);
+  return Object.freeze({
+    key: createDecisionKey({
+      ruleId: candidate.rule.id,
+      sourceId: candidate.sourceId,
+      sourceLayer: candidate.feature.sourceLayer,
+      layerId: candidate.layerId,
+      feature: candidate.feature,
+      coordinate: candidate.coordinate,
+      segment: candidate.segment,
+    }),
+    ruleId: candidate.rule.id,
+    sourceId: candidate.sourceId,
+    ...(candidate.feature.sourceLayer ? { sourceLayer: candidate.feature.sourceLayer } : {}),
+    layerId: candidate.layerId,
+    feature: candidate.feature,
+    geometryCoordinate,
+    attachment: candidate.attachment ?? 'real',
+    segment,
+    snapKind: candidate.snapKind,
+    distancePx: candidate.distancePx,
+  });
+}
+
+/**
+ * 将交点兼容 parent 转换为规范 participant。
+ * @param parent 当前交点父线
+ * @returns 带真实附着位置的不可变 participant
+ */
+function toDecisionParticipant(parent: MapFeatureSnapParent): MapFeatureSnapParticipant {
+  const coordinate = parent.geometryCoordinate ?? [Number.NaN, Number.NaN];
+  const segment = cloneSegment(parent.segment ?? null);
+  const feature = parent.feature as SnapFeatureLike;
+  return Object.freeze({
+    key: createDecisionKey({
+      ruleId: parent.ruleId,
+      sourceId: parent.sourceId,
+      sourceLayer: parent.sourceLayer,
+      layerId: parent.layerId,
+      feature,
+      coordinate,
+      segment: parent.segment ?? null,
+    }),
+    ruleId: parent.ruleId,
+    sourceId: parent.sourceId,
+    ...(parent.sourceLayer ? { sourceLayer: parent.sourceLayer } : {}),
+    layerId: parent.layerId,
+    feature,
+    geometryCoordinate: freezeCoordinate(coordinate),
+    attachment: parent.attachment ?? 'real',
+    segment,
+  });
+}
+
+/** @returns 坐标两个分量是否都是有限数值。 */
+function isFiniteCoordinate(coordinate: readonly [number, number]): boolean {
+  return coordinate.every(Number.isFinite);
+}
+
+/**
+ * 创建证据错误结果，明确阻断所有未命中 fallback。
+ * @param reason 无法形成合法 decision 的原因
+ * @returns matched=false 且 resolution=invalid 的结果
+ */
+function createInvalidMapFeatureSnapResult(
+  reason: MapFeatureSnapInvalidReason
+): MapFeatureSnapResult {
+  return {
+    ...createEmptyMapFeatureSnapResult(),
+    resolution: { status: 'invalid', reason },
+  };
+}
+
+/**
+ * 比较同一 decision 中的目标，保证输入与渲染切片顺序不影响 primary。
+ * @param relation 当前交互关系
+ * @param left 左候选
+ * @param right 右候选
+ * @returns Array.sort 比较值
+ */
+function compareDecisionCandidates(
+  relation: MapFeatureSnapRelation,
+  left: SnapCandidate,
+  right: SnapCandidate
+): number {
+  const priorityDiff = (right.rule.priority ?? 0) - (left.rule.priority ?? 0);
+  if (priorityDiff) {
+    return priorityDiff;
+  }
+  if (relation !== 'intersection') {
+    const kindOrder: Record<MapFeatureSnapKind, number> = {
+      vertex: 0,
+      segment: 1,
+      crossLayerIntersect: 2,
+      sameLayerIntersect: 3,
+    };
+    const kindDiff = kindOrder[left.snapKind] - kindOrder[right.snapKind];
+    if (kindDiff) {
+      return kindDiff;
+    }
+  }
+  return left.distancePx - right.distancePx
+    || createDecisionKey({
+      ruleId: left.rule.id,
+      sourceId: left.sourceId,
+      sourceLayer: left.feature.sourceLayer,
+      layerId: left.layerId,
+      feature: left.feature,
+      coordinate: left.coordinate,
+      segment: left.segment,
+    }).localeCompare(createDecisionKey({
+      ruleId: right.rule.id,
+      sourceId: right.sourceId,
+      sourceLayer: right.feature.sourceLayer,
+      layerId: right.layerId,
+      feature: right.feature,
+      coordinate: right.coordinate,
+      segment: right.segment,
+    }));
+}
+
+/**
+ * 将 decision target 投影为旧版候选字段。
+ * @param target 当前规范 target
+ * @param parents intersection 的兼容父线集合
+ * @returns 完全由 decision 派生的兼容候选
+ */
+function toPublicCandidate(
+  target: MapFeatureSnapTarget,
+  parents: MapFeatureSnapParent[]
+): MapFeatureSnapCandidate {
+  const feature = target.feature as SnapFeatureLike;
+  return {
+    distancePx: target.distancePx,
+    snapKind: target.snapKind,
+    ruleId: target.ruleId,
+    targetFeature: feature.layer ? (feature as MapGeoJSONFeature) : null,
+    targetLayerId: target.layerId,
+    targetSourceId: target.sourceId,
+    targetCoordinate: [...target.geometryCoordinate],
+    segment: cloneSegment(target.segment),
+    parents,
+  };
+}
+
+/**
+ * 将主候选和同位置近邻候选转换为统一输出对象。
  * @param candidate 当前命中的最佳候选
+ * @param candidates 当前指针位置的稳定候选集合
  * @returns 标准化后的吸附结果
  */
-function toSnapResult(candidate: SnapCandidate | null): MapFeatureSnapResult {
+function toSnapResult(
+  candidate: SnapCandidate | null,
+  candidates: SnapCandidate[] = candidate ? [candidate] : [],
+  relationOverride?: MapFeatureSnapRelation
+): MapFeatureSnapResult {
   if (!candidate) {
     return createEmptyMapFeatureSnapResult();
   }
 
+  const relation = relationOverride
+    ?? (candidate.snapCoordinate ? 'intersection' : candidates.length > 1 ? 'nearby' : 'direct');
+  const sortedCandidates = [...candidates].sort((left, right) => (
+    compareDecisionCandidates(relation, left, right)
+  ));
+  const targetMap = new Map<string, MapFeatureSnapTarget>();
+  sortedCandidates.forEach((item) => {
+    const target = toDecisionTarget(item);
+    if (!targetMap.has(target.key)) {
+      targetMap.set(target.key, target);
+    }
+  });
+  const targets = [...targetMap.values()];
+  const participantMap = new Map<string, MapFeatureSnapParticipant>();
+  if (relation === 'intersection') {
+    candidate.parents.map(toDecisionParticipant).forEach((participant) => {
+      const current = participantMap.get(participant.key);
+      if (!current || (current.attachment === 'extended' && participant.attachment === 'real')) {
+        participantMap.set(participant.key, participant);
+      }
+    });
+  }
+  const participants = [...participantMap.values()].sort((left, right) => left.key.localeCompare(right.key));
+  const primary = targets[0];
+  const snapCoordinate = freezeCoordinate(candidate.snapCoordinate ?? primary?.geometryCoordinate ?? candidate.coordinate);
+
+  if (
+    !primary
+    || !isFiniteCoordinate(snapCoordinate)
+    || targets.some((target) => (
+      !isFiniteCoordinate(target.geometryCoordinate) || !Number.isFinite(target.distancePx)
+    ))
+    || participants.some((participant) => !isFiniteCoordinate(participant.geometryCoordinate))
+  ) {
+    return createInvalidMapFeatureSnapResult('non-finite-coordinate');
+  }
+  if (
+    (relation === 'direct' && (targets.length !== 1 || participants.length !== 0))
+    || (relation === 'nearby' && (targets.length < 2 || participants.length !== 0))
+    || (relation === 'intersection' && (targets.length < 1 || participants.length < 2))
+  ) {
+    return createInvalidMapFeatureSnapResult(
+      relation === 'intersection' ? 'incomplete-intersection-evidence' : 'invalid-cardinality'
+    );
+  }
+  if (relation === 'intersection') {
+    const participantKeys = new Set(participants.map((participant) => participant.key));
+    if (targets.some((target) => !participantKeys.has(target.key))) {
+      return createInvalidMapFeatureSnapResult('incomplete-intersection-evidence');
+    }
+  }
+
+  const decision: MapFeatureSnapDecision = Object.freeze({
+    relation,
+    snapKind: candidate.snapKind,
+    snapCoordinate,
+    primaryTargetKey: primary.key,
+    targets: Object.freeze(targets),
+    participants: Object.freeze(participants),
+  });
+  const parents: MapFeatureSnapParent[] = decision.participants.map((participant) => ({
+    ruleId: participant.ruleId,
+    sourceId: participant.sourceId,
+    ...(participant.sourceLayer ? { sourceLayer: participant.sourceLayer } : {}),
+    layerId: participant.layerId,
+    feature: participant.feature as MapFeatureSnapParent['feature'],
+    attachment: participant.attachment,
+    geometryCoordinate: [...participant.geometryCoordinate],
+    segment: cloneSegment(participant.segment),
+  }));
+  const primaryFeature = primary.feature as SnapFeatureLike;
   return {
+    resolution: { status: 'matched', decision },
     matched: true,
     lngLat: {
-      lng: candidate.coordinate[0],
-      lat: candidate.coordinate[1],
+      lng: decision.snapCoordinate[0],
+      lat: decision.snapCoordinate[1],
     },
-    distancePx: candidate.distancePx,
-    snapKind: candidate.snapKind,
-    ruleId: candidate.rule.id,
-    targetFeature: candidate.feature.layer ? (candidate.feature as MapGeoJSONFeature) : null,
-    targetLayerId: candidate.layerId,
-    targetSourceId: candidate.sourceId,
-    targetCoordinate: candidate.coordinate,
-    segment: candidate.segment,
-    parents: candidate.parents,
+    distancePx: primary.distancePx,
+    snapKind: decision.snapKind,
+    ruleId: primary.ruleId,
+    targetFeature: primaryFeature.layer ? (primaryFeature as MapGeoJSONFeature) : null,
+    targetLayerId: primary.layerId,
+    targetSourceId: primary.sourceId,
+    targetCoordinate: [...primary.geometryCoordinate],
+    anchorCoordinate: [...decision.snapCoordinate],
+    segment: cloneSegment(primary.segment),
+    parents,
+    candidates: decision.targets.map((target) => toPublicCandidate(target, parents)),
   };
 }
 
@@ -1115,7 +1706,10 @@ function getEnabledSnapRules(
 export function buildPreviewData(
   result: MapFeatureSnapResult
 ): PreviewFeatureCollection {
-  if (!result.matched || !result.targetCoordinate) {
+  const previewCoordinate = result.resolution.status === 'matched'
+    ? result.resolution.decision.snapCoordinate
+    : null;
+  if (!result.matched || !previewCoordinate) {
     return createEmptyPreviewFeatureCollection();
   }
 
@@ -1127,7 +1721,7 @@ export function buildPreviewData(
       properties: { kind: 'point' },
       geometry: {
         type: 'Point',
-        coordinates: result.targetCoordinate,
+        coordinates: [...previewCoordinate],
       },
     }],
   };
@@ -1223,7 +1817,22 @@ export function createMapFeatureSnapBinding(options: {
       targets.set(`${source}:${sourceLayer ?? ''}:${String(id)}`, target);
     };
 
-    if (result.parents?.length) {
+    const candidates = result.candidates?.length ? result.candidates : null;
+    if (candidates) {
+      candidates.forEach((candidate) => {
+        if (candidate.parents.length) {
+          candidate.parents.forEach((parent) => {
+            appendTarget(parent.sourceId, parent.feature.id, parent.sourceLayer);
+          });
+          return;
+        }
+        appendTarget(
+          candidate.targetSourceId ?? candidate.targetFeature?.source,
+          candidate.targetFeature?.id,
+          candidate.targetFeature?.sourceLayer
+        );
+      });
+    } else if (result.parents?.length) {
       result.parents.forEach((parent) => {
         appendTarget(parent.sourceId, parent.feature.id, parent.sourceLayer);
       });
@@ -1259,6 +1868,7 @@ export function createMapFeatureSnapBinding(options: {
         snapPreviewColor: style?.color ?? null,
         snapPreviewOpacity: style?.opacity ?? null,
         snapPreviewLineWidth: style?.lineWidth ?? null,
+        snapPreviewPointRadius: style?.pointRadius ?? null,
       });
     } catch {
       // style/source 合并期间目标可能短暂不可用，后续地图数据事件会再次补写。
@@ -1327,6 +1937,8 @@ export function createMapFeatureSnapBinding(options: {
   let restoreFrameHandle: number | null = null;
   let restoreAllStateTargets = false;
   const pendingRestoreSourceIds = new Set<string>();
+  let lastPointer: ResolvePointerOptions | null = null;
+  let activePreviewSnapshot: MapFeatureSnapPreviewSnapshot | null = null;
 
   /**
    * 取消当前已调度但尚未执行的预览同步。
@@ -1408,20 +2020,24 @@ export function createMapFeatureSnapBinding(options: {
   }
 
   /**
-   * 主动清空当前吸附预览。
+   * 清空当前吸附预览及活动状态。
+   * @param preservePointer 是否保留最后屏幕指针供配置或缩放结束后重算
    */
-  function clearPreview(): void {
+  function resetPreview(preservePointer: boolean): void {
     cancelPreviewSync();
     cancelStateRestore();
     previewData.value = createEmptyPreviewFeatureCollection();
     clearStateTargets();
+    activePreviewSnapshot = null;
+    if (!preservePointer) {
+      lastPointer = null;
+    }
   }
 
-  const stopPreviewWatch = watchEffect(() => {
-    if (getOptions()?.preview?.enabled === false) {
-      clearPreview();
-    }
-  }, { flush: 'sync' });
+  /** 主动清空当前吸附预览，并丢弃旧指针上下文。 */
+  function clearPreview(): void {
+    resetPreview(false);
+  }
 
   /**
    * 根据当前指针位置解析吸附结果。
@@ -1445,21 +2061,68 @@ export function createMapFeatureSnapBinding(options: {
     const ruleScope = rawRuleScope === null || rawRuleScope === undefined
       ? null
       : new Set(rawRuleScope);
-    let bestCandidate = resolveSnapCandidate(map, normalizedRules, pointer, ruleScope);
-
-    resolveIntersectionCandidates(
+    const nearbyOptions = resolveNearbyOptions(snapOptions?.nearby);
+    const regularCandidates = resolveSnapCandidates(
+      map,
+      normalizedRules,
+      pointer,
+      ruleScope,
+      nearbyOptions.enabled ? nearbyOptions.paddingPx : 0
+    );
+    const directCandidates = regularCandidates.filter((candidate) => {
+      const tolerancePx = getResolvedTolerancePx(candidate.rule, defaultTolerancePx);
+      return candidate.distancePx <= tolerancePx;
+    });
+    const intersectionCandidates = resolveIntersectionCandidates(
       map,
       intersectionStore,
       normalizedRules,
       pointer,
-      ruleScope
-    ).forEach((candidate) => {
-      if (shouldReplaceCandidate(bestCandidate, candidate)) {
+      ruleScope,
+      nearbyOptions.enabled ? nearbyOptions.paddingPx : 0
+    );
+    const allCandidates = [...directCandidates, ...intersectionCandidates];
+    if (!allCandidates.length) {
+      return createEmptyMapFeatureSnapResult();
+    }
+    const winningPriority = Math.max(...allCandidates.map((item) => item.rule.priority ?? 0));
+    const winningIntersections = intersectionCandidates.filter((item) => (
+      (item.rule.priority ?? 0) === winningPriority
+    ));
+    if (winningIntersections.length) {
+      const bestIntersection = [...winningIntersections].sort((left, right) => {
+        const kindOrder = { crossLayerIntersect: 0, sameLayerIntersect: 1 } as const;
+        return left.distancePx - right.distancePx
+          || kindOrder[left.snapKind as keyof typeof kindOrder]
+            - kindOrder[right.snapKind as keyof typeof kindOrder]
+          || JSON.stringify(left.snapCoordinate).localeCompare(JSON.stringify(right.snapCoordinate))
+          || createCandidateKey(left).localeCompare(createCandidateKey(right));
+      })[0];
+      const nodeKey = JSON.stringify(bestIntersection.snapCoordinate);
+      const nodeTargets = intersectionCandidates.filter((item) => (
+        JSON.stringify(item.snapCoordinate) === nodeKey
+      ));
+      return toSnapResult(bestIntersection, nodeTargets, 'intersection');
+    }
+
+    let bestCandidate: SnapCandidate | null = null;
+    directCandidates.forEach((candidate) => {
+      if (
+        (candidate.rule.priority ?? 0) === winningPriority
+        && shouldReplaceCandidate(bestCandidate, candidate)
+      ) {
         bestCandidate = candidate;
       }
     });
 
-    return toSnapResult(bestCandidate);
+    const nearbyCandidates = bestCandidate
+      ? resolveNearbyCandidates(map, bestCandidate, regularCandidates, pointer, nearbyOptions)
+      : [];
+    return toSnapResult(
+      bestCandidate,
+      nearbyCandidates,
+      nearbyCandidates.length > 1 ? 'nearby' : 'direct'
+    );
   }
 
   /**
@@ -1479,6 +2142,66 @@ export function createMapFeatureSnapBinding(options: {
       },
     });
   }
+
+  /**
+   * 将指定指针的解析结果提交为可消费快照，并按配置同步视觉预览。
+   * @param pointer 同一帧使用的原始屏幕坐标与经纬度
+   * @returns 当前指针对应的吸附结果
+   */
+  function commitPreview(pointer: ResolvePointerOptions): MapFeatureSnapResult {
+    const snapOptions = getOptions();
+    if (!isSnapPluginEnabled(snapOptions)) {
+      resetPreview(true);
+      return createEmptyMapFeatureSnapResult();
+    }
+
+    const result = resolvePointer(pointer);
+    const previewEnabled = snapOptions?.preview?.enabled !== false;
+    previewData.value = previewEnabled && snapOptions?.preview?.pointEnabled !== false
+      ? buildPreviewData(result)
+      : createEmptyPreviewFeatureCollection();
+    if (previewEnabled) {
+      syncStateTargets(result, createTargetStyle(snapOptions));
+    } else {
+      clearStateTargets();
+    }
+    activePreviewSnapshot = {
+      originalCoordinate: [pointer.lngLat.lng, pointer.lngLat.lat],
+      pointer: { ...pointer.point },
+      result,
+    };
+    return result;
+  }
+
+  /**
+   * 读取当前已经提交并可供交互消费的指针快照。
+   * @returns 当前吸附快照；快照已清理时返回 null
+   */
+  function getPreviewSnapshot(): MapFeatureSnapPreviewSnapshot | null {
+    if (!activePreviewSnapshot) {
+      return null;
+    }
+    return {
+      originalCoordinate: [...activePreviewSnapshot.originalCoordinate],
+      pointer: { ...activePreviewSnapshot.pointer },
+      result: activePreviewSnapshot.result,
+    };
+  }
+
+  const stopPreviewWatch = watchEffect(() => {
+    const snapOptions = getOptions();
+    // 显式读取有效规则和样式，使运行期规则、target 与 preview 配置变化立即刷新静止指针。
+    getEnabledSnapRules(snapOptions);
+    createTargetStyle(snapOptions);
+    options.getRuleScope?.();
+    if (!lastPointer) {
+      if (!isSnapPluginEnabled(snapOptions) || snapOptions?.preview?.enabled === false) {
+        resetPreview(true);
+      }
+      return;
+    }
+    commitPreview(lastPointer);
+  }, { flush: 'sync' });
 
   /**
    * 根据 TerraDraw 鼠标事件解析吸附结果。
@@ -1512,20 +2235,12 @@ export function createMapFeatureSnapBinding(options: {
       return;
     }
 
-    const snapOptions = getOptions();
-    if (!isSnapPluginEnabled(snapOptions)) {
-      clearPreview();
-      resultHandler?.(createEmptyMapFeatureSnapResult());
-      return;
-    }
-
-    const result = resolveMapEvent(latestEvent);
-    if (snapOptions?.preview?.enabled === false) {
-      clearPreview();
-    } else {
-      previewData.value = buildPreviewData(result);
-      syncStateTargets(result, createTargetStyle(snapOptions));
-    }
+    const pointer = {
+      point: { x: latestEvent.point.x, y: latestEvent.point.y },
+      lngLat: { lng: latestEvent.lngLat.lng, lat: latestEvent.lngLat.lat },
+    };
+    lastPointer = pointer;
+    const result = commitPreview(pointer);
     resultHandler?.(result);
   }
 
@@ -1538,6 +2253,10 @@ export function createMapFeatureSnapBinding(options: {
     event: MapMouseEvent,
     onResolved?: (result: MapFeatureSnapResult) => void
   ): void {
+    lastPointer = {
+      point: { x: event.point.x, y: event.point.y },
+      lngLat: { lng: event.lngLat.lng, lat: event.lngLat.lat },
+    };
     pendingPreviewEvent = event;
     if (onResolved) {
       pendingResultHandler = onResolved;
@@ -1574,11 +2293,25 @@ export function createMapFeatureSnapBinding(options: {
     clearPreview();
   }
 
+  /** 视图移动开始时清理旧高亮，但保留屏幕指针供 zoomend 重新投影。 */
+  function handleViewStart(): void {
+    resetPreview(true);
+  }
+
   /**
    * 缩放结束后按当前 zoom 重新计算 source 与 layer filter。
    */
   function handleZoomEnd(): void {
     rebuildIntersectionStore();
+    if (!lastPointer) {
+      return;
+    }
+    const lngLat = map.unproject([lastPointer.point.x, lastPointer.point.y]);
+    lastPointer = {
+      point: { ...lastPointer.point },
+      lngLat: { lng: lngLat.lng, lat: lngLat.lat },
+    };
+    commitPreview(lastPointer);
   }
 
   /** style 重建后恢复仍活动的吸附目标状态。 */
@@ -1598,8 +2331,8 @@ export function createMapFeatureSnapBinding(options: {
 
   map.on('mousemove', handleMouseMove);
   map.on('mouseout', handleMouseOut);
-  map.on('movestart', clearPreview);
-  map.on('zoomstart', clearPreview);
+  map.on('movestart', handleViewStart);
+  map.on('zoomstart', handleViewStart);
   map.on('zoomend', handleZoomEnd);
   map.on('styledata', handleStyleData);
   map.on('sourcedata', handleSourceData);
@@ -1611,6 +2344,7 @@ export function createMapFeatureSnapBinding(options: {
     resolvePointer,
     resolveTerradrawEvent,
     clearPreview,
+    getPreviewSnapshot,
     destroy: () => {
       if (hasDisposed) {
         return;
@@ -1624,8 +2358,8 @@ export function createMapFeatureSnapBinding(options: {
 
       map.off('mousemove', handleMouseMove);
       map.off('mouseout', handleMouseOut);
-      map.off('movestart', clearPreview);
-      map.off('zoomstart', clearPreview);
+      map.off('movestart', handleViewStart);
+      map.off('zoomstart', handleViewStart);
       map.off('zoomend', handleZoomEnd);
       map.off('styledata', handleStyleData);
       map.off('sourcedata', handleSourceData);

@@ -9,6 +9,10 @@ import type {
   MapLayerInteractiveContext,
   MapLayerInteractiveLayerOptions,
   MapLayerInteractiveOptions,
+  MapLayerSelectedFeature,
+  MapSelectionUndoHistory,
+  MapSelectionReplaceOptions,
+  MapSelectionDeactivateOptions,
   MapSelectionState,
   ResolvedMapSelectionToolOptions,
   TerradrawControlType,
@@ -77,11 +81,31 @@ export interface MapSelectionBindingController {
   /** 激活多选模式。 */
   activate: () => void;
   /** 退出多选模式。 */
-  deactivate: () => void;
+  deactivate: (options?: MapSelectionDeactivateOptions) => void;
   /** 清空当前选中集。 */
   clear: () => void;
   /** 读取当前多选模式是否已激活。 */
   isActive: () => boolean;
+  /** 读取当前完整选中集快照。 */
+  getSelectedFeatures: () => MapLayerSelectedFeature[];
+  /** 原子替换完整选中集，并同步 feature-state。 */
+  replaceSelectedFeatures: (
+    features: MapLayerSelectedFeature[],
+    options?: MapSelectionReplaceOptions
+  ) => void;
+  /**
+   * 回退到上一次用户可见选中变化之前的完整选中集、主选中项和范围起点。
+   * @returns 发生回退时返回 true；无历史时返回 false
+   */
+  undo: () => boolean;
+  /** 当前是否存在可回退历史。 */
+  canUndo: () => boolean;
+  /** 清空当前多选编辑周期内的 undo 历史。 */
+  clearUndoHistory: () => void;
+  /** 读取当前 undo 历史副本。 */
+  snapshotUndoHistory: () => MapSelectionUndoHistory;
+  /** 恢复指定 undo 历史。 */
+  restoreUndoHistory: (history: MapSelectionUndoHistory) => void;
 }
 
 /** 地图选择服务统一接口。 */
@@ -97,13 +121,33 @@ export interface MapSelectionService {
   /** 激活多选模式。 */
   activate: () => void;
   /** 退出多选模式。 */
-  deactivate: () => void;
+  deactivate: (options?: MapSelectionDeactivateOptions) => void;
   /** 切换多选模式。 */
   toggle: () => void;
   /** 清空当前选中集。 */
   clear: () => void;
   /** 读取当前多选模式是否已激活。 */
   isActive: () => boolean;
+  /** 读取当前完整选中集快照。 */
+  getSelectedFeatures: () => MapLayerSelectedFeature[];
+  /** 原子替换完整选中集，并同步 feature-state。 */
+  replaceSelectedFeatures: (
+    features: MapLayerSelectedFeature[],
+    options?: MapSelectionReplaceOptions
+  ) => void;
+  /**
+   * 回退到上一次用户可见选中变化之前的完整选中集、主选中项和范围起点。
+   * @returns 发生回退时返回 true；无历史时返回 false
+   */
+  undo: () => boolean;
+  /** 当前是否存在可回退历史。 */
+  canUndo: () => boolean;
+  /** 清空当前多选编辑周期内的 undo 历史。 */
+  clearUndoHistory: () => void;
+  /** 读取当前 undo 历史副本。 */
+  snapshotUndoHistory: () => MapSelectionUndoHistory;
+  /** 恢复指定 undo 历史。 */
+  restoreUndoHistory: (history: MapSelectionUndoHistory) => void;
 }
 
 /** 单个插件渲染项。 */

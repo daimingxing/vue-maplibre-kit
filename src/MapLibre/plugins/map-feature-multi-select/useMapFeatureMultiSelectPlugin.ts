@@ -29,16 +29,26 @@ export const mapFeatureMultiSelectPlugin = defineMapPlugin({
     });
     const pluginApi = computed<MapFeatureMultiSelectPluginApi>(() => ({
       activate: () => multiSelectService.activate(),
-      deactivate: () => multiSelectService.deactivate(),
+      deactivate: (options) => multiSelectService.deactivate(options),
       toggle: () => multiSelectService.toggle(),
       clear: () => multiSelectService.clear(),
       isActive: () => multiSelectService.isActive(),
-      getSelectedFeatures: () => [...multiSelectService.state.value.selectedFeatures],
+      getSelectedFeatures: () => multiSelectService.getSelectedFeatures(),
+      replaceSelectedFeatures: (features, options) =>
+        multiSelectService.replaceSelectedFeatures(features, options),
+      undo: () => multiSelectService.undo(),
+      canUndo: () => multiSelectService.canUndo(),
+      clearUndoHistory: () => multiSelectService.clearUndoHistory(),
+      snapshotUndoHistory: () => multiSelectService.snapshotUndoHistory(),
+      restoreUndoHistory: (history) => multiSelectService.restoreUndoHistory(history),
     }));
 
     return {
       getRenderItems: () => {
-        if (!multiSelectService.resolvedOptions.value.enabled) {
+        if (
+          !multiSelectService.resolvedOptions.value.enabled
+          || !multiSelectService.resolvedOptions.value.showControl
+        ) {
           return [];
         }
 

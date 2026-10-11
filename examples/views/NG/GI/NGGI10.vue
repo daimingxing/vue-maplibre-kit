@@ -67,6 +67,18 @@ const plugins = createBusinessPlugins({
     deactivateBehavior: "retain",
     targetLayerIds: [EXAMPLE_POINT_LAYER_ID, EXAMPLE_LINE_LAYER_ID],
     canSelect: (context) => context.layerId !== null,
+    gestures: {
+      clickAdd: true,
+      clickDeselect: true,
+      box: true,
+      range: true,
+    },
+    resolveRange: (anchor, endpoint) => {
+      if (anchor.layerId !== endpoint.layerId) {
+        return { status: "rejected", reason: "rangeUnsupported" };
+      }
+      return { status: "resolved", features: [anchor, endpoint] };
+    },
   },
 });
 

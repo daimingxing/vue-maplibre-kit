@@ -42,6 +42,39 @@ interface TerradrawSnappingPatch extends TerradrawModePatch {
   };
 }
 
+/** TerraDraw 合并地图与已绘制要素后的内部吸附状态。 */
+type TerradrawCustomSnapResolution =
+  | { status: 'matched'; coordinate: [number, number] }
+  | { status: 'unmatched' }
+  | { status: 'invalid' };
+
+/** TerraDraw 自定义吸附可使用的候选来源。 */
+interface TerradrawCustomSnapSources {
+  /** 解析普通地图业务图层吸附结果。 */
+  resolveMapResult?: (event: TerraDrawMouseEvent) => MapFeatureSnapResult | null | undefined;
+  /** 解析 TerraDraw 已绘制要素吸附结果。 */
+  resolveDrawnResult?: (event: TerraDrawMouseEvent) => MapFeatureSnapResult | null | undefined;
+}
+
+type TerradrawModeDragCallback = (event: TerraDrawMouseEvent, setMapDraggability: (enabled: boolean) => void) => void;
+
+interface TerradrawGuardableMode {
+  onClick?: (event: TerraDrawMouseEvent) => void;
+  onMouseMove?: (event: TerraDrawMouseEvent) => void;
+  onDragStart?: TerradrawModeDragCallback;
+  onDrag?: TerradrawModeDragCallback;
+  onDragEnd?: TerradrawModeDragCallback;
+  /** TerraDraw 内置 mode 的 provisional 清理入口；仅在 invalid 拖拽中使用。 */
+  cleanUp?: () => void;
+}
+
+interface TerradrawModeGuardState {
+  coordinator: TerradrawSnapInputCoordinator;
+  dragBlocked: boolean;
+}
+
+const terradrawModeGuardStates = new WeakMap<object, TerradrawModeGuardState>();
+
 /**
  * 判断错误是否来自 TerraDraw 未注册指定模式。
  * @param error 捕获到的异常
@@ -92,24 +125,182 @@ export function buildTerradrawCustomSnapResolver(options: {
   resolveDrawnResult?: (event: TerraDrawMouseEvent) => MapFeatureSnapResult | null | undefined;
 }): (event: TerraDrawMouseEvent) => [number, number] | undefined {
   return (event) => {
-    const mapResult = options.resolveMapResult?.(event) || null;
-    const drawnResult = options.resolveDrawnResult?.(event) || null;
-    const matchedResults = [mapResult, drawnResult].filter(
-      (result): result is MapFeatureSnapResult => Boolean(result?.matched && result.targetCoordinate)
-    );
+    const resolution = resolveTerradrawCustomSnap(event, options);
+    return resolution.status === 'matched' ? [...resolution.coordinate] : undefined;
+  };
+}
 
-    if (!matchedResults.length) {
-      return undefined;
+/**
+ * 合并同一次 TerraDraw 输入的地图与已绘制要素吸附结果。
+ * 任一已启用来源返回 invalid 时必须阻断其他来源，只有全部来源正常时才比较 matched 距离。
+ * @param event 当前 TerraDraw 指针事件
+ * @param sources 当前启用的自定义吸附来源
+ * @returns TerraDraw 内部 matched、unmatched 或 invalid 状态
+ */
+function resolveTerradrawCustomSnap(
+  event: TerraDrawMouseEvent,
+  sources: TerradrawCustomSnapSources
+): TerradrawCustomSnapResolution {
+  const results = [
+    sources.resolveMapResult?.(event) || null,
+    sources.resolveDrawnResult?.(event) || null,
+  ].filter((result): result is MapFeatureSnapResult => Boolean(result));
+
+  if (results.some((result) => result.resolution.status === 'invalid')) {
+    return { status: 'invalid' };
+  }
+
+  const matchedResults = results.filter(
+    (result): result is MapFeatureSnapResult & {
+      resolution: Extract<MapFeatureSnapResult['resolution'], { status: 'matched' }>;
+    } => result.resolution.status === 'matched'
+  );
+  if (!matchedResults.length) {
+    return { status: 'unmatched' };
+  }
+
+  const bestResult = [...matchedResults].sort((left, right) => {
+    const leftDistance = left.distancePx ?? Number.POSITIVE_INFINITY;
+    const rightDistance = right.distancePx ?? Number.POSITIVE_INFINITY;
+    return leftDistance - rightDistance;
+  })[0];
+
+  return {
+    status: 'matched',
+    coordinate: [...bestResult.resolution.decision.snapCoordinate],
+  };
+}
+
+/**
+ * 创建可同时供 toCustom 与 mode 输入守卫消费的 TerraDraw 吸附协调器。
+ * @returns 更新来源、解析当前事件和阻断 invalid 输入的方法
+ */
+export function createTerradrawSnapInputCoordinator(): TerradrawSnapInputCoordinator {
+  let sources: TerradrawCustomSnapSources = {};
+  let cache = new WeakMap<object, TerradrawCustomSnapResolution>();
+
+  const resolve = (event: TerraDrawMouseEvent): TerradrawCustomSnapResolution => {
+    const cached = cache.get(event);
+    if (cached) {
+      return cached;
     }
 
-    const bestResult = matchedResults.sort((left, right) => {
-      const leftDistance = left.distancePx ?? Number.POSITIVE_INFINITY;
-      const rightDistance = right.distancePx ?? Number.POSITIVE_INFINITY;
-      return leftDistance - rightDistance;
-    })[0];
-
-    return bestResult.targetCoordinate || undefined;
+    const result = resolveTerradrawCustomSnap(event, sources);
+    cache.set(event, result);
+    return result;
   };
+
+  return {
+    setSources: (nextSources) => {
+      sources = nextSources;
+      cache = new WeakMap<object, TerradrawCustomSnapResolution>();
+    },
+    toCustom: (event) => {
+      const result = resolve(event);
+      return result.status === 'matched' ? [...result.coordinate] : undefined;
+    },
+    isInvalid: (event) => resolve(event).status === 'invalid',
+  };
+}
+
+/** TerraDraw 吸附输入守卫协调器。 */
+export interface TerradrawSnapInputCoordinator {
+  /** 更新当前启用的地图与已绘制要素吸附来源。 */
+  setSources(sources: TerradrawCustomSnapSources): void;
+  /** 返回 matched 的 snapCoordinate；unmatched/invalid 都不提供自定义坐标。 */
+  toCustom(event: TerraDrawMouseEvent): [number, number] | undefined;
+  /** 判断当前输入是否因 invalid 证据而必须阻断。 */
+  isInvalid(event: TerraDrawMouseEvent): boolean;
+}
+
+/**
+ * 为 TerraDraw 标准绘制 mode 增加 invalid 输入守卫。
+ * 不改写原 mode 的 pointerEvents 或 validation；合法输入继续调用原处理器。
+ * @param mode 已实例化的 TerraDraw mode
+ * @param coordinator 当前控件的吸附协调器
+ */
+export function guardTerradrawModeInputs(
+  mode: object,
+  coordinator: TerradrawSnapInputCoordinator
+): void {
+  const existingState = terradrawModeGuardStates.get(mode);
+  if (existingState) {
+    existingState.coordinator = coordinator;
+    existingState.dragBlocked = false;
+    return;
+  }
+
+  const state: TerradrawModeGuardState = { coordinator, dragBlocked: false };
+  terradrawModeGuardStates.set(mode, state);
+  const guardableMode = mode as TerradrawGuardableMode;
+  const original = {
+    onClick: guardableMode.onClick,
+    onMouseMove: guardableMode.onMouseMove,
+    onDragStart: guardableMode.onDragStart,
+    onDrag: guardableMode.onDrag,
+    onDragEnd: guardableMode.onDragEnd,
+  };
+
+  if (original.onClick) {
+    guardableMode.onClick = (event) => {
+      if (event.button === 'left' && state.coordinator.isInvalid(event)) {
+        return;
+      }
+      original.onClick?.call(guardableMode, event);
+    };
+  }
+
+  if (original.onMouseMove) {
+    guardableMode.onMouseMove = (event) => {
+      if (state.coordinator.isInvalid(event)) {
+        return;
+      }
+      original.onMouseMove?.call(guardableMode, event);
+    };
+  }
+
+  if (original.onDragStart) {
+    guardableMode.onDragStart = (event, setMapDraggability) => {
+      if (state.coordinator.isInvalid(event)) {
+        state.dragBlocked = true;
+        return;
+      }
+      state.dragBlocked = false;
+      original.onDragStart?.call(guardableMode, event, setMapDraggability);
+    };
+  }
+
+  if (original.onDrag) {
+    guardableMode.onDrag = (event, setMapDraggability) => {
+      if (state.dragBlocked) {
+        setMapDraggability(true);
+        return;
+      }
+      if (state.coordinator.isInvalid(event)) {
+        state.dragBlocked = true;
+        guardableMode.cleanUp?.();
+        setMapDraggability(true);
+        return;
+      }
+      original.onDrag?.call(guardableMode, event, setMapDraggability);
+    };
+  }
+
+  if (original.onDragEnd) {
+    guardableMode.onDragEnd = (event, setMapDraggability) => {
+      if (state.dragBlocked) {
+        state.dragBlocked = false;
+        setMapDraggability(true);
+        return;
+      }
+      if (state.coordinator.isInvalid(event)) {
+        guardableMode.cleanUp?.();
+        setMapDraggability(true);
+        return;
+      }
+      original.onDragEnd?.call(guardableMode, event, setMapDraggability);
+    };
+  }
 }
 
 /**
@@ -276,6 +467,7 @@ export function syncTerradrawLineAndPolygonSnapping(options: {
   ensureReadyForModeSync: EnsureTerradrawReadyForModeSync;
   resolveMapResult?: (event: TerraDrawMouseEvent) => MapFeatureSnapResult | null | undefined;
   resolveDrawnResult?: (event: TerraDrawMouseEvent) => MapFeatureSnapResult | null | undefined;
+  inputCoordinator?: TerradrawSnapInputCoordinator;
 }): void {
   const {
     drawInstance,
@@ -286,6 +478,7 @@ export function syncTerradrawLineAndPolygonSnapping(options: {
     ensureReadyForModeSync,
     resolveMapResult,
     resolveDrawnResult,
+    inputCoordinator,
   } = options;
 
   if (!ensureReadyForModeSync(drawInstance, taskKey, retryTask)) {
@@ -293,13 +486,14 @@ export function syncTerradrawLineAndPolygonSnapping(options: {
   }
 
   const resolvedSnapOptions = resolveSnapOptions(localSnapConfig);
-  const customSnapResolver = buildTerradrawCustomSnapResolver({
+  const coordinator = inputCoordinator ?? createTerradrawSnapInputCoordinator();
+  coordinator.setSources({
     resolveMapResult: resolvedSnapOptions.useMapTargets ? resolveMapResult : undefined,
     resolveDrawnResult: resolvedSnapOptions.drawnTargets.enabled ? resolveDrawnResult : undefined,
   });
   const snappingPatch = buildTerradrawModeSnappingPatch(
     resolvedSnapOptions,
-    customSnapResolver
+    coordinator.toCustom
   );
 
   TERRADRAW_SNAP_MODE_NAMES.forEach((modeName) => {
